@@ -1,7 +1,9 @@
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireAdmin } from '$lib/server/guards';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	requireAdmin(locals);
 	const db = getDb();
 	const allValues = db.prepare('SELECT * FROM constrained_values ORDER BY category, sort_order, value').all() as any[];
 

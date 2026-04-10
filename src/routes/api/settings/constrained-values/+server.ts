@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
+import { apiError } from '$lib/server/api-errors';
 
 export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
@@ -21,7 +22,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			id, data.category, data.value, data.label || null, data.sort_order ?? maxOrder.next
 		);
 		return json(db.prepare('SELECT * FROM constrained_values WHERE id = ?').get(id), { status: 201 });
-	} catch (err: any) {
-		return json({ error: err.message }, { status: 400 });
+	} catch (err) {
+		return apiError(err);
 	}
 };

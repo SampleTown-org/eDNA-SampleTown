@@ -50,7 +50,9 @@
 			<div class="flex items-center gap-3">
 				{#if user}
 					<span class="text-sm text-slate-400 hidden sm:inline">{user.username}</span>
-					<a href="/auth/logout" class="text-sm text-slate-400 hover:text-white">Sign out</a>
+					<form method="POST" action="/auth/logout" class="inline">
+						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
+					</form>
 				{:else}
 					<a href="/auth/login" class="text-sm text-ocean-400 hover:text-ocean-300">Sign in</a>
 				{/if}

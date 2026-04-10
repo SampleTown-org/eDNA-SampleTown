@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
+import { apiError } from '$lib/server/api-errors';
 
 export const PUT: RequestHandler = async ({ params, request }) => {
 	const data = await request.json();
@@ -13,8 +14,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.is_active ?? 1, data.sort_order ?? 0, params.id
 		);
 		return json(db.prepare('SELECT p.*, u.username AS github_username FROM personnel p LEFT JOIN users u ON u.id = p.user_id WHERE p.id = ?').get(params.id));
-	} catch (err: any) {
-		return json({ error: err.message }, { status: 400 });
+	} catch (err) {
+		return apiError(err);
 	}
 };
 

@@ -99,12 +99,27 @@ Run `node build/index.js` directly under pm2, or wrap it in Docker. The DB is ju
 | `GITHUB_CLIENT_ID` / `_SECRET` | required | unused |
 | `GITHUB_REPO` / `GITHUB_TOKEN` | required for snapshots | leave blank |
 | `DB_PATH` | `data/sampletown.db` | `data/sampletown.db` |
-| `SESSION_SECRET` | random 32-byte hex | random 32-byte hex |
+| `ADMIN_SETUP_TOKEN` | set once for first-admin creation, unset after | same |
 
-Generate a session secret:
+## Creating the first admin user
+
+After a fresh install the `users` table is empty and there's no way to log in.
+Set `ADMIN_SETUP_TOKEN` to a random value in `.env`, restart the app, then on
+the login page submit the form with a hidden `setup_token` field that matches
+(or use curl). The first user is created as `role=admin`. Once a user exists,
+the token is ignored — you should unset it.
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+TOKEN=$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")
+echo "ADMIN_SETUP_TOKEN=$TOKEN" >> .env
+pm2 restart sampletown --update-env
+
+curl -X POST https://sampletown.example.com/auth/login/local \
+  -d "username=admin" -d "password=<a-strong-password>" -d "setup_token=$TOKEN"
+
+# Then unset and restart:
+sed -i '/^ADMIN_SETUP_TOKEN=/d' .env
+pm2 restart sampletown --update-env
 ```
 
 ## Troubleshooting

@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
+import { apiError } from '$lib/server/api-errors';
 
 export const PUT: RequestHandler = async ({ params, request }) => {
 	const data = await request.json();
@@ -14,7 +15,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.reverse_primer_name ?? null, data.reverse_primer_seq ?? null,
 			data.reference ?? null, data.is_active ?? 1, data.sort_order ?? 0, params.id);
 		return json(db.prepare('SELECT * FROM primer_sets WHERE id = ?').get(params.id));
-	} catch (err: any) { return json({ error: err.message }, { status: 400 }); }
+	} catch (err) { return apiError(err); }
 };
 
 export const DELETE: RequestHandler = async ({ params }) => {

@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
+import { apiError } from '$lib/server/api-errors';
 
 export const GET: RequestHandler = async () => {
 	const db = getDb();
@@ -17,5 +18,5 @@ export const POST: RequestHandler = async ({ request }) => {
 			data.forward_primer_name ?? null, data.forward_primer_seq ?? null, data.reverse_primer_name ?? null, data.reverse_primer_seq ?? null,
 			data.reference ?? null, data.sort_order ?? 0);
 		return json(db.prepare('SELECT * FROM primer_sets WHERE id = ?').get(id), { status: 201 });
-	} catch (err: any) { return json({ error: err.message }, { status: 400 }); }
+	} catch (err) { return apiError(err); }
 };

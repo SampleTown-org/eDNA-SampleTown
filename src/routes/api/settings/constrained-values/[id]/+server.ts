@@ -1,6 +1,7 @@
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
+import { apiError } from '$lib/server/api-errors';
 
 export const PUT: RequestHandler = async ({ params, request }) => {
 	const data = await request.json();
@@ -10,8 +11,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.value, data.label || null, data.sort_order ?? 0, data.is_active ?? 1, params.id
 		);
 		return json(db.prepare('SELECT * FROM constrained_values WHERE id = ?').get(params.id));
-	} catch (err: any) {
-		return json({ error: err.message }, { status: 400 });
+	} catch (err) {
+		return apiError(err);
 	}
 };
 

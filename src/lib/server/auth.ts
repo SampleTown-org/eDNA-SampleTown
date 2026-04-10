@@ -4,6 +4,14 @@ import { getDb, generateId } from './db';
 import { env } from '$env/dynamic/private';
 import type { User } from '$lib/types';
 
+// Columns to select when loading a user for session/locals.
+// IMPORTANT: never include `password_hash` here — locals.user flows to every
+// page via +layout.server.ts, so anything in this list ends up in client HTML.
+const SAFE_USER_COLS = `
+	id, github_id, username, display_name, email, avatar_url,
+	role, is_local_account, created_at, updated_at
+`;
+
 // GitHub OAuth client (initialized lazily)
 let _github: GitHub | null = null;
 
@@ -24,7 +32,24 @@ export function getAuthMode(): 'local' | 'github' | 'hybrid' {
 // Sessions
 // ============================================================
 
-const SESSION_DURATION_DAYS = 90;
+const SESSION_DURATION_DAYS = 14;
+const BCRYPT_COST = 12;
+
+/** True if the configured public ORIGIN is HTTPS — used to set Secure on cookies. */
+export function isSecureOrigin(): boolean {
+	return (env.ORIGIN || '').startsWith('https://');
+}
+
+/** Standard session cookie options used by both login flows. */
+export function sessionCookieOptions() {
+	return {
+		path: '/',
+		httpOnly: true,
+		secure: isSecureOrigin(),
+		maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60,
+		sameSite: 'lax' as const
+	};
+}
 
 export function createSession(userId: string): string {
 	const db = getDb();
@@ -37,7 +62,8 @@ export function createSession(userId: string): string {
 export function validateSession(sessionId: string): User | null {
 	const db = getDb();
 	const row = db.prepare(`
-		SELECT u.* FROM sessions s
+		SELECT ${SAFE_USER_COLS}
+		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.id = ? AND s.expires_at > datetime('now')
 	`).get(sessionId) as User | undefined;
@@ -54,6 +80,27 @@ export function deleteExpiredSessions() {
 	db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
 }
 
+export function deleteExpiredOauthStates() {
+	const db = getDb();
+	db.prepare("DELETE FROM oauth_states WHERE expires_at <= datetime('now')").run();
+}
+
+// Periodic sweep — runs at most once per 5 minutes per process. Cheap because
+// the predicates are indexed and the tables stay tiny.
+let lastSweep = 0;
+const SWEEP_INTERVAL_MS = 5 * 60_000;
+export function maybeSweepExpired() {
+	const now = Date.now();
+	if (now - lastSweep < SWEEP_INTERVAL_MS) return;
+	lastSweep = now;
+	try {
+		deleteExpiredSessions();
+		deleteExpiredOauthStates();
+	} catch (err) {
+		console.error('[auth] expired sweep failed', err instanceof Error ? err.message : err);
+	}
+}
+
 // ============================================================
 // GitHub user upsert
 // ============================================================
@@ -66,14 +113,14 @@ export function upsertGitHubUser(githubUser: {
 	avatar_url: string | null;
 }): User {
 	const db = getDb();
-	const existing = db.prepare('SELECT * FROM users WHERE github_id = ?').get(githubUser.id) as User | undefined;
+	const existing = db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE github_id = ?`).get(githubUser.id) as User | undefined;
 
 	if (existing) {
 		db.prepare(`
 			UPDATE users SET username = ?, display_name = ?, email = ?, avatar_url = ?, updated_at = datetime('now')
 			WHERE github_id = ?
 		`).run(githubUser.login, githubUser.name, githubUser.email, githubUser.avatar_url, githubUser.id);
-		return db.prepare('SELECT * FROM users WHERE github_id = ?').get(githubUser.id) as User;
+		return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE github_id = ?`).get(githubUser.id) as User;
 	}
 
 	const id = generateId();
@@ -81,7 +128,7 @@ export function upsertGitHubUser(githubUser: {
 		INSERT INTO users (id, github_id, username, display_name, email, avatar_url, role, is_local_account)
 		VALUES (?, ?, ?, ?, ?, ?, 'user', 0)
 	`).run(id, githubUser.id, githubUser.login, githubUser.name, githubUser.email, githubUser.avatar_url);
-	return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User;
+	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE id = ?`).get(id) as User;
 }
 
 // ============================================================
@@ -91,20 +138,29 @@ export function upsertGitHubUser(githubUser: {
 export async function createLocalUser(username: string, password: string, role: string = 'user'): Promise<User> {
 	const db = getDb();
 	const id = generateId();
-	const hash = await bcrypt.hash(password, 10);
+	const hash = await bcrypt.hash(password, BCRYPT_COST);
 	db.prepare(`
 		INSERT INTO users (id, username, password_hash, role, is_local_account)
 		VALUES (?, ?, ?, ?, 1)
 	`).run(id, username, hash, role);
-	return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User;
+	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE id = ?`).get(id) as User;
 }
+
+// Dummy hash used to keep verifyLocalUser timing constant when the username
+// doesn't exist. Generated once at startup; the password "x" never matches it.
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync('does-not-matter', 10);
 
 export async function verifyLocalUser(username: string, password: string): Promise<User | null> {
 	const db = getDb();
-	const user = db.prepare('SELECT * FROM users WHERE username = ? AND is_local_account = 1').get(username) as
-		| (User & { password_hash: string })
-		| undefined;
-	if (!user || !user.password_hash) return null;
-	const valid = await bcrypt.compare(password, user.password_hash);
-	return valid ? user : null;
+	const row = db
+		.prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_local_account = 1')
+		.get(username) as { id: string; password_hash: string } | undefined;
+
+	// Always run bcrypt.compare so unknown-username and wrong-password take
+	// the same wall-clock time (mitigates username enumeration).
+	const hash = row?.password_hash ?? DUMMY_BCRYPT_HASH;
+	const valid = await bcrypt.compare(password, hash);
+	if (!row || !valid) return null;
+
+	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE id = ?`).get(row.id) as User;
 }

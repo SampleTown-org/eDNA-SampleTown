@@ -1,7 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getGitHub } from '$lib/server/auth';
-import { getDb } from '$lib/server/db';
+import { getGitHub, isSecureOrigin } from '$lib/server/auth';
 import { generateState } from 'arctic';
 
 export const GET: RequestHandler = async ({ cookies }) => {
@@ -13,20 +12,15 @@ export const GET: RequestHandler = async ({ cookies }) => {
 	const state = generateState();
 	const url = github.createAuthorizationURL(state, ['user:email']);
 
-	// Store state in DB with expiry — more reliable than cookies over SSH tunnels
-	const db = getDb();
-	db.prepare(`
-		INSERT INTO oauth_states (state, expires_at)
-		VALUES (?, datetime('now', '+10 minutes'))
-	`).run(state);
-
-	// Also try cookie as fallback
+	// State is bound to the user's browser via an httpOnly cookie.
+	// SameSite=lax works for OAuth because the GitHub redirect back is a
+	// top-level GET; lax cookies are sent on top-level navigations.
 	cookies.set('github_oauth_state', state, {
 		path: '/',
 		httpOnly: true,
-		secure: false,
+		secure: isSecureOrigin(),
 		maxAge: 600,
-		sameSite: 'none'
+		sameSite: 'lax'
 	});
 
 	throw redirect(302, url.toString());

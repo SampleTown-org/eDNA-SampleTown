@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
+import { apiError } from '$lib/server/api-errors';
 
 export const GET: RequestHandler = async () => {
 	const db = getDb();
@@ -16,5 +17,5 @@ export const POST: RequestHandler = async ({ request }) => {
 			VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, data.name, data.polymerase ?? null,
 			data.annealing_temp_c ?? null, data.num_cycles ?? null, data.pcr_conditions ?? null, data.sort_order ?? 0);
 		return json(db.prepare('SELECT * FROM pcr_protocols WHERE id = ?').get(id), { status: 201 });
-	} catch (err: any) { return json({ error: err.message }, { status: 400 }); }
+	} catch (err) { return apiError(err); }
 };

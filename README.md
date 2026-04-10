@@ -55,8 +55,8 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
 | `GITHUB_REPO` | `owner/repo` for DB snapshot commits |
 | `GITHUB_TOKEN` | PAT used by Octokit to push JSON snapshots |
 | `DB_PATH` | SQLite file path (default `data/sampletown.db`) |
-| `ORIGIN` | Public origin URL — required for SvelteKit CSRF |
-| `SESSION_SECRET` | Random hex string for signing sessions |
+| `ORIGIN` | Public origin URL — required for SvelteKit CSRF and Secure cookies |
+| `ADMIN_SETUP_TOKEN` | One-time token to create the first admin user (unset after first use) |
 
 ## Repo layout
 

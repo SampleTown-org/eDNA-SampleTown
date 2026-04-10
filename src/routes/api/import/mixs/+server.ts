@@ -3,33 +3,61 @@ import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
 import { parseMixsTsv, xlsxToTsv } from '$lib/server/mixs-io';
 import { parseLatLon } from '$lib/mixs/validators';
+import { checkRate } from '$lib/server/rate-limit';
+import { apiError } from '$lib/server/api-errors';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_TSV_BYTES = 20 * 1024 * 1024; // post-decompression cap (xlsx is zipped)
+const MAX_ROWS = 10_000;
+
+export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
+	// Rate limit per IP: 10 imports / hour. Hooks already require a session.
+	const ip = getClientAddress();
+	if (!checkRate(`import:${ip}`, 10, 60 * 60_000)) {
+		return json({ error: 'Too many import requests, try again later' }, { status: 429 });
+	}
+
 	const contentType = request.headers.get('content-type') || '';
 
 	let tsv: string;
 	let projectId: string;
 	let dryRun: boolean;
 
-	if (contentType.includes('multipart/form-data')) {
-		const formData = await request.formData();
-		projectId = formData.get('projectId') as string;
-		dryRun = formData.get('dryRun') === 'true';
-		const file = formData.get('file') as File;
-		if (!file || !projectId) {
-			return json({ error: 'File and project_id are required' }, { status: 400 });
-		}
-		const buffer = Buffer.from(await file.arrayBuffer());
-		if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-			tsv = xlsxToTsv(buffer);
+	try {
+		if (contentType.includes('multipart/form-data')) {
+			const formData = await request.formData();
+			projectId = formData.get('projectId') as string;
+			dryRun = formData.get('dryRun') === 'true';
+			const file = formData.get('file') as File;
+			if (!file || !projectId) {
+				return json({ error: 'File and project_id are required' }, { status: 400 });
+			}
+			if (file.size > MAX_UPLOAD_BYTES) {
+				return json(
+					{ error: `File too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB)` },
+					{ status: 413 }
+				);
+			}
+			const buffer = Buffer.from(await file.arrayBuffer());
+			if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+				tsv = xlsxToTsv(buffer);
+			} else {
+				tsv = buffer.toString('utf-8');
+			}
+			if (tsv.length > MAX_TSV_BYTES) {
+				return json({ error: 'Decoded payload too large' }, { status: 413 });
+			}
 		} else {
-			tsv = buffer.toString('utf-8');
+			const body = await request.json();
+			tsv = body.tsv;
+			projectId = body.projectId;
+			dryRun = body.dryRun;
+			if (typeof tsv === 'string' && tsv.length > MAX_TSV_BYTES) {
+				return json({ error: 'TSV payload too large' }, { status: 413 });
+			}
 		}
-	} else {
-		const body = await request.json();
-		tsv = body.tsv;
-		projectId = body.projectId;
-		dryRun = body.dryRun;
+	} catch (err) {
+		return apiError(err);
 	}
 
 	if (!tsv || !projectId) {
@@ -37,6 +65,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const { samples, errors, headers } = parseMixsTsv(tsv);
+
+	if (samples.length > MAX_ROWS) {
+		return json(
+			{ error: `Too many rows (got ${samples.length}, max ${MAX_ROWS})` },
+			{ status: 413 }
+		);
+	}
 
 	if (dryRun) {
 		return json({ samples, errors, headers, count: samples.length });
@@ -86,16 +121,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					sample.notes || null, userId
 				);
 				inserted.push({ id, samp_name: sample.samp_name });
-			} catch (err: any) {
-				insertErrors.push(`${sample.samp_name}: ${err.message}`);
+			} catch (err: unknown) {
+				const raw = err instanceof Error ? err.message : String(err);
+				console.error('[import] row failed', sample.samp_name, raw);
+				// Generic per-row message — don't leak SQLite constraint names.
+				insertErrors.push(`${sample.samp_name}: failed to insert (validation)`);
 			}
 		}
 	});
 
 	try {
 		insertSample(samples);
-	} catch (err: any) {
-		return json({ error: err.message, errors: insertErrors }, { status: 400 });
+	} catch (err) {
+		return apiError(err);
 	}
 
 	return json({
