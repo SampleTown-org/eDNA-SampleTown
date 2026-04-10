@@ -57,7 +57,6 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
 | `GITHUB_TOKEN` | PAT used by Octokit to push JSON snapshots |
 | `DB_PATH` | SQLite file path (default `data/sampletown.db`) |
 | `ORIGIN` | Public origin URL — required for SvelteKit CSRF and Secure cookies |
-| `ADMIN_SETUP_TOKEN` | One-time token to create the first admin user (unset after first use) |
 
 ## Auth model
 
@@ -68,7 +67,7 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
   - Anonymous: only `POST /api/feedback`
   - Authenticated: all other `/api/*`
   - Admin: any mutation under `/api/settings/`, `/api/personnel`, `/api/db/`, plus `GET /api/feedback`. The `/settings` page itself is also admin-gated.
-- **Bootstrapping the first admin**: on a fresh DB the `users` table is empty. Set `ADMIN_SETUP_TOKEN` in `.env`, hit the login form with a matching `setup_token` field once, then unset the env var. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#creating-the-first-admin-user).
+- **Bootstrapping the first admin**: SampleTown auto-seeds a default `admin/admin` user on first startup (when the `users` table is empty). The seeded account has `must_change_password=1` so the first login is forced to set a real password before anything else works. **Bootstrap from a private network or SSH tunnel BEFORE exposing the app publicly** — the literal `admin/admin` is exploitable until the first login changes it.
 
 ## Repo layout
 

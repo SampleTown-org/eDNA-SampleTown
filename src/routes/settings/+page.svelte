@@ -31,6 +31,102 @@
 	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback';
 	let feedbackItems = $state(structuredClone(data.feedback) as any[]);
 	let personnelList = $state(structuredClone(data.personnel) as any[]);
+	let userList = $state(structuredClone(data.users) as any[]);
+
+	// --- User accounts CRUD ---
+	const USER_ROLES = ['admin', 'user', 'viewer'] as const;
+	const emptyNewUser = () => ({ username: '', display_name: '', email: '', role: 'user' as string, password: '' });
+	let newUser = $state(emptyNewUser());
+	let resetPwdId = $state('');
+	let resetPwdValue = $state('');
+
+	async function addUser() {
+		clearMsg();
+		if (!newUser.username.trim() || newUser.password.length < 10) {
+			errorMsg = 'Username and a password of at least 10 characters are required';
+			return;
+		}
+		const res = await fetch('/api/users', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(newUser)
+		});
+		if (res.ok) {
+			userList = [...userList, await res.json()];
+			newUser = emptyNewUser();
+		} else {
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to create user';
+		}
+	}
+
+	async function approveUser(u: any) {
+		clearMsg();
+		const res = await fetch(`/api/users/${u.id}`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ is_approved: 1 })
+		});
+		if (res.ok) {
+			const updated = await res.json();
+			userList = userList.map((x) => (x.id === u.id ? updated : x));
+		} else {
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed';
+		}
+	}
+
+	async function changeUserRole(u: any, role: string) {
+		clearMsg();
+		const res = await fetch(`/api/users/${u.id}`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ role })
+		});
+		if (res.ok) {
+			const updated = await res.json();
+			userList = userList.map((x) => (x.id === u.id ? updated : x));
+		} else {
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed';
+		}
+	}
+
+	async function deleteUser(u: any) {
+		if (!confirm(`Delete user "${u.username}"? This cannot be undone.`)) return;
+		clearMsg();
+		const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
+		if (res.ok) {
+			userList = userList.filter((x) => x.id !== u.id);
+		} else {
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed';
+		}
+	}
+
+	function startResetPwd(u: any) {
+		resetPwdId = u.id;
+		resetPwdValue = '';
+	}
+
+	async function submitResetPwd() {
+		clearMsg();
+		if (resetPwdValue.length < 10) {
+			errorMsg = 'New password must be at least 10 characters';
+			return;
+		}
+		const res = await fetch(`/api/users/${resetPwdId}/reset-password`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ password: resetPwdValue })
+		});
+		if (res.ok) {
+			// Refresh the row to show must_change_password=1
+			userList = userList.map((u) =>
+				u.id === resetPwdId ? { ...u, must_change_password: 1, has_password: 1 } : u
+			);
+			resetPwdId = '';
+			resetPwdValue = '';
+		} else {
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed';
+		}
+	}
 
 	// --- Personnel CRUD ---
 	const ROLES = ['PI', 'Co-PI', 'Lab Manager', 'Postdoc', 'PhD Student', 'MSc Student', 'Undergrad', 'Field Tech', 'Lab Tech', 'Bioinformatician', 'Collaborator', 'Other'];
@@ -481,8 +577,110 @@
 	</div>
 
 	{:else if tabType === 'people'}
-	<div class="space-y-4">
-		<p class="text-sm text-slate-400">Lab members and collaborators. Link to GitHub accounts for authentication.</p>
+	<div class="space-y-8">
+		<!-- ============ User accounts ============ -->
+		<div class="space-y-3">
+			<div>
+				<h2 class="text-base font-semibold text-white">User Accounts</h2>
+				<p class="text-sm text-slate-400 mt-0.5">
+					Who can sign in. New GitHub sign-ins land in <span class="text-amber-400">Pending</span>
+					and need approval before they can access the database.
+				</p>
+			</div>
+
+			<div class="space-y-2">
+				{#each userList as u (u.id)}
+					<div class="p-3 rounded-lg bg-slate-800/50 border {u.is_approved ? 'border-slate-800' : 'border-amber-700'}">
+						<div class="flex items-start justify-between gap-3">
+							<div class="flex items-center gap-3 flex-1">
+								{#if u.avatar_url}
+									<img src={u.avatar_url} alt="" class="w-8 h-8 rounded-full" />
+								{:else}
+									<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm text-slate-400">
+										{u.username.charAt(0).toUpperCase()}
+									</div>
+								{/if}
+								<div class="flex-1">
+									<div class="flex items-center gap-2">
+										<span class="text-white font-medium text-sm">{u.username}</span>
+										{#if !u.is_approved}
+											<span class="text-xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-400">Pending</span>
+										{/if}
+										{#if u.must_change_password}
+											<span class="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">Temp password</span>
+										{/if}
+										{#if u.is_local_account}
+											<span class="text-xs text-slate-500">local</span>
+										{:else if u.github_id}
+											<span class="text-xs text-ocean-400">GitHub</span>
+										{/if}
+									</div>
+									<div class="flex gap-3 text-xs text-slate-500 mt-0.5">
+										{#if u.display_name}<span>{u.display_name}</span>{/if}
+										{#if u.email}<span>{u.email}</span>{/if}
+										<span class="font-mono">{u.id.slice(0, 8)}</span>
+									</div>
+								</div>
+							</div>
+							<div class="flex items-center gap-2 shrink-0">
+								<select
+									value={u.role}
+									onchange={(e) => changeUserRole(u, (e.currentTarget as HTMLSelectElement).value)}
+									class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500"
+								>
+									{#each USER_ROLES as r}<option value={r}>{r}</option>{/each}
+								</select>
+								{#if !u.is_approved}
+									<button onclick={() => approveUser(u)} class="text-xs text-green-400 hover:text-green-300">Approve</button>
+								{/if}
+								<button onclick={() => startResetPwd(u)} class="text-xs text-slate-500 hover:text-ocean-400">Reset pwd</button>
+								<button onclick={() => deleteUser(u)} class="text-xs text-slate-600 hover:text-red-400">Del</button>
+							</div>
+						</div>
+						{#if resetPwdId === u.id}
+							<form
+								onsubmit={(e) => { e.preventDefault(); submitResetPwd(); }}
+								class="mt-3 flex gap-2 items-end"
+							>
+								<div class="flex-1">
+									<label class="block text-xs text-slate-400 mb-1">New temporary password (min 10 chars)</label>
+									<input type="text" bind:value={resetPwdValue} minlength="10" class="w-full {inputCls} text-sm" placeholder="The user will be forced to change this on next login" />
+								</div>
+								<button type="submit" class="px-3 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">Set</button>
+								<button type="button" onclick={() => { resetPwdId = ''; }} class="px-3 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 text-sm font-medium">Cancel</button>
+							</form>
+						{/if}
+					</div>
+				{/each}
+			</div>
+
+			<details class="group">
+				<summary class="text-sm font-medium text-ocean-400 cursor-pointer hover:text-ocean-300">Add local user</summary>
+				<form onsubmit={(e) => { e.preventDefault(); addUser(); }} class="space-y-3 mt-3 p-4 bg-slate-800/30 rounded-lg">
+					<div class="grid grid-cols-2 gap-3">
+						<div><label class="block text-xs text-slate-400 mb-1">Username</label><input type="text" bind:value={newUser.username} class="w-full {inputCls} text-sm" required /></div>
+						<div><label class="block text-xs text-slate-400 mb-1">Role</label>
+							<select bind:value={newUser.role} class="w-full {selectCls} text-sm">
+								{#each USER_ROLES as r}<option value={r}>{r}</option>{/each}
+							</select></div>
+						<div><label class="block text-xs text-slate-400 mb-1">Display name (optional)</label><input type="text" bind:value={newUser.display_name} class="w-full {inputCls} text-sm" /></div>
+						<div><label class="block text-xs text-slate-400 mb-1">Email (optional)</label><input type="email" bind:value={newUser.email} class="w-full {inputCls} text-sm" /></div>
+						<div class="col-span-2"><label class="block text-xs text-slate-400 mb-1">Temporary password (min 10 chars)</label><input type="text" bind:value={newUser.password} minlength="10" class="w-full {inputCls} text-sm" placeholder="The user will be forced to change this on first login" required /></div>
+					</div>
+					<button type="submit" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">Add User</button>
+				</form>
+			</details>
+		</div>
+
+		<!-- ============ Personnel directory ============ -->
+		<div class="space-y-3">
+			<div>
+				<h2 class="text-base font-semibold text-white">Personnel Directory</h2>
+				<p class="text-sm text-slate-400 mt-0.5">
+					Lab members + collaborators used as the &quot;who did the work&quot; attribution
+					on samples, extracts, PCRs, etc. Optionally linked to a User Account.
+				</p>
+			</div>
 
 		<div class="space-y-2">
 			{#each personnelList as person}
@@ -562,6 +760,7 @@
 			</form>
 		</details>
 		{/if}
+		</div> <!-- /Personnel directory -->
 	</div>
 
 	{:else if tabType === 'feedback'}

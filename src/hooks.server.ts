@@ -1,5 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
-import { json } from '@sveltejs/kit';
+import { json, redirect } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { validateSession, maybeSweepExpired } from '$lib/server/auth';
 
@@ -27,6 +27,7 @@ function isPublicApi(pathname: string, method: string): boolean {
 const ADMIN_WRITE_PREFIXES = [
 	'/api/settings/',
 	'/api/personnel', // covers /api/personnel and /api/personnel/[id]
+	'/api/users', // covers /api/users and /api/users/[id]/...
 	'/api/db/'
 ];
 
@@ -36,9 +37,34 @@ function requiresAdmin(pathname: string, method: string): boolean {
 	if (!MUTATING_METHODS.has(method)) {
 		// GET /api/feedback is admin-only (list of all feedback)
 		if (pathname === '/api/feedback' && method === 'GET') return true;
+		// GET /api/users is admin-only (lists local + GitHub users)
+		if (pathname === '/api/users' && method === 'GET') return true;
 		return false;
 	}
 	return ADMIN_WRITE_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+/**
+ * Routes a user with must_change_password=1 is allowed to reach. Everything
+ * else gets bounced to /auth/change-password until the flag clears.
+ *
+ * The change-password page itself, the API that submits the new password,
+ * and the logout endpoint all need to be reachable so the user can
+ * actually complete (or escape) the flow.
+ */
+const PASSWORD_CHANGE_ALLOWLIST = new Set([
+	'/auth/change-password',
+	'/auth/logout',
+	'/api/account/password'
+]);
+
+function blockedByPasswordChange(pathname: string, user: { must_change_password: number } | null): boolean {
+	if (!user || user.must_change_password !== 1) return false;
+	if (PASSWORD_CHANGE_ALLOWLIST.has(pathname)) return false;
+	// Allow SvelteKit's static asset routes through so the change-password
+	// page itself can render its CSS / JS bundles.
+	if (pathname.startsWith('/_app/') || pathname === '/favicon.ico') return false;
+	return true;
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -62,6 +88,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (requiresAdmin(pathname, method) && event.locals.user?.role !== 'admin') {
 			return json({ error: 'Admin role required' }, { status: 403 });
 		}
+	}
+
+	// Password-change gate: a user with must_change_password=1 can't reach
+	// any route except the change-password page, the password API, and
+	// logout. This forces the seeded admin/admin (and any admin-created
+	// account with a temporary password) to set a real password before
+	// doing anything else.
+	if (blockedByPasswordChange(pathname, event.locals.user)) {
+		if (pathname.startsWith('/api/')) {
+			return json({ error: 'Password change required' }, { status: 403 });
+		}
+		throw redirect(302, '/auth/change-password');
 	}
 
 	return resolve(event);

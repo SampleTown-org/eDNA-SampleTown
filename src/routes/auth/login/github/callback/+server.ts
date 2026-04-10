@@ -47,6 +47,13 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		avatar_url: githubUser.avatar_url
 	});
 
+	// Approval gate: GitHub-OAuth accounts can't sign in until an admin
+	// flips is_approved=1 in Settings → People. Don't create a session,
+	// don't set a cookie — just send them to the pending page.
+	if (!user.is_approved) {
+		throw redirect(302, '/auth/pending');
+	}
+
 	const sessionId = createSession(user.id);
 	cookies.set('session', sessionId, sessionCookieOptions());
 

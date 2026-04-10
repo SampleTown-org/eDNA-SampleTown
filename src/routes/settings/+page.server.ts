@@ -23,7 +23,19 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const feedback = db.prepare('SELECT * FROM feedback ORDER BY created_at DESC').all();
 	const personnel = db.prepare('SELECT p.*, u.username AS github_username, u.avatar_url FROM personnel p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.sort_order, p.full_name').all();
-	const users = db.prepare('SELECT id, username, display_name, email, avatar_url FROM users ORDER BY username').all();
+	// Full user list for the user-management UI on the People tab. Includes
+	// is_approved, must_change_password, role, and a derived has_password
+	// flag — but never password_hash.
+	const users = db
+		.prepare(
+			`SELECT id, github_id, username, display_name, email, avatar_url,
+			        role, is_local_account, is_approved, must_change_password,
+			        (password_hash IS NOT NULL) AS has_password,
+			        created_at, updated_at
+			   FROM users
+			   ORDER BY is_approved ASC, username`
+		)
+		.all();
 
 	return { categories, primerSets, pcrProtocols, naming, feedback, personnel, users };
 };

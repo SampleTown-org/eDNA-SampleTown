@@ -100,25 +100,36 @@ If you want sign-in-with-GitHub (i.e. `AUTH_MODE=github` or `hybrid`):
 
 ### Creating the first admin user
 
-After a fresh install the `users` table is empty and there's no way to log in. Set `ADMIN_SETUP_TOKEN` to a random value in `.env`, restart the app, then submit the login form with the matching `setup_token` field. The first user is created as `role=admin`. Once any user exists, the token is ignored — unset it.
+On first startup (when the `users` table is empty), SampleTown automatically seeds a default account:
 
-```bash
-TOKEN=$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")
-echo "ADMIN_SETUP_TOKEN=$TOKEN" >> .env
-pm2 restart sampletown --update-env
-
-# Either: visit https://sampletown.example.com/auth/login?setup=1 in a browser
-# (the setup_token field will appear), or curl directly:
-curl -X POST https://sampletown.example.com/auth/login/local \
-  -H "Origin: https://sampletown.example.com" \
-  -d "username=admin" \
-  -d "password=<a-strong-password-min-10-chars>" \
-  -d "setup_token=$TOKEN"
-
-# Then unset and restart:
-sed -i '/^ADMIN_SETUP_TOKEN=/d' .env
-pm2 restart sampletown --update-env
 ```
+username: admin
+password: admin
+role:     admin
+must_change_password: 1
+```
+
+The `must_change_password` flag means the first login is **forced** to the `/auth/change-password` page before any other route works. The seed never runs again once any user exists.
+
+> **Security warning** — the literal `admin/admin` is exploitable until the first login changes it. **Always bootstrap from a private network or SSH tunnel BEFORE adding the public DNS A record / opening the firewall**:
+>
+> ```bash
+> # On your workstation, tunnel the app port through SSH
+> ssh -L 13001:127.0.0.1:3001 your-vm
+>
+> # In a browser, visit http://127.0.0.1:13001/auth/login
+> # Sign in as admin / admin
+> # You'll be redirected to /auth/change-password
+> # Set a real password (≥ 10 chars)
+> # Then expose the public hostname
+> ```
+>
+> If you forget and an attacker logs in first, they'll be forced into the change-password page too — and they'll lock you out by setting their own password. The seed only fires once, so the only recovery is to delete the prod DB and re-bootstrap.
+
+After the first admin exists, additional users are managed via **Settings → People → User Accounts**. There are two paths:
+
+- **Add local user** — admin sets a temporary password; the new user is forced to change it on first login.
+- **Approve a GitHub OAuth user** — anyone who signs in with GitHub creates a row in `users` with `is_approved=0` and is bounced to `/auth/pending`. The admin sees them in the User Accounts list with a "Pending" badge and an Approve button. Approving sets `is_approved=1` and they can sign in. (Revoking later is just toggling `is_approved=0` back; existing sessions are invalidated immediately because `validateSession` requires `is_approved=1`.)
 
 ### Ops
 
@@ -153,7 +164,6 @@ Run `node build/index.js` directly under pm2, or wrap it in Docker. The DB is ju
 | `GITHUB_CLIENT_ID` / `_SECRET` | required | unused |
 | `GITHUB_REPO` / `GITHUB_TOKEN` | required for snapshots | leave blank |
 | `DB_PATH` | `data/sampletown.db` | `data/sampletown.db` |
-| `ADMIN_SETUP_TOKEN` | set once for first-admin creation, unset after | same |
 
 ## Troubleshooting
 

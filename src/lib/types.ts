@@ -11,6 +11,8 @@ export interface User {
 	avatar_url: string | null;
 	role: 'admin' | 'user' | 'viewer';
 	is_local_account: number;
+	is_approved: number;
+	must_change_password: number;
 	created_at: string;
 	updated_at: string;
 }

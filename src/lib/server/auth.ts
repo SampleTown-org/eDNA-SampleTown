@@ -12,7 +12,8 @@ import type { User } from '$lib/types';
 // tables have an `id` column).
 const SAFE_USER_COLS = `
 	u.id, u.github_id, u.username, u.display_name, u.email, u.avatar_url,
-	u.role, u.is_local_account, u.created_at, u.updated_at
+	u.role, u.is_local_account, u.is_approved, u.must_change_password,
+	u.created_at, u.updated_at
 `;
 
 // GitHub OAuth client (initialized lazily)
@@ -68,7 +69,9 @@ export function validateSession(sessionId: string): User | null {
 		SELECT ${SAFE_USER_COLS}
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
-		WHERE s.id = ? AND s.expires_at > datetime('now')
+		WHERE s.id = ?
+		  AND s.expires_at > datetime('now')
+		  AND u.is_approved = 1
 	`).get(sessionId) as User | undefined;
 	return row ?? null;
 }
@@ -131,9 +134,12 @@ export function upsertGitHubUser(githubUser: {
 	}
 
 	const id = generateId();
+	// New GitHub-OAuth users land in is_approved=0 — an admin must approve
+	// them before they can sign in. The session will not be created in the
+	// callback handler unless this flag is 1.
 	db.prepare(`
-		INSERT INTO users (id, github_id, username, display_name, email, avatar_url, role, is_local_account)
-		VALUES (?, ?, ?, ?, ?, ?, 'user', 0)
+		INSERT INTO users (id, github_id, username, display_name, email, avatar_url, role, is_local_account, is_approved)
+		VALUES (?, ?, ?, ?, ?, ?, 'user', 0, 0)
 	`).run(id, githubUser.id, githubUser.login, githubUser.name, githubUser.email, githubUser.avatar_url);
 	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
 }
@@ -151,6 +157,44 @@ export async function createLocalUser(username: string, password: string, role: 
 		VALUES (?, ?, ?, ?, 1)
 	`).run(id, username, hash, role);
 	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
+}
+
+// Password length policy. Applied on password SET (registration / change),
+// NOT on verify — so the seeded admin/admin bootstrap can still sign in once.
+export const MIN_PASSWORD_LEN = 10;
+export const MAX_PASSWORD_LEN = 128;
+
+/** Throws an Error with a safe message if the password doesn't meet policy. */
+export function validatePasswordPolicy(password: string) {
+	if (typeof password !== 'string' || password.length < MIN_PASSWORD_LEN || password.length > MAX_PASSWORD_LEN) {
+		throw new Error(`Password must be ${MIN_PASSWORD_LEN}–${MAX_PASSWORD_LEN} characters`);
+	}
+}
+
+/**
+ * Set a new password for a user. Always clears the must_change_password flag.
+ * Caller is responsible for verifying the OLD password (or for skipping the
+ * verify when an admin is resetting someone else's password).
+ */
+export async function setUserPassword(userId: string, newPassword: string) {
+	validatePasswordPolicy(newPassword);
+	const db = getDb();
+	const hash = await bcrypt.hash(newPassword, BCRYPT_COST);
+	db.prepare(
+		`UPDATE users
+		   SET password_hash = ?, must_change_password = 0, is_local_account = 1, updated_at = datetime('now')
+		 WHERE id = ?`
+	).run(hash, userId);
+}
+
+/** Verify the current password of a user; returns true if it matches. */
+export async function verifyUserPassword(userId: string, password: string): Promise<boolean> {
+	const db = getDb();
+	const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as
+		| { password_hash: string | null }
+		| undefined;
+	if (!row?.password_hash) return false;
+	return bcrypt.compare(password, row.password_hash);
 }
 
 // Dummy hash used to keep verifyLocalUser timing constant when the username

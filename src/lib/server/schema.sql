@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT,                  -- for local accounts only
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
     is_local_account INTEGER NOT NULL DEFAULT 0,
+    -- Approval gate: GitHub-OAuth users start with is_approved=0 and must be
+    -- approved by an admin before they can sign in. Local users created by
+    -- an admin start with is_approved=1.
+    is_approved INTEGER NOT NULL DEFAULT 1,
+    -- Force password change on next login (used for the seeded admin/admin
+    -- account and for admin-created users with a temporary password).
+    must_change_password INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
