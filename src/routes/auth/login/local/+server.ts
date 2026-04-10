@@ -3,7 +3,20 @@ import type { RequestHandler } from './$types';
 import { verifyLocalUser, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRate } from '$lib/server/rate-limit';
 
-export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
+/**
+ * Validate a `?next=` redirect target. We only allow same-origin paths
+ * starting with `/` and not `//` (which browsers parse as scheme-relative
+ * URLs to other origins). This stops `?next=https://evil.example.com`
+ * open-redirect attacks.
+ */
+function safeNext(raw: string | null): string {
+	if (!raw) return '/';
+	if (!raw.startsWith('/')) return '/';
+	if (raw.startsWith('//')) return '/';
+	return raw;
+}
+
+export const POST: RequestHandler = async ({ request, url, cookies, getClientAddress }) => {
 	// Rate limit per IP: 5 attempts / minute
 	const ip = getClientAddress();
 	if (!checkRate(`login:${ip}`, 5, 60_000)) {
@@ -13,6 +26,8 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 	const formData = await request.formData();
 	const username = formData.get('username')?.toString()?.trim();
 	const password = formData.get('password')?.toString();
+
+	const next = safeNext(url.searchParams.get('next'));
 
 	if (!username || !password) {
 		throw redirect(302, '/auth/login?error=missing_credentials');
@@ -35,5 +50,5 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 	cookies.set('session', sessionId, sessionCookieOptions());
 
 	// The hooks gate will redirect to /auth/change-password if must_change_password=1.
-	throw redirect(302, '/');
+	throw redirect(302, next);
 };

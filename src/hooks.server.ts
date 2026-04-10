@@ -45,6 +45,26 @@ function requiresAdmin(pathname: string, method: string): boolean {
 }
 
 /**
+ * Routes a viewer (read-only role) is allowed to mutate.
+ * Everything else returns 403 for any POST/PUT/PATCH/DELETE.
+ *
+ * Viewers can still:
+ *   - GET any resource they have access to
+ *   - Change their own password (POST /api/account/password)
+ *   - Submit feedback (POST /api/feedback)
+ *   - Sign out (POST /auth/logout — handled outside the /api/ tree)
+ */
+const VIEWER_WRITE_ALLOWLIST = new Set(['/api/account/password', '/api/feedback']);
+
+function blockedByViewerReadOnly(pathname: string, method: string, role: string | undefined): boolean {
+	if (role !== 'viewer') return false;
+	if (!MUTATING_METHODS.has(method)) return false;
+	if (!pathname.startsWith('/api/')) return false;
+	if (VIEWER_WRITE_ALLOWLIST.has(pathname)) return false;
+	return true;
+}
+
+/**
  * Routes a user with must_change_password=1 is allowed to reach. Everything
  * else gets bounced to /auth/change-password until the flag clears.
  *
@@ -67,6 +87,25 @@ function blockedByPasswordChange(pathname: string, user: { must_change_password:
 	return true;
 }
 
+/**
+ * Public-page allowlist: HTML pages that don't require a session.
+ * Everything else (the dashboard, projects, samples, settings, every CRUD
+ * page) is gated behind a login — even SSR data is denied to anonymous
+ * visitors.
+ *
+ * Note: /api/* routes are gated separately, above. Static asset paths
+ * (/_app/, /favicon.ico) are also allowed unconditionally.
+ */
+const PUBLIC_PAGE_PREFIXES = [
+	'/auth/' // login form, GitHub OAuth callback, pending, change-password
+];
+
+function isPublicPage(pathname: string): boolean {
+	if (pathname.startsWith('/_app/')) return true;
+	if (pathname === '/favicon.ico' || pathname === '/favicon.png') return true;
+	return PUBLIC_PAGE_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	// Initialize DB on first request
 	getDb();
@@ -78,15 +117,27 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get('session');
 	event.locals.user = sessionId ? validateSession(sessionId) : null;
 
-	// Centralized API auth gate.
 	const { pathname } = event.url;
 	const method = event.request.method;
+
+	// Centralized API auth gate.
 	if (pathname.startsWith('/api/')) {
 		if (!event.locals.user && !isPublicApi(pathname, method)) {
 			return json({ error: 'Authentication required' }, { status: 401 });
 		}
 		if (requiresAdmin(pathname, method) && event.locals.user?.role !== 'admin') {
 			return json({ error: 'Admin role required' }, { status: 403 });
+		}
+		if (blockedByViewerReadOnly(pathname, method, event.locals.user?.role)) {
+			return json({ error: 'Viewer role is read-only' }, { status: 403 });
+		}
+	} else if (!isPublicPage(pathname)) {
+		// Page-level gate: any non-/api, non-public page requires a session.
+		// SvelteKit page loads run server-side and would otherwise serve DB
+		// data to anonymous visitors via SSR.
+		if (!event.locals.user) {
+			const next = encodeURIComponent(pathname + event.url.search);
+			throw redirect(302, `/auth/login?next=${next}`);
 		}
 	}
 

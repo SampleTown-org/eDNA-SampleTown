@@ -7,6 +7,19 @@
 
 	let { user }: Props = $props();
 
+	// Role-aware account icon: tells the user (and an admin glancing at someone
+	// else's screen) what role they're signed in as. Clicking goes to /account.
+	const ROLE_ICON: Record<string, string> = {
+		admin: '👑',
+		user: '👤',
+		viewer: '👁️'
+	};
+	const ROLE_LABEL: Record<string, string> = {
+		admin: 'Administrator',
+		user: 'User',
+		viewer: 'Viewer (read-only)'
+	};
+
 	const navLinks = [
 		{ href: '/', label: 'Dashboard' },
 		{ href: '/projects', label: 'Projects' },
@@ -50,7 +63,11 @@
 			<div class="flex items-center gap-3">
 				{#if user}
 					<span class="text-sm text-slate-400 hidden sm:inline">{user.username}</span>
-					<a href="/auth/change-password" class="text-sm text-slate-400 hover:text-white" title="Change password">🔑</a>
+					<a
+						href="/account"
+						class="text-base hover:opacity-80 transition-opacity"
+						title="{ROLE_LABEL[user.role] ?? user.role} — manage account"
+					>{ROLE_ICON[user.role] ?? '👤'}</a>
 					<form method="POST" action="/auth/logout" class="inline">
 						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
 					</form>

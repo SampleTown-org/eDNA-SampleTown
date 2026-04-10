@@ -2,6 +2,8 @@
 	import { page } from '$app/stores';
 
 	let errorParam = $derived($page.url.searchParams.get('error'));
+	let nextParam = $derived($page.url.searchParams.get('next') ?? '');
+	let formAction = $derived(nextParam ? `/auth/login/local?next=${encodeURIComponent(nextParam)}` : '/auth/login/local');
 	let errorMsg = $derived(
 		errorParam === 'invalid_credentials' ? 'Invalid username or password.' :
 		errorParam === 'missing_credentials' ? 'Please enter username and password.' :
@@ -37,7 +39,7 @@
 			<div class="relative flex justify-center text-xs"><span class="bg-slate-950 px-2 text-slate-500">or</span></div>
 		</div>
 
-		<form action="/auth/login/local" method="POST" class="space-y-3">
+		<form action={formAction} method="POST" class="space-y-3">
 			<input
 				name="username"
 				type="text"
