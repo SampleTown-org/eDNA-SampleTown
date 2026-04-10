@@ -2,9 +2,11 @@
 	import { page } from '$app/stores';
 
 	let errorParam = $derived($page.url.searchParams.get('error'));
+	let setupMode = $derived($page.url.searchParams.get('setup') === '1');
 	let errorMsg = $derived(
 		errorParam === 'invalid_credentials' ? 'Invalid username or password.' :
 		errorParam === 'missing_credentials' ? 'Please enter username and password.' :
+		errorParam === 'rate_limited' ? 'Too many login attempts, please wait and try again.' :
 		errorParam === 'github_not_configured' ? 'GitHub OAuth is not configured. Use local login.' :
 		''
 	);
@@ -48,9 +50,23 @@
 				name="password"
 				type="password"
 				required
-				placeholder="Password"
+				placeholder="Password (min 10 characters)"
+				minlength="10"
 				class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
 			/>
+			{#if setupMode}
+				<input
+					name="setup_token"
+					type="text"
+					required
+					placeholder="Admin setup token (one-time)"
+					class="w-full px-3 py-2 bg-slate-800 border border-amber-700 rounded-lg text-white placeholder-amber-500/60 focus:outline-none focus:border-amber-500"
+				/>
+				<p class="text-xs text-amber-400">
+					Setup mode: this will create the first admin user. The setup token must
+					match the <code>ADMIN_SETUP_TOKEN</code> env var on the server.
+				</p>
+			{/if}
 			<button
 				type="submit"
 				class="w-full px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
@@ -59,8 +75,4 @@
 			</button>
 		</form>
 	</div>
-
-	<p class="text-center text-xs text-slate-500">
-		First login creates an admin account automatically.
-	</p>
 </div>
