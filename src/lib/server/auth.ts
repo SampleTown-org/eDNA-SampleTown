@@ -7,9 +7,12 @@ import type { User } from '$lib/types';
 // Columns to select when loading a user for session/locals.
 // IMPORTANT: never include `password_hash` here — locals.user flows to every
 // page via +layout.server.ts, so anything in this list ends up in client HTML.
+// All columns are explicitly qualified with `u.` so the same constant works
+// inside JOINs (e.g. validateSession joins sessions s × users u, where both
+// tables have an `id` column).
 const SAFE_USER_COLS = `
-	id, github_id, username, display_name, email, avatar_url,
-	role, is_local_account, created_at, updated_at
+	u.id, u.github_id, u.username, u.display_name, u.email, u.avatar_url,
+	u.role, u.is_local_account, u.created_at, u.updated_at
 `;
 
 // GitHub OAuth client (initialized lazily)
@@ -113,14 +116,18 @@ export function upsertGitHubUser(githubUser: {
 	avatar_url: string | null;
 }): User {
 	const db = getDb();
-	const existing = db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE github_id = ?`).get(githubUser.id) as User | undefined;
+	const existing = db
+		.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.github_id = ?`)
+		.get(githubUser.id) as User | undefined;
 
 	if (existing) {
 		db.prepare(`
 			UPDATE users SET username = ?, display_name = ?, email = ?, avatar_url = ?, updated_at = datetime('now')
 			WHERE github_id = ?
 		`).run(githubUser.login, githubUser.name, githubUser.email, githubUser.avatar_url, githubUser.id);
-		return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE github_id = ?`).get(githubUser.id) as User;
+		return db
+			.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.github_id = ?`)
+			.get(githubUser.id) as User;
 	}
 
 	const id = generateId();
@@ -128,7 +135,7 @@ export function upsertGitHubUser(githubUser: {
 		INSERT INTO users (id, github_id, username, display_name, email, avatar_url, role, is_local_account)
 		VALUES (?, ?, ?, ?, ?, ?, 'user', 0)
 	`).run(id, githubUser.id, githubUser.login, githubUser.name, githubUser.email, githubUser.avatar_url);
-	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE id = ?`).get(id) as User;
+	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
 }
 
 // ============================================================
@@ -143,7 +150,7 @@ export async function createLocalUser(username: string, password: string, role: 
 		INSERT INTO users (id, username, password_hash, role, is_local_account)
 		VALUES (?, ?, ?, ?, 1)
 	`).run(id, username, hash, role);
-	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE id = ?`).get(id) as User;
+	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
 }
 
 // Dummy hash used to keep verifyLocalUser timing constant when the username
@@ -162,5 +169,5 @@ export async function verifyLocalUser(username: string, password: string): Promi
 	const valid = await bcrypt.compare(password, hash);
 	if (!row || !valid) return null;
 
-	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users WHERE id = ?`).get(row.id) as User;
+	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(row.id) as User;
 }
