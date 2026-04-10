@@ -57,6 +57,7 @@
 		href={(row) => `/libraries/${row.id}`}
 		empty="No library plates yet."
 		showId
+		filterable
 		editHref={(row) => `/libraries/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}

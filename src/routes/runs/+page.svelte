@@ -31,6 +31,7 @@
 		href={(row) => `/runs/${row.id}`}
 		empty="No sequencing runs yet."
 		showId
+		filterable
 		editHref={(row) => `/runs/${row.id}/edit`}
 		ondelete={deleteRun}
 	/>

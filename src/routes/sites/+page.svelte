@@ -55,6 +55,7 @@
 		href={(row) => `/sites/${row.id}`}
 		empty="No sites yet."
 		showId
+		filterable
 		editHref={(row) => `/sites/${row.id}/edit`}
 		ondelete={deleteSite}
 		onduplicate={duplicateSite}

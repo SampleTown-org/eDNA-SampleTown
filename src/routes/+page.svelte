@@ -68,14 +68,14 @@
 		<p class="text-slate-400 mt-1">eDNA sample tracking &middot; MIxS-compliant</p>
 	</div>
 
-	<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+	<div class="grid grid-cols-4 sm:grid-cols-8 gap-2">
 		{#each cards as card}
 			<a
 				href={card.href}
-				class="block p-5 rounded-lg border border-slate-800 bg-slate-900/50 hover:border-ocean-700 transition-colors"
+				class="block p-3 rounded-lg border border-slate-800 bg-slate-900/50 hover:border-ocean-700 transition-colors"
 			>
-				<div class="text-2xl font-bold text-ocean-400">{card.count}</div>
-				<div class="text-sm text-slate-400 mt-1">{card.label}</div>
+				<div class="text-xl font-bold text-ocean-400 leading-tight">{card.count}</div>
+				<div class="text-xs text-slate-400 mt-0.5 truncate">{card.label}</div>
 			</a>
 		{/each}
 	</div>

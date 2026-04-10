@@ -42,6 +42,7 @@
 		href={(row) => `/extracts/${row.id}`}
 		empty="No extracts yet."
 		showId
+		filterable
 		editHref={(row) => `/extracts/${row.id}/edit`}
 		ondelete={deleteExtract}
 		onduplicate={duplicateExtract}

@@ -27,7 +27,34 @@
 	let result = $state<{ imported: number; failed: number; errors: string[] } | null>(null);
 
 	function addRow() { rows = [...rows, emptyRow()]; }
-	function removeRow(i: number) { rows = rows.filter((_, idx) => idx !== i); }
+	function removeRow(i: number) {
+		// Don't let the user remove row 0 (the template) — it's the first
+		// row in the list and removing it would silently promote a real
+		// data row to template status. Instead, clearing row 0 is enough.
+		if (i === 0) return;
+		rows = rows.filter((_, idx) => idx !== i);
+	}
+
+	/**
+	 * Apply the "template" row 0 to every row below it. Only fills empty
+	 * cells in each child row — never overwrites data the user has typed.
+	 * Triggered either manually via a button or automatically when row 0
+	 * changes.
+	 */
+	function applyTemplate() {
+		const tpl = rows[0];
+		if (!tpl) return;
+		rows = rows.map((row, i) => {
+			if (i === 0) return row;
+			const next = { ...row };
+			for (const k of Object.keys(tpl) as (keyof Row)[]) {
+				if (!next[k]?.toString().trim() && tpl[k]?.toString().trim()) {
+					next[k] = tpl[k];
+				}
+			}
+			return next;
+		});
+	}
 
 	/** Paste handler — if the user pastes TSV/CSV, split into rows + cells. */
 	function handlePaste(e: ClipboardEvent, rowIdx: number, field: keyof Row) {
@@ -109,8 +136,11 @@
 		saving = false;
 		result = { imported, failed: errors.length, errors };
 		if (errors.length === 0) {
-			// Full success — clear the form
-			rows = [emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()];
+			// Full success — clear the data rows but preserve the template
+			// row 0 so the operator can keep entering more samples without
+			// retyping the common fields.
+			const tpl = { ...rows[0], samp_name: '' };
+			rows = [tpl, emptyRow(), emptyRow(), emptyRow(), emptyRow()];
 		}
 	}
 
@@ -119,18 +149,21 @@
 </script>
 
 <div class="max-w-5xl space-y-6">
-	<div class="flex items-baseline justify-between">
-		<div>
-			<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
-			<h1 class="text-2xl font-bold text-white mt-1">Batch sample entry</h1>
-			<p class="text-slate-400 mt-1 text-sm">
-				Paste or type multiple rows at once. Only <span class="text-white">name</span> is required;
-				every other field defaults to the MIxS <code>not collected</code> sentinel and can be filled
-				in later via the single-sample edit form.
-			</p>
-		</div>
-		<a href="/samples/new" class="text-xs text-slate-400 hover:text-ocean-400">Single-sample form &rarr;</a>
+	<div>
+		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
+		<h1 class="text-2xl font-bold text-white mt-1">New Sample</h1>
 	</div>
+
+	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
+		<a href="/samples/new" class="px-4 py-1.5 rounded text-sm font-medium text-slate-400 hover:text-white transition-colors">Single</a>
+		<span class="px-4 py-1.5 rounded text-sm font-medium bg-ocean-600 text-white">Batch</span>
+	</div>
+
+	<p class="text-slate-400 text-sm">
+		Paste or type multiple rows at once. Only <span class="text-white">name</span> is required;
+		every other field defaults to the MIxS <code>not collected</code> sentinel and can be filled
+		in later via the single-sample edit form.
+	</p>
 
 	{#if errorMsg}
 		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">
@@ -163,7 +196,12 @@
 			</select>
 		</div>
 		<p class="text-xs text-slate-500 pb-2">
-			Tip: paste a block of rows from a spreadsheet — the table auto-fills.
+			Paste a block of rows from a spreadsheet to auto-fill.
+			Row <span class="text-ocean-400">⭐</span> is a template —
+			<button type="button" onclick={applyTemplate} class="text-ocean-400 hover:text-ocean-300 underline">
+				apply to all
+			</button>
+			fills empty cells below with its values.
 		</p>
 	</div>
 
@@ -182,8 +220,18 @@
 			</thead>
 			<tbody>
 				{#each rows as row, i}
-					<tr class="border-b border-slate-800/50">
-						<td class="px-2 py-1 text-slate-500 text-xs font-mono">{i + 1}</td>
+					<tr
+						class="border-b border-slate-800/50 {i === 0
+							? 'bg-ocean-900/20'
+							: ''}"
+					>
+						<td class="px-2 py-1 text-slate-500 text-xs font-mono">
+							{#if i === 0}
+								<span class="text-ocean-400" title="Template — fills empty cells in rows below">⭐</span>
+							{:else}
+								{i + 1}
+							{/if}
+						</td>
 						<td class="px-2 py-1">
 							<input
 								type="text"

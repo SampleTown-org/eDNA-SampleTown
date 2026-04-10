@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PlateView from '$lib/components/PlateView.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	// Plate layout — assigns reactions to well positions (A1, A2, …).
+	// Optional visual aid for laying out the plate on the bench; the mapping
+	// doesn't currently persist (no well column in the schema yet).
+	let showPlateView = $state(false);
+	let plateFormat = $state<8 | 96 | 384>(96);
+	let wellAssignments = $state<Record<string, string>>({});
 
 	let plate = $state({
 		plate_name: '', pcr_date: '', pcr_operator: '', target_gene: '16S', target_subfragment: '',
@@ -47,8 +55,16 @@
 	}
 
 	let selectedExtractIds = $state<Set<string>>(new Set());
-	type RowItem = { extract_id: string; extract_name: string; samp_name: string; pcr_name: string; band_observed: string; concentration_ng_ul: string };
+	type RowItem = { extract_id: string; extract_name: string; samp_name: string; pcr_name: string; concentration_ng_ul: string };
 	let rows = $state<RowItem[]>([]);
+
+	const plateItems = $derived(
+		rows.map((r) => ({
+			id: r.extract_id,
+			label: r.pcr_name || r.extract_name,
+			sublabel: r.samp_name
+		}))
+	);
 
 	function toggleExtract(id: string, extract_name: string, samp_name: string) {
 		if (selectedExtractIds.has(id)) {
@@ -59,7 +75,7 @@
 			rows = [...rows, {
 				extract_id: id, extract_name, samp_name,
 				pcr_name: `${extract_name}_${plate.target_gene || 'PCR'}`,
-				band_observed: '', concentration_ng_ul: ''
+				concentration_ng_ul: ''
 			}];
 		}
 		selectedExtractIds = new Set(selectedExtractIds);
@@ -96,7 +112,6 @@
 			num_cycles: plate.num_cycles ? +plate.num_cycles : null,
 			reactions: rows.map(r => ({
 				extract_id: r.extract_id, pcr_name: r.pcr_name,
-				band_observed: r.band_observed === '' ? null : +r.band_observed,
 				concentration_ng_ul: r.concentration_ng_ul ? +r.concentration_ng_ul : null,
 			}))
 		};
@@ -202,6 +217,25 @@
 		</div>
 	</div>
 
+	<!-- Plate layout (collapsible) -->
+	{#if rows.length > 0}
+	<div class="rounded-lg border border-slate-800 bg-slate-900/30">
+		<button
+			type="button"
+			onclick={() => (showPlateView = !showPlateView)}
+			class="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-300 hover:text-white"
+		>
+			<span class="font-semibold">Plate layout</span>
+			<span class="text-xs text-slate-500">{showPlateView ? '▾' : '▸'}</span>
+		</button>
+		{#if showPlateView}
+			<div class="p-4 border-t border-slate-800">
+				<PlateView items={plateItems} bind:wellAssignments bind:format={plateFormat} />
+			</div>
+		{/if}
+	</div>
+	{/if}
+
 	<!-- Per-reaction table -->
 	{#if rows.length > 0}
 	<div class="overflow-x-auto">
@@ -211,7 +245,6 @@
 				<tr class="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
 					<th class="text-left pb-2 pr-3 font-medium">Extract</th>
 					<th class="text-left pb-2 pr-3 font-medium min-w-36">Reaction Name</th>
-					<th class="text-left pb-2 pr-3 font-medium w-24">Band</th>
 					<th class="text-left pb-2 pr-3 font-medium w-28">Conc. ng/µL</th>
 					<th class="pb-2 w-8"></th>
 				</tr>
@@ -221,10 +254,6 @@
 				<tr>
 					<td class="py-2 pr-3"><div class="text-white">{row.extract_name}</div><div class="text-xs text-slate-500">{row.samp_name}</div></td>
 					<td class="py-2 pr-3"><input type="text" bind:value={rows[i].pcr_name} class={cellInput} /></td>
-					<td class="py-2 pr-3">
-						<select bind:value={rows[i].band_observed} class="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500">
-							<option value="">--</option><option value="1">Yes</option><option value="0">No</option>
-						</select></td>
 					<td class="py-2 pr-3"><input type="number" step="any" bind:value={rows[i].concentration_ng_ul} class={cellInput} placeholder="--" /></td>
 					<td class="py-2"><button onclick={() => toggleExtract(row.extract_id, row.extract_name, row.samp_name)} class="text-slate-600 hover:text-red-400 transition-colors">✕</button></td>
 				</tr>

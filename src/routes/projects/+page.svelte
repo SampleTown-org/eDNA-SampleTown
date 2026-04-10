@@ -42,6 +42,7 @@
 		href={(row) => `/projects/${row.id}`}
 		empty="No projects yet. Create one to get started."
 		showId
+		filterable
 		editHref={(row) => `/projects/${row.id}/edit`}
 		ondelete={deleteProject}
 		onduplicate={duplicateProject}

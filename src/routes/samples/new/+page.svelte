@@ -67,6 +67,10 @@
 			errorMsg = 'Please select a project';
 			return;
 		}
+		if (!form.site_id) {
+			errorMsg = 'Please select a site';
+			return;
+		}
 		if (!(form.samp_name as string)?.trim()) {
 			errorMsg = 'Sample name is required';
 			return;
@@ -110,14 +114,21 @@
 		<h1 class="text-2xl font-bold text-white mt-1">New Sample</h1>
 	</div>
 
+	<!-- Single / Batch toggle -->
+	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
+		<span class="px-4 py-1.5 rounded text-sm font-medium bg-ocean-600 text-white">Single</span>
+		<a href="/samples/batch" class="px-4 py-1.5 rounded text-sm font-medium text-slate-400 hover:text-white transition-colors">Batch</a>
+	</div>
+
 	{#if errorMsg}
 		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>
 	{/if}
 
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-8">
-		<!-- Project & Checklist -->
+		<!-- Where: project + site. Site is required; lat/lng/geo_loc/env scales
+		     are inherited from the selected site at save time. -->
 		<fieldset class="space-y-4">
-			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Classification</legend>
+			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Where</legend>
 
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
@@ -130,91 +141,43 @@
 					</select>
 				</div>
 				<div>
-					<label for="site_id" class="block text-sm font-medium text-slate-300 mb-1">Site <span class="text-slate-500 font-normal">(auto-fills location)</span></label>
+					<label for="site_id" class="block text-sm font-medium text-slate-300 mb-1">Site</label>
 					<select id="site_id" bind:value={form.site_id} onchange={onSiteChange} class={selectCls}>
-						<option value="">No site / manual entry</option>
+						<option value="">Select site...</option>
 						{#each availableSites as site}
 							<option value={site.id}>{site.site_name}</option>
 						{/each}
 					</select>
-				</div>
-			</div>
-
-			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-				<div>
-					<label for="mixs_checklist" class="block text-sm font-medium text-slate-300 mb-1">MIxS Checklist</label>
-					<select id="mixs_checklist" bind:value={form.mixs_checklist} class={selectCls}>
-						{#each CHECKLIST_OPTIONS as opt}
-							<option value={opt.value}>{opt.label}</option>
-						{/each}
-					</select>
-					<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find(o => o.value === form.mixs_checklist)?.description}</p>
-				</div>
-
-				<div>
-					<label for="env_package" class="block text-sm font-medium text-slate-300 mb-1">Env Package</label>
-					<select id="env_package" bind:value={form.env_package} class={selectCls}>
-						{#each ENV_PACKAGES as pkg}
-							<option value={pkg.value}>{pkg.label}</option>
-						{/each}
-					</select>
+					{#if form.site_id}
+						{@const chosen = (data.sites as any[]).find((s: any) => s.id === form.site_id)}
+						{#if chosen}
+							<p class="text-xs text-slate-500 mt-1">
+								{chosen.latitude?.toFixed?.(4) ?? '?'}, {chosen.longitude?.toFixed?.(4) ?? '?'}
+								{#if chosen.geo_loc_name} &middot; {chosen.geo_loc_name}{/if}
+								<span class="text-slate-600">(inherited)</span>
+							</p>
+						{/if}
+					{/if}
 				</div>
 			</div>
 		</fieldset>
 
-		<!-- Core MIxS fields -->
+		<!-- Sample: name, date, env_medium. Everything else is inherited from
+		     site or hidden behind the "Add MIxS metadata" section below. -->
 		<fieldset class="space-y-4">
-			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Core MIxS Fields</legend>
+			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Sample</legend>
 
-			<div>
-				<label for="samp_name" class="block text-sm font-medium text-slate-300 mb-1">Sample Name</label>
-				<input id="samp_name" type="text" bind:value={form.samp_name}
-					class="{inputCls} {bc('samp_name')}" placeholder={data.namingTemplates?.sample_name || 'e.g., eDNA_River_2026_001'} />
-			</div>
-
-			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<div>
+					<label for="samp_name" class="block text-sm font-medium text-slate-300 mb-1">Sample Name</label>
+					<input id="samp_name" type="text" bind:value={form.samp_name}
+						class="{inputCls} {bc('samp_name')}" placeholder={data.namingTemplates?.sample_name || 'e.g., eDNA_River_2026_001'} />
+				</div>
 				<div>
 					<label for="collection_date" class="block text-sm font-medium text-slate-300 mb-1">Collection Date</label>
 					<input id="collection_date" type="date" bind:value={form.collection_date}
 						class="{inputCls} {bc('collection_date')}" />
 				</div>
-				<div>
-					<label for="latitude" class="block text-sm font-medium text-slate-300 mb-1">Latitude</label>
-					<input id="latitude" type="number" step="any" bind:value={form.latitude}
-						class="{inputCls} {bc('lat_lon')}" placeholder="e.g., 48.4284" />
-				</div>
-				<div>
-					<label for="longitude" class="block text-sm font-medium text-slate-300 mb-1">Longitude</label>
-					<input id="longitude" type="number" step="any" bind:value={form.longitude}
-						class="{inputCls} {bc('lat_lon')}" placeholder="e.g., -123.3656" />
-				</div>
-			</div>
-
-			<div>
-				<label for="geo_loc_name" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=geo_loc_name" target="_blank" class="hover:text-ocean-400">Geographic Location</a></label>
-				<select id="geo_loc_name" bind:value={form.geo_loc_name}
-					class="{selectCls} {bc('geo_loc_name')}">
-					<option value="">Select...</option>
-					{#each data.picklists.geo_loc_name as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select>
-			</div>
-
-			<div>
-				<label for="env_broad_scale" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=env_broad_scale" target="_blank" class="hover:text-ocean-400">Broad-scale Environment</a></label>
-				<select id="env_broad_scale" bind:value={form.env_broad_scale}
-					class="{selectCls} {bc('env_broad_scale')}">
-					<option value="">Select...</option>
-					{#each data.picklists.env_broad_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select>
-			</div>
-
-			<div>
-				<label for="env_local_scale" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=env_local_scale" target="_blank" class="hover:text-ocean-400">Local Environment</a></label>
-				<select id="env_local_scale" bind:value={form.env_local_scale}
-					class="{selectCls} {bc('env_local_scale')}">
-					<option value="">Select...</option>
-					{#each data.picklists.env_local_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select>
 			</div>
 
 			<div>
@@ -226,6 +189,39 @@
 				</select>
 			</div>
 		</fieldset>
+
+		<!-- Add MIxS metadata (collapsed): checklist + env package picker.
+		     Package selection drives the package-specific fields section below. -->
+		<details class="group rounded-lg border border-slate-800 bg-slate-900/40">
+			<summary class="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white cursor-pointer flex items-center gap-2">
+				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
+				Add MIxS metadata
+				<span class="text-xs text-slate-500 font-normal">
+					(checklist, package, package-specific fields)
+				</span>
+			</summary>
+			<div class="p-4 space-y-4 border-t border-slate-800">
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+					<div>
+						<label for="mixs_checklist" class="block text-sm font-medium text-slate-300 mb-1">MIxS Checklist</label>
+						<select id="mixs_checklist" bind:value={form.mixs_checklist} class={selectCls}>
+							{#each CHECKLIST_OPTIONS as opt}
+								<option value={opt.value}>{opt.label}</option>
+							{/each}
+						</select>
+						<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find(o => o.value === form.mixs_checklist)?.description}</p>
+					</div>
+					<div>
+						<label for="env_package" class="block text-sm font-medium text-slate-300 mb-1">Env Package</label>
+						<select id="env_package" bind:value={form.env_package} class={selectCls}>
+							{#each ENV_PACKAGES as pkg}
+								<option value={pkg.value}>{pkg.label}</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+			</div>
+		</details>
 
 		<!-- Package-specific fields -->
 		{#if packageFields.length > 0}

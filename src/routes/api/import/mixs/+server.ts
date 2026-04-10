@@ -132,14 +132,14 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			env_package, depth, elevation, host_taxon_id,
 			temp, salinity, ph, dissolved_oxygen, pressure, turbidity, chlorophyll, nitrate, phosphate,
 			sample_type, volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
-			notes, created_by)
+			notes, custom_fields, created_by)
 		VALUES (?, ?, ?, ?,
 			?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?,
 			?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?,
-			?, ?)
+			?, ?, ?)
 	`);
 
 	const insertSample = db.transaction((rows: typeof matched) => {
@@ -185,6 +185,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 					sample.storage_conditions || null,
 					sample.collector_name || null,
 					sample.notes || null,
+					sample.custom_fields || null,
 					userId
 				);
 				inserted.push({

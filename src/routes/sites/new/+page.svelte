@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ENV_PACKAGES } from '$lib/mixs/controlled-vocab';
 	import { formatLatLon } from '$lib/mixs/validators';
 	import MapPicker from '$lib/components/MapPicker.svelte';
 	import type { PageData } from './$types';
@@ -18,8 +17,6 @@
 		locality: '',
 		env_broad_scale: '',
 		env_local_scale: '',
-		env_medium: '',
-		env_package: '',
 		depth: '',
 		elevation: '',
 		habitat_type: '',
@@ -38,6 +35,10 @@
 	async function submit() {
 		if (!form.project_id) { errorMsg = 'Please select a project'; return; }
 		if (!(form.site_name as string).trim()) { errorMsg = 'Site name is required'; return; }
+		if (latitude == null || longitude == null) {
+			errorMsg = 'GPS coordinates are required — click the map or type lat/lng';
+			return;
+		}
 		saving = true; errorMsg = '';
 
 		const body = {
@@ -133,21 +134,10 @@
 		</fieldset>
 
 		<fieldset class="space-y-4">
-			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Environment (defaults for samples)</legend>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				<div>
-					<label for="env_package" class="block text-sm font-medium text-slate-300 mb-1">Env Package</label>
-					<select id="env_package" bind:value={form.env_package} class={selectCls}>
-						<option value="">Select...</option>
-						{#each ENV_PACKAGES as pkg}
-							<option value={pkg.value}>{pkg.label}</option>
-						{/each}
-					</select>
-				</div>
-				<div>
-					<label for="depth" class="block text-sm font-medium text-slate-300 mb-1">Depth (m)</label>
-					<input id="depth" type="number" step="any" bind:value={form.depth} class={inputCls} placeholder="e.g., 10" />
-				</div>
+			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Environment</legend>
+			<div>
+				<label for="depth" class="block text-sm font-medium text-slate-300 mb-1">Depth (m)</label>
+				<input id="depth" type="number" step="any" bind:value={form.depth} class={inputCls} placeholder="e.g., 10" />
 			</div>
 			<div>
 				<label for="env_broad_scale" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=env_broad_scale" target="_blank" class="hover:text-ocean-400">Broad-scale Environment</a></label>
@@ -161,13 +151,6 @@
 				<select id="env_local_scale" bind:value={form.env_local_scale} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.env_local_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select>
-			</div>
-			<div>
-				<label for="env_medium" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=env_medium" target="_blank" class="hover:text-ocean-400">Environmental Medium</a></label>
-				<select id="env_medium" bind:value={form.env_medium} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.env_medium as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 		</fieldset>

@@ -623,7 +623,7 @@
 		{/if}
 	</div>
 
-	{:else}
+	{:else if tabType === 'protocols'}
 	<!-- PCR Protocols -->
 	<div class="space-y-3">
 		<div class="space-y-2">

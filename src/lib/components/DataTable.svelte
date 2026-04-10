@@ -18,12 +18,28 @@
 		editHref?: (row: Record<string, unknown>) => string;
 		ondelete?: (row: Record<string, unknown>) => void;
 		onduplicate?: (row: Record<string, unknown>) => void;
+		/** Show the filter input above the table and narrow rows to matching cells. */
+		filterable?: boolean;
 	}
 
-	let { columns, rows = $bindable(), href, empty = 'No data found.', actions, showId = false, editHref, ondelete, onduplicate }: Props = $props();
+	let {
+		columns,
+		rows = $bindable(),
+		href,
+		empty = 'No data found.',
+		actions,
+		showId = false,
+		editHref,
+		ondelete,
+		onduplicate,
+		filterable = false
+	}: Props = $props();
 
 	let sortKey = $state('');
 	let sortDir = $state<'asc' | 'desc'>('asc');
+	let searchQuery = $state('');
+	/** When set, rows are tinted by their value for this column. */
+	let colorByKey = $state('');
 
 	function toggleSort(key: string) {
 		if (sortKey === key) {
@@ -34,9 +50,38 @@
 		}
 	}
 
+	function toggleColorBy(key: string) {
+		colorByKey = colorByKey === key ? '' : key;
+	}
+
+	/** Deterministic hash → HSL hue. Same input value → same color across renders. */
+	function hashHue(s: string): number {
+		let h = 0;
+		for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+		return Math.abs(h) % 360;
+	}
+
+	function colorForValue(v: unknown): string {
+		if (v == null || v === '') return '';
+		const hue = hashHue(String(v));
+		// Low-saturation, low-lightness tint that plays well with the dark theme.
+		return `background-color: hsl(${hue}, 30%, 22%);`;
+	}
+
+	let filteredRows = $derived.by(() => {
+		const q = searchQuery.trim().toLowerCase();
+		if (!q) return rows;
+		return rows.filter((row) =>
+			columns.some((col) => {
+				const v = row[col.key];
+				return v != null && String(v).toLowerCase().includes(q);
+			})
+		);
+	});
+
 	let sortedRows = $derived.by(() => {
-		if (!sortKey) return rows;
-		return [...rows].sort((a, b) => {
+		if (!sortKey) return filteredRows;
+		return [...filteredRows].sort((a, b) => {
 			const av = a[sortKey];
 			const bv = b[sortKey];
 			if (av == null && bv == null) return 0;
@@ -55,6 +100,29 @@
 	}
 </script>
 
+{#if filterable}
+	<div class="flex items-center gap-3 mb-3">
+		<input
+			type="text"
+			bind:value={searchQuery}
+			placeholder="Filter {rows.length} row{rows.length === 1 ? '' : 's'}..."
+			class="flex-1 max-w-sm px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500 text-sm"
+		/>
+		{#if searchQuery}
+			<span class="text-xs text-slate-500">{sortedRows.length} of {rows.length}</span>
+		{/if}
+		{#if colorByKey}
+			<button
+				onclick={() => (colorByKey = '')}
+				class="text-xs text-slate-500 hover:text-ocean-400"
+				title="Clear color-by"
+			>
+				×&nbsp;color by {columns.find((c) => c.key === colorByKey)?.label ?? colorByKey}
+			</button>
+		{/if}
+	</div>
+{/if}
+
 <div class="overflow-x-auto rounded-lg border border-slate-800">
 	<table class="w-full text-sm">
 		<thead>
@@ -63,20 +131,36 @@
 					<th class="px-3 py-3 text-left font-medium text-slate-500 w-20">ID</th>
 				{/if}
 				{#each columns as col}
-					<th class="px-4 py-3 text-left font-medium text-slate-400 {col.class || ''}">
-						{#if col.sortable}
-							<button
-								class="flex items-center gap-1 hover:text-white transition-colors"
-								onclick={() => toggleSort(col.key)}
-							>
-								{col.label}
-								{#if sortKey === col.key}
-									<span class="text-ocean-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
-								{/if}
-							</button>
-						{:else}
-							{col.label}
-						{/if}
+					<th
+						class="px-4 py-3 text-left font-medium text-slate-400 {col.class || ''}"
+						title="Shift+click to color rows by this column"
+					>
+						<div class="flex items-center gap-2">
+							{#if col.sortable}
+								<button
+									class="flex items-center gap-1 hover:text-white transition-colors"
+									onclick={(e) => {
+										if (e.shiftKey) toggleColorBy(col.key);
+										else toggleSort(col.key);
+									}}
+								>
+									{col.label}
+									{#if sortKey === col.key}
+										<span class="text-ocean-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+									{/if}
+								</button>
+							{:else}
+								<button
+									class="hover:text-white transition-colors"
+									onclick={(e) => {
+										if (e.shiftKey) toggleColorBy(col.key);
+									}}
+								>{col.label}</button>
+							{/if}
+							{#if colorByKey === col.key}
+								<span class="text-ocean-400 text-xs" title="Rows colored by this column">●</span>
+							{/if}
+						</div>
 					</th>
 				{/each}
 				{#if hasActions}
@@ -96,7 +180,10 @@
 				</tr>
 			{/if}
 			{#each sortedRows as row}
-				<tr class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+				<tr
+					class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors"
+					style={colorByKey ? colorForValue(row[colorByKey]) : ''}
+				>
 					{#if showId}
 						<td class="px-3 py-3">
 							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>

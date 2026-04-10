@@ -58,6 +58,7 @@
 		href={(row) => `/pcr/${row.id}`}
 		empty="No PCR plates yet."
 		showId
+		filterable
 		editHref={(row) => `/pcr/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}

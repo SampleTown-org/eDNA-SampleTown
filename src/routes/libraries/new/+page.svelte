@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PlateView from '$lib/components/PlateView.svelte';
 	import type { PageData } from './$types';
+	import { inferPlatformFromInstrument } from '$lib/platform-infer';
 	let { data }: { data: PageData } = $props();
+
+	let showPlateView = $state(false);
+	let plateFormat = $state<8 | 96 | 384>(96);
+	let wellAssignments = $state<Record<string, string>>({});
 
 	let sourceType = $state<'pcr_plate' | 'pcr' | 'extract'>(data.preselectedPcrPlateId ? 'pcr_plate' : 'pcr');
 
@@ -10,12 +16,30 @@
 		library_prep_kit: '', platform: '', instrument_model: '', notes: ''
 	});
 
+	// Platform is inferred from the selected instrument — the user never
+	// picks it directly. Falls back to 'other' if the instrument isn't
+	// recognized (e.g. a custom picklist entry the operator added).
+	const inferredPlatform = $derived(
+		inferPlatformFromInstrument(plate.instrument_model) ?? (plate.instrument_model ? 'other' : '')
+	);
+	$effect(() => {
+		plate.platform = inferredPlatform;
+	});
+
 	// Source selection
 	let selectedPcrPlateId = $state(data.preselectedPcrPlateId || '');
 	let selectedIds = $state<Set<string>>(new Set());
 
 	type RowItem = { source_id: string; source_type: 'pcr' | 'extract'; source_name: string; parent_name: string; library_name: string; index_sequence_i7: string; index_sequence_i5: string; barcode: string; final_concentration_ng_ul: string };
 	let rows = $state<RowItem[]>([]);
+
+	const plateItems = $derived(
+		rows.map((r) => ({
+			id: r.source_id,
+			label: r.library_name || r.source_name,
+			sublabel: r.parent_name
+		}))
+	);
 
 	// When PCR plate is selected, auto-populate rows from its reactions
 	async function loadPcrPlateReactions() {
@@ -209,22 +233,44 @@
 						{#each data.picklists.library_prep_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select></div>
 			</div>
-			<div class="grid grid-cols-2 gap-4">
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=seq_platform" target="_blank" class="hover:text-ocean-400">Platform</a></label>
-					<select bind:value={plate.platform} class={selectCls}>
-						<option value="">Select...</option>
-						{#each data.picklists.seq_platform as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=seq_instrument" target="_blank" class="hover:text-ocean-400">Instrument</a></label>
-					<select bind:value={plate.instrument_model} class={selectCls}>
-						<option value="">Select...</option>
-						{#each data.picklists.seq_instrument as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
+			<div>
+				<label class="block text-xs font-medium text-slate-400 mb-1">
+					<a href="/settings?tab=seq_instrument" target="_blank" class="hover:text-ocean-400">Instrument</a>
+				</label>
+				<select bind:value={plate.instrument_model} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.seq_instrument as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
+				{#if inferredPlatform}
+					<p class="text-xs text-slate-500 mt-1">
+						Platform: <span class="text-slate-300">{inferredPlatform}</span>
+						<span class="text-slate-600">(inferred)</span>
+					</p>
+				{/if}
 			</div>
 			<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
 				<input type="text" bind:value={plate.notes} class={inputCls} /></div>
 		</div>
 	</div>
+
+	<!-- Plate layout (collapsible) -->
+	{#if rows.length > 0}
+	<div class="rounded-lg border border-slate-800 bg-slate-900/30">
+		<button
+			type="button"
+			onclick={() => (showPlateView = !showPlateView)}
+			class="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-300 hover:text-white"
+		>
+			<span class="font-semibold">Plate layout</span>
+			<span class="text-xs text-slate-500">{showPlateView ? '▾' : '▸'}</span>
+		</button>
+		{#if showPlateView}
+			<div class="p-4 border-t border-slate-800">
+				<PlateView items={plateItems} bind:wellAssignments bind:format={plateFormat} />
+			</div>
+		{/if}
+	</div>
+	{/if}
 
 	<!-- Per-library table -->
 	{#if rows.length > 0}

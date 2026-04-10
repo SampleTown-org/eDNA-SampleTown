@@ -231,13 +231,26 @@ export function parseMixsTsv(
 
 		const values = parseTsvLine(line);
 		const sample: Record<string, unknown> = {};
+		const customFields: Record<string, unknown> = {};
 
 		for (const { index, field } of colMap) {
 			let val: unknown = values[index]?.trim() ?? null;
 			if (val === '' || val === 'not collected' || val === 'not applicable' || val === 'missing') {
 				val = null;
 			}
+			// Special prefix "custom:<key>" routes the value into a custom_fields
+			// JSON blob on the sample row instead of a named column. Used by
+			// the column mapper UI's "add as custom field" option.
+			if (field.startsWith('custom:')) {
+				const key = field.slice('custom:'.length);
+				if (key) customFields[key] = val;
+				continue;
+			}
 			sample[field] = val;
+		}
+
+		if (Object.keys(customFields).length > 0) {
+			sample.custom_fields = JSON.stringify(customFields);
 		}
 
 		// Validation

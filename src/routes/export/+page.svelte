@@ -284,6 +284,7 @@
 													>
 														<option value="">(unmapped — ignored)</option>
 														<option value="_skip_">(skip — drop column)</option>
+														<option value="custom:{header}">(add as custom field)</option>
 														{#each importPreview.available_fields ?? [] as f}
 															<option value={f}>{f}</option>
 														{/each}
