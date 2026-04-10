@@ -4,6 +4,8 @@ import { setUserPassword, verifyUserPassword } from '$lib/server/auth';
 import { apiError } from '$lib/server/api-errors';
 import { requireUser } from '$lib/server/guards';
 import { checkRate } from '$lib/server/rate-limit';
+import { parseBody } from '$lib/server/validation';
+import { ChangeOwnPasswordBody } from '$lib/server/schemas/auth';
 
 /**
  * Change the current user's own password.
@@ -11,7 +13,7 @@ import { checkRate } from '$lib/server/rate-limit';
  * - Requires the OLD password to be supplied and verified, EVEN if the user
  *   is in the must_change_password=1 state. (Stops a stolen-session attacker
  *   from locking out the legitimate user.)
- * - Validates length on the new password.
+ * - Validates length on the new password via the zod schema.
  * - Clears must_change_password as a side effect of setUserPassword.
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
@@ -23,31 +25,23 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		return json({ error: 'Too many attempts, try again in a moment' }, { status: 429 });
 	}
 
+	const parsed = parseBody(ChangeOwnPasswordBody, await request.json().catch(() => null));
+	if (!parsed.ok) return parsed.response;
+	const { old_password, new_password } = parsed.data;
+
 	try {
-		const body = await request.json();
-		const oldPassword = String(body?.old_password ?? '');
-		const newPassword = String(body?.new_password ?? '');
-
-		if (!oldPassword || !newPassword) {
-			return json({ error: 'old_password and new_password are required' }, { status: 400 });
-		}
-
-		const ok = await verifyUserPassword(user.id, oldPassword);
+		const ok = await verifyUserPassword(user.id, old_password);
 		if (!ok) {
 			return json({ error: 'Current password is incorrect' }, { status: 400 });
 		}
 
-		// validatePasswordPolicy is invoked inside setUserPassword and throws
-		// a safe Error message if the new password is too short / too long.
-		await setUserPassword(user.id, newPassword);
+		// setUserPassword still calls validatePasswordPolicy as defense in
+		// depth — the zod schema and the function-level check enforce the
+		// same rules so a future caller that bypasses the schema is still safe.
+		await setUserPassword(user.id, new_password);
 
 		return json({ ok: true });
 	} catch (err) {
-		// Surface the policy error message to the client (it's hand-written,
-		// not from SQLite), but route everything else through apiError.
-		if (err instanceof Error && /^Password must be/.test(err.message)) {
-			return json({ error: err.message }, { status: 400 });
-		}
 		return apiError(err);
 	}
 };

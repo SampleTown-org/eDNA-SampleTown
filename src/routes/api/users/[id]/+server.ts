@@ -3,8 +3,8 @@ import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { requireAdmin } from '$lib/server/guards';
-
-const VALID_ROLES = new Set(['admin', 'user', 'viewer']);
+import { parseBody } from '$lib/server/validation';
+import { UserUpdateBody } from '$lib/server/schemas/auth';
 
 const SAFE_USER_LIST_COLS = `
 	id, github_id, username, display_name, email, avatar_url,
@@ -16,16 +16,19 @@ const SAFE_USER_LIST_COLS = `
 /** Edit role / approval / display fields. Cannot edit own role (anti-lockout). */
 export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	const me = requireAdmin(locals);
+
+	const parsed = parseBody(UserUpdateBody, await request.json().catch(() => null));
+	if (!parsed.ok) return parsed.response;
+	const data = parsed.data;
+
 	try {
-		const data = await request.json();
 		const db = getDb();
 		const target = db.prepare('SELECT id, role FROM users WHERE id = ?').get(params.id) as
 			| { id: string; role: string }
 			| undefined;
 		if (!target) throw error(404, 'User not found');
 
-		const role = data?.role !== undefined ? String(data.role) : target.role;
-		if (!VALID_ROLES.has(role)) return json({ error: 'invalid role' }, { status: 400 });
+		const role = data.role ?? target.role;
 
 		// Anti-lockout: an admin cannot demote themselves. They must promote
 		// another admin first, then have that admin demote them.
@@ -36,11 +39,6 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 			);
 		}
 
-		const isApproved =
-			data?.is_approved !== undefined ? (data.is_approved ? 1 : 0) : null;
-		const displayName = data?.display_name !== undefined ? String(data.display_name).trim() || null : null;
-		const email = data?.email !== undefined ? String(data.email).trim() || null : null;
-
 		db.prepare(
 			`UPDATE users
 			   SET role = ?,
@@ -49,7 +47,13 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 			       email = COALESCE(?, email),
 			       updated_at = datetime('now')
 			 WHERE id = ?`
-		).run(role, isApproved, displayName, email, params.id);
+		).run(
+			role,
+			data.is_approved ?? null,
+			data.display_name ?? null,
+			data.email ?? null,
+			params.id
+		);
 
 		const updated = db
 			.prepare(`SELECT ${SAFE_USER_LIST_COLS} FROM users WHERE id = ?`)

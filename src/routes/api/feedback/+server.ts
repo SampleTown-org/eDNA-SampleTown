@@ -17,10 +17,10 @@ export const GET: RequestHandler = async () => {
 // Anonymous POSTs allowed via hooks.server.ts PUBLIC_API_ROUTES allowlist.
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
 	try {
-		// Rate limit per IP: 5 submissions / hour
+		// Rate limit per IP: 5 submissions / minute
 		const ip = getClientAddress();
-		if (!checkRate(`feedback:${ip}`, 5, 60 * 60_000)) {
-			return json({ error: 'Too many feedback submissions, try again later' }, { status: 429 });
+		if (!checkRate(`feedback:${ip}`, 5, 60_000)) {
+			return json({ error: 'Too many feedback submissions, try again in a moment' }, { status: 429 });
 		}
 
 		const data = await request.json();
