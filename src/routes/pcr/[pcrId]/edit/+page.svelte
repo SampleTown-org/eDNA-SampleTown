@@ -42,7 +42,7 @@
 		if (res.ok) {
 			goto(`/pcr/${data.pcr.id}`);
 		} else {
-			errorMsg = 'Failed to update PCR';
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update PCR';
 			saving = false;
 		}
 	}

@@ -53,7 +53,7 @@
 		if (res.ok) {
 			goto(`/sites/${data.site.id}`);
 		} else {
-			errorMsg = 'Failed to update site';
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update site';
 			saving = false;
 		}
 	}

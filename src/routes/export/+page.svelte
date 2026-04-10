@@ -38,9 +38,22 @@
 	let importProject = $state('');
 	let importTsv = $state('');
 	let importFileName = $state('');
-	let importPreview: { samples: any[]; errors: string[]; headers: string[]; count: number } | null = $state(null);
+	type SiteMatch = { samp_name: string; site: { id: string; site_name: string; distance_km: number } | null };
+	let importPreview: {
+		samples: any[];
+		errors: string[];
+		headers: string[];
+		count: number;
+		site_matches?: SiteMatch[];
+		column_map?: Record<string, string>;
+		available_fields?: string[];
+	} | null = $state(null);
 	let importing = $state(false);
-	let importResult: { imported: number; errors: string[] } | null = $state(null);
+	let importResult: { imported: number; errors: string[]; site_matches?: number } | null = $state(null);
+
+	// Column mapper state — populated from the dry-run response and editable by the user.
+	let columnMap = $state<Record<string, string>>({});
+	let showMapper = $state(false);
 
 	let importFile: File | null = $state(null);
 
@@ -63,38 +76,62 @@
 		}
 	}
 
-	async function sendImport(dryRun: boolean) {
+	async function sendImport(dryRun: boolean, useMapping: boolean = false) {
 		if (!importProject || !importFile) return;
 		importing = true;
 
+		const colMapJson = useMapping && Object.keys(columnMap).length > 0 ? JSON.stringify(columnMap) : null;
+
 		let res: Response;
 		if (importFile.name.endsWith('.xlsx') || importFile.name.endsWith('.xls')) {
-			// Send as multipart form for xlsx
 			const fd = new FormData();
 			fd.append('file', importFile);
 			fd.append('projectId', importProject);
 			fd.append('dryRun', String(dryRun));
+			if (colMapJson) fd.append('columnMap', colMapJson);
 			res = await fetch('/api/import/mixs', { method: 'POST', body: fd });
 		} else {
-			// Send as JSON for TSV
 			res = await fetch('/api/import/mixs', {
-				method: 'POST', headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ tsv: importTsv, projectId: importProject, dryRun })
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					tsv: importTsv,
+					projectId: importProject,
+					dryRun,
+					columnMap: colMapJson ? JSON.parse(colMapJson) : undefined
+				})
 			});
 		}
 
 		if (dryRun) {
-			if (res.ok) { importPreview = await res.json(); }
-			else { const err = await res.json().catch(() => null); importPreview = { samples: [], errors: [err?.error || 'Parse failed'], headers: [], count: 0 }; }
+			if (res.ok) {
+				importPreview = await res.json();
+				// Seed the editable map from the server's detected mapping on the FIRST
+				// dry run (before the user has edited anything), otherwise keep the
+				// user's edits.
+				if (!useMapping && importPreview?.column_map) {
+					columnMap = { ...importPreview.column_map };
+				}
+			} else {
+				const err = await res.json().catch(() => null);
+				importPreview = { samples: [], errors: [err?.error || 'Parse failed'], headers: [], count: 0 };
+			}
 		} else {
-			if (res.ok) { importResult = await res.json(); importPreview = null; }
-			else { const err = await res.json().catch(() => null); importResult = { imported: 0, errors: [err?.error || 'Import failed'] }; }
+			if (res.ok) {
+				importResult = await res.json();
+				importPreview = null;
+				showMapper = false;
+			} else {
+				const err = await res.json().catch(() => null);
+				importResult = { imported: 0, errors: [err?.error || 'Import failed'] };
+			}
 		}
 		importing = false;
 	}
 
-	async function previewImport() { await sendImport(true); }
-	async function runImport() { await sendImport(false); }
+	async function previewImport() { await sendImport(true, false); }
+	async function revalidateWithMapping() { await sendImport(true, true); }
+	async function runImport() { await sendImport(false, true); }
 
 	const selectCls = 'px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';
 </script>
@@ -203,12 +240,102 @@
 
 		{#if importPreview}
 		<div class="space-y-3">
+			{#if importPreview.column_map}
+				<div class="rounded-lg border border-slate-800 bg-slate-900/50">
+					<button
+						type="button"
+						onclick={() => (showMapper = !showMapper)}
+						class="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-300 hover:text-white"
+					>
+						<span>
+							Column mapping ·
+							<span class="text-slate-500">
+								{Object.values(columnMap).filter((v) => v && v !== '_skip_').length} mapped
+								&middot;
+								{Object.values(columnMap).filter((v) => v === '_skip_').length} skipped
+								&middot;
+								{Object.values(columnMap).filter((v) => !v).length} unmapped
+							</span>
+						</span>
+						<span class="text-xs text-slate-500">{showMapper ? '▾' : '▸'}</span>
+					</button>
+					{#if showMapper}
+						<div class="p-4 pt-0 space-y-2">
+							<p class="text-xs text-slate-500">
+								Override SampleTown's auto-detection. Unmapped columns are ignored. Use
+								<code>_skip_</code> to deliberately drop a column.
+							</p>
+							<div class="max-h-72 overflow-y-auto">
+								<table class="w-full text-xs">
+									<thead class="sticky top-0 bg-slate-900/80 backdrop-blur">
+										<tr class="text-slate-400 border-b border-slate-800">
+											<th class="px-2 py-1.5 text-left font-medium">File column</th>
+											<th class="px-2 py-1.5 text-left font-medium">→ Target field</th>
+										</tr>
+									</thead>
+									<tbody>
+										{#each Object.keys(importPreview.column_map) as header}
+											<tr class="border-b border-slate-800/40">
+												<td class="px-2 py-1.5 font-mono text-slate-300">{header}</td>
+												<td class="px-2 py-1.5">
+													<select
+														bind:value={columnMap[header]}
+														class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500"
+													>
+														<option value="">(unmapped — ignored)</option>
+														<option value="_skip_">(skip — drop column)</option>
+														{#each importPreview.available_fields ?? [] as f}
+															<option value={f}>{f}</option>
+														{/each}
+													</select>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+							<div class="flex justify-end pt-2">
+								<button
+									onclick={revalidateWithMapping}
+									disabled={importing}
+									class="px-3 py-1.5 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 text-xs font-medium"
+								>
+									{importing ? 'Re-validating...' : 'Re-validate with mapping'}
+								</button>
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			{#if importPreview.errors.length > 0}
 			<div class="p-3 rounded-lg bg-yellow-900/20 border border-yellow-800 text-yellow-300 text-sm space-y-1">
 				{#each importPreview.errors as err}
 					<div>{err}</div>
 				{/each}
 			</div>
+			{/if}
+
+			{#if importPreview.site_matches && importPreview.site_matches.length > 0}
+				{@const linked = importPreview.site_matches.filter((m) => m.site)}
+				{#if linked.length > 0}
+				<div class="p-3 rounded-lg bg-ocean-900/20 border border-ocean-800 text-ocean-200 text-sm">
+					<p class="font-medium">
+						{linked.length} of {importPreview.site_matches.length} samples will auto-link
+						to an existing site within 1&nbsp;km
+					</p>
+					<details class="mt-2">
+						<summary class="cursor-pointer text-xs text-ocean-300 hover:text-ocean-200">
+							Show matches
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each linked as m}
+								<div>{m.samp_name} → {m.site?.site_name} ({m.site?.distance_km} km)</div>
+							{/each}
+						</div>
+					</details>
+				</div>
+				{/if}
 			{/if}
 
 			<div>
@@ -249,6 +376,9 @@
 		<div class="p-4 rounded-lg {importResult.imported > 0 ? 'bg-green-900/20 border border-green-800' : 'bg-red-900/20 border border-red-800'}">
 			{#if importResult.imported > 0}
 				<p class="text-green-300 font-medium">{importResult.imported} samples imported successfully</p>
+				{#if importResult.site_matches && importResult.site_matches > 0}
+					<p class="text-sm text-ocean-300 mt-1">{importResult.site_matches} auto-linked to nearby sites (within 1 km)</p>
+				{/if}
 				<a href="/samples" class="text-sm text-ocean-400 hover:text-ocean-300 mt-1 inline-block">View samples &rarr;</a>
 			{/if}
 			{#if importResult.errors.length > 0}

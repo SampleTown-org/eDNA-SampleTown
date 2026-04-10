@@ -38,7 +38,7 @@
 		if (res.ok) {
 			goto(`/runs/${data.run.id}`);
 		} else {
-			errorMsg = 'Failed to update run';
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update run';
 			saving = false;
 		}
 	}

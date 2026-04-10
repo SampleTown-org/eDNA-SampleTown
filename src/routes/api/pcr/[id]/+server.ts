@@ -1,6 +1,9 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
+import { apiError } from '$lib/server/api-errors';
+
+const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
 
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
@@ -10,26 +13,55 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
-	const data = await request.json();
-	const db = getDb();
-	db.prepare(`
-		UPDATE pcr_amplifications SET pcr_name = ?, target_gene = ?, target_subfragment = ?,
-			forward_primer_name = ?, forward_primer_seq = ?, reverse_primer_name = ?, reverse_primer_seq = ?,
-			pcr_conditions = ?, annealing_temp_c = ?, num_cycles = ?, polymerase = ?, pcr_date = ?,
-			band_observed = ?, concentration_ng_ul = ?, notes = ?,
-			sync_version = sync_version + 1, updated_at = datetime('now')
-		WHERE id = ?
-	`).run(data.pcr_name, data.target_gene, data.target_subfragment ?? null,
-		data.forward_primer_name ?? null, data.forward_primer_seq ?? null,
-		data.reverse_primer_name ?? null, data.reverse_primer_seq ?? null,
-		data.pcr_conditions ?? null, data.annealing_temp_c ?? null, data.num_cycles ?? null,
-		data.polymerase ?? null, data.pcr_date ?? null,
-		data.band_observed ?? null, data.concentration_ng_ul ?? null, data.notes ?? null, params.id);
-	return json(db.prepare('SELECT * FROM pcr_amplifications WHERE id = ?').get(params.id));
+	try {
+		const data = await request.json();
+		if (!data?.pcr_name?.trim()) {
+			return json({ error: 'pcr_name is required' }, { status: 400 });
+		}
+		if (!data?.target_gene) {
+			return json({ error: 'target_gene is required' }, { status: 400 });
+		}
+		const db = getDb();
+		db.prepare(
+			`UPDATE pcr_amplifications SET
+				pcr_name = ?, target_gene = ?, target_subfragment = ?,
+				forward_primer_name = ?, forward_primer_seq = ?, reverse_primer_name = ?, reverse_primer_seq = ?,
+				pcr_conditions = ?, annealing_temp_c = ?, num_cycles = ?, polymerase = ?, pcr_date = ?,
+				band_observed = ?, concentration_ng_ul = ?, notes = ?,
+				sync_version = sync_version + 1, updated_at = datetime('now')
+			 WHERE id = ?`
+		).run(
+			data.pcr_name.trim(),
+			data.target_gene,
+			nn(data.target_subfragment),
+			nn(data.forward_primer_name),
+			nn(data.forward_primer_seq),
+			nn(data.reverse_primer_name),
+			nn(data.reverse_primer_seq),
+			nn(data.pcr_conditions),
+			data.annealing_temp_c ?? null,
+			data.num_cycles ?? null,
+			nn(data.polymerase),
+			nn(data.pcr_date),
+			data.band_observed ?? null,
+			data.concentration_ng_ul ?? null,
+			nn(data.notes),
+			params.id
+		);
+		return json(db.prepare('SELECT * FROM pcr_amplifications WHERE id = ?').get(params.id));
+	} catch (err) {
+		return apiError(err);
+	}
 };
 
 export const DELETE: RequestHandler = async ({ params }) => {
-	const db = getDb();
-	db.prepare("UPDATE pcr_amplifications SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?").run(params.id);
-	return json({ ok: true });
+	try {
+		const db = getDb();
+		db.prepare(
+			"UPDATE pcr_amplifications SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?"
+		).run(params.id);
+		return json({ ok: true });
+	} catch (err) {
+		return apiError(err);
+	}
 };

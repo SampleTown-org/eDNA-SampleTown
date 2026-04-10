@@ -1,24 +1,71 @@
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
 
+export type EventType = 'sample' | 'extract' | 'pcr' | 'library' | 'run';
+
+export interface DayEvent {
+	date: string; // YYYY-MM-DD
+	type: EventType;
+	count: number;
+}
+
 export const load: PageServerLoad = async () => {
 	const db = getDb();
 
+	const count = (sql: string) => (db.prepare(sql).get() as { c: number }).c;
 	const counts = {
-		projects: (db.prepare('SELECT COUNT(*) as c FROM projects').get() as { c: number }).c,
-		samples: (db.prepare('SELECT COUNT(*) as c FROM samples WHERE is_deleted = 0').get() as { c: number }).c,
-		extracts: (db.prepare('SELECT COUNT(*) as c FROM extracts WHERE is_deleted = 0').get() as { c: number }).c,
-		runs: (db.prepare('SELECT COUNT(*) as c FROM sequencing_runs WHERE is_deleted = 0').get() as { c: number }).c
+		projects: count('SELECT COUNT(*) AS c FROM projects'),
+		sites: count('SELECT COUNT(*) AS c FROM sites WHERE is_deleted = 0'),
+		samples: count('SELECT COUNT(*) AS c FROM samples WHERE is_deleted = 0'),
+		extracts: count('SELECT COUNT(*) AS c FROM extracts WHERE is_deleted = 0'),
+		pcrPlates: count('SELECT COUNT(*) AS c FROM pcr_plates WHERE is_deleted = 0'),
+		libraryPlates: count('SELECT COUNT(*) AS c FROM library_plates WHERE is_deleted = 0'),
+		runs: count('SELECT COUNT(*) AS c FROM sequencing_runs WHERE is_deleted = 0'),
+		analyses: count('SELECT COUNT(*) AS c FROM analyses')
 	};
 
-	const recentSamples = db.prepare(`
-		SELECT s.*, p.project_name
-		FROM samples s
-		JOIN projects p ON p.id = s.project_id
-		WHERE s.is_deleted = 0
-		ORDER BY s.created_at DESC
-		LIMIT 10
-	`).all() as Array<{ id: string; samp_name: string; project_name: string; mixs_checklist: string; geo_loc_name: string; collection_date: string }>;
+	// Event calendar: aggregate the creation/activity dates for each entity
+	// type into a single list of (date, type, count) rows. We pull dates that
+	// parse as YYYY-MM-DD (i.e. the first 10 chars match the ISO-ish pattern)
+	// and skip the MIxS "not collected" sentinel and any other junk.
+	//
+	// SQLite's `date()` function returns NULL for unparseable strings, so the
+	// WHERE clause filters those out naturally.
+	const eventSql = `
+		SELECT date(collection_date)   AS date, 'sample'  AS type, COUNT(*) AS count
+		FROM samples
+		WHERE is_deleted = 0 AND date(collection_date) IS NOT NULL
+		GROUP BY date(collection_date)
 
-	return { counts, recentSamples };
+		UNION ALL
+
+		SELECT date(extraction_date)   AS date, 'extract' AS type, COUNT(*) AS count
+		FROM extracts
+		WHERE is_deleted = 0 AND date(extraction_date) IS NOT NULL
+		GROUP BY date(extraction_date)
+
+		UNION ALL
+
+		SELECT date(pcr_date)          AS date, 'pcr'     AS type, COUNT(*) AS count
+		FROM pcr_plates
+		WHERE is_deleted = 0 AND date(pcr_date) IS NOT NULL
+		GROUP BY date(pcr_date)
+
+		UNION ALL
+
+		SELECT date(library_prep_date) AS date, 'library' AS type, COUNT(*) AS count
+		FROM library_plates
+		WHERE is_deleted = 0 AND date(library_prep_date) IS NOT NULL
+		GROUP BY date(library_prep_date)
+
+		UNION ALL
+
+		SELECT date(run_date)          AS date, 'run'     AS type, COUNT(*) AS count
+		FROM sequencing_runs
+		WHERE is_deleted = 0 AND date(run_date) IS NOT NULL
+		GROUP BY date(run_date)
+	`;
+	const events = db.prepare(eventSql).all() as DayEvent[];
+
+	return { counts, events };
 };

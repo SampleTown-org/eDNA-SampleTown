@@ -2,6 +2,64 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	const cards = [
+		{ href: '/projects',  label: 'Projects',       count: data.counts.projects },
+		{ href: '/sites',     label: 'Sites',          count: data.counts.sites },
+		{ href: '/samples',   label: 'Samples',        count: data.counts.samples },
+		{ href: '/extracts',  label: 'DNA Extracts',   count: data.counts.extracts },
+		{ href: '/pcr',       label: 'PCR Plates',     count: data.counts.pcrPlates },
+		{ href: '/libraries', label: 'Library Plates', count: data.counts.libraryPlates },
+		{ href: '/runs',      label: 'Sequencing Runs',count: data.counts.runs },
+		{ href: '/analysis',  label: 'Analyses',       count: data.counts.analyses }
+	];
+
+	// --- Event calendar ---------------------------------------------------
+	// Each event_type gets a distinct tailwind color class. Days with multiple
+	// event types stack the colors as small dots inside the cell.
+	const EVENT_COLORS: Record<string, { dot: string; label: string }> = {
+		sample:  { dot: 'bg-ocean-400',   label: 'Sample collection' },
+		extract: { dot: 'bg-emerald-400', label: 'DNA extraction' },
+		pcr:     { dot: 'bg-amber-400',   label: 'PCR plate' },
+		library: { dot: 'bg-violet-400',  label: 'Library prep' },
+		run:     { dot: 'bg-rose-400',    label: 'Sequencing run' }
+	};
+
+	// Group events by date for O(1) lookup by ISO date string.
+	const eventsByDate = $derived.by(() => {
+		const map = new Map<string, { type: string; count: number }[]>();
+		for (const e of data.events) {
+			if (!e.date) continue;
+			const arr = map.get(e.date) ?? [];
+			arr.push({ type: e.type, count: e.count });
+			map.set(e.date, arr);
+		}
+		return map;
+	});
+
+	// Available years — distinct years from events, always including current year.
+	const years = $derived.by(() => {
+		const set = new Set<number>();
+		for (const e of data.events) {
+			if (e.date) set.add(Number(e.date.slice(0, 4)));
+		}
+		set.add(new Date().getFullYear());
+		return Array.from(set).sort((a, b) => b - a);
+	});
+
+	let selectedYear = $state(new Date().getFullYear());
+
+	// Build a grid for the selected year: 12 rows (months) × 31 cols (days).
+	// Cells for days that don't exist in a given month (e.g. Feb 30) are blank.
+	const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+	function daysInMonth(year: number, month: number): number {
+		return new Date(year, month + 1, 0).getDate();
+	}
+	function iso(year: number, month: number, day: number): string {
+		const m = String(month + 1).padStart(2, '0');
+		const d = String(day).padStart(2, '0');
+		return `${year}-${m}-${d}`;
+	}
 </script>
 
 <div class="space-y-8">
@@ -10,57 +68,83 @@
 		<p class="text-slate-400 mt-1">eDNA sample tracking &middot; MIxS-compliant</p>
 	</div>
 
-	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-		<a href="/projects" class="block p-5 rounded-lg border border-slate-800 bg-slate-900/50 hover:border-ocean-700 transition-colors">
-			<div class="text-2xl font-bold text-ocean-400">{data.counts.projects}</div>
-			<div class="text-sm text-slate-400 mt-1">Projects</div>
-		</a>
-		<a href="/samples" class="block p-5 rounded-lg border border-slate-800 bg-slate-900/50 hover:border-ocean-700 transition-colors">
-			<div class="text-2xl font-bold text-ocean-400">{data.counts.samples}</div>
-			<div class="text-sm text-slate-400 mt-1">Samples</div>
-		</a>
-		<a href="/extracts" class="block p-5 rounded-lg border border-slate-800 bg-slate-900/50 hover:border-ocean-700 transition-colors">
-			<div class="text-2xl font-bold text-ocean-400">{data.counts.extracts}</div>
-			<div class="text-sm text-slate-400 mt-1">DNA Extracts</div>
-		</a>
-		<a href="/runs" class="block p-5 rounded-lg border border-slate-800 bg-slate-900/50 hover:border-ocean-700 transition-colors">
-			<div class="text-2xl font-bold text-ocean-400">{data.counts.runs}</div>
-			<div class="text-sm text-slate-400 mt-1">Sequencing Runs</div>
-		</a>
+	<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+		{#each cards as card}
+			<a
+				href={card.href}
+				class="block p-5 rounded-lg border border-slate-800 bg-slate-900/50 hover:border-ocean-700 transition-colors"
+			>
+				<div class="text-2xl font-bold text-ocean-400">{card.count}</div>
+				<div class="text-sm text-slate-400 mt-1">{card.label}</div>
+			</a>
+		{/each}
 	</div>
 
-	{#if data.recentSamples.length > 0}
-		<div>
-			<h2 class="text-lg font-semibold text-white mb-3">Recent Samples</h2>
-			<div class="overflow-x-auto rounded-lg border border-slate-800">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-slate-800 bg-slate-900/50">
-							<th class="px-4 py-3 text-left font-medium text-slate-400">Name</th>
-							<th class="px-4 py-3 text-left font-medium text-slate-400">Project</th>
-							<th class="px-4 py-3 text-left font-medium text-slate-400">Checklist</th>
-							<th class="px-4 py-3 text-left font-medium text-slate-400">Location</th>
-							<th class="px-4 py-3 text-left font-medium text-slate-400">Collected</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.recentSamples as sample}
-							<tr class="border-b border-slate-800/50 hover:bg-slate-800/30">
-								<td class="px-4 py-3">
-									<a href="/samples/{sample.id}" class="text-ocean-400 hover:text-ocean-300">{sample.samp_name}</a>
-								</td>
-								<td class="px-4 py-3 text-slate-300">{sample.project_name}</td>
-								<td class="px-4 py-3">
-									<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{sample.mixs_checklist}</span>
-								</td>
-								<td class="px-4 py-3 text-slate-300">{sample.geo_loc_name}</td>
-								<td class="px-4 py-3 text-slate-400">{sample.collection_date}</td>
-							</tr>
+	<!-- Year calendar of events -->
+	<div class="space-y-3">
+		<div class="flex items-center justify-between">
+			<h2 class="text-lg font-semibold text-white">Activity calendar</h2>
+			<select
+				bind:value={selectedYear}
+				class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
+			>
+				{#each years as y}<option value={y}>{y}</option>{/each}
+			</select>
+		</div>
+
+		<div class="rounded-lg border border-slate-800 bg-slate-900/50 p-4 overflow-x-auto">
+			<table class="border-separate border-spacing-0.5">
+				<thead>
+					<tr>
+						<th class="w-10"></th>
+						{#each Array.from({ length: 31 }, (_, i) => i + 1) as d}
+							<th class="text-[9px] text-slate-600 font-normal w-5 text-center">
+								{d % 5 === 0 || d === 1 ? d : ''}
+							</th>
 						{/each}
-					</tbody>
-				</table>
+					</tr>
+				</thead>
+				<tbody>
+					{#each MONTHS as month, mi}
+						<tr>
+							<td class="pr-2 text-xs text-slate-500 text-right font-medium">{month}</td>
+							{#each Array.from({ length: 31 }, (_, i) => i + 1) as day}
+								{#if day <= daysInMonth(selectedYear, mi)}
+									{@const dateKey = iso(selectedYear, mi, day)}
+									{@const dayEvents = eventsByDate.get(dateKey) ?? []}
+									<td
+										class="w-5 h-5 border border-slate-800/60 {dayEvents.length > 0
+											? 'bg-slate-800/80'
+											: 'bg-slate-900/40'}"
+										title={dayEvents.length > 0
+											? `${dateKey}\n` + dayEvents.map((e) => `${EVENT_COLORS[e.type]?.label ?? e.type}: ${e.count}`).join('\n')
+											: dateKey}
+									>
+										{#if dayEvents.length > 0}
+											<div class="flex flex-wrap gap-0.5 items-center justify-center h-full w-full p-0.5">
+												{#each dayEvents as e}
+													<span class="w-1 h-1 rounded-full {EVENT_COLORS[e.type]?.dot ?? 'bg-slate-400'}"></span>
+												{/each}
+											</div>
+										{/if}
+									</td>
+								{:else}
+									<td class="w-5 h-5"></td>
+								{/if}
+							{/each}
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+
+			<div class="flex flex-wrap gap-4 mt-4 pt-3 border-t border-slate-800 text-xs">
+				{#each Object.entries(EVENT_COLORS) as [key, cfg]}
+					<div class="flex items-center gap-1.5">
+						<span class="w-2 h-2 rounded-full {cfg.dot}"></span>
+						<span class="text-slate-400">{cfg.label}</span>
+					</div>
+				{/each}
 			</div>
 		</div>
-	{/if}
-
+	</div>
 </div>

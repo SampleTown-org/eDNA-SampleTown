@@ -48,7 +48,7 @@
 		if (res.ok) {
 			goto(`/samples/${data.sample.id}`);
 		} else {
-			errorMsg = 'Failed to update sample';
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update sample';
 			saving = false;
 		}
 	}

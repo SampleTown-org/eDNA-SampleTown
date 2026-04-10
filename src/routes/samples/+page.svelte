@@ -34,7 +34,10 @@
 <div class="space-y-4">
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-white">Samples</h1>
-		<a href="/samples/new" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Sample</a>
+		<div class="flex gap-2">
+			<a href="/samples/batch" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Batch</a>
+			<a href="/samples/new" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Sample</a>
+		</div>
 	</div>
 
 	<DataTable

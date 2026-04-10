@@ -40,7 +40,7 @@
 		if (res.ok) {
 			goto(`/extracts/${data.extract.id}`);
 		} else {
-			errorMsg = 'Failed to update extract';
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update extract';
 			saving = false;
 		}
 	}

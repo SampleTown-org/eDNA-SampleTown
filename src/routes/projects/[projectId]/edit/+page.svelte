@@ -26,7 +26,7 @@
 		if (res.ok) {
 			goto(`/projects/${data.project.id}`);
 		} else {
-			errorMsg = 'Failed to update project';
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update project';
 			saving = false;
 		}
 	}

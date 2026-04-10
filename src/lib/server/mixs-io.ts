@@ -96,9 +96,97 @@ export function xlsxToTsv(buffer: Buffer): string {
 	return rows.map((row: unknown[]) => row.map(cell => cell ?? '').join('\t')).join('\n');
 }
 
+/**
+ * Build the auto-detection map from lowercase file header → internal field name.
+ * Exported so the column-mapper UI can call it directly.
+ */
+export function buildHeaderToFieldMap(): Record<string, string> {
+	const headerToField: Record<string, string> = {};
+	for (const col of EXPORT_COLUMNS) {
+		headerToField[col.header.toLowerCase().replace(/^\*/, '')] = col.field;
+	}
+	const allFields = [
+		...CORE_FIELDS,
+		...Object.values(PACKAGE_FIELDS).flat(),
+		...MEASUREMENT_FIELDS,
+		...LOGISTICS_FIELDS
+	];
+	for (const f of allFields) {
+		headerToField[f.name.toLowerCase()] = f.name;
+		if (f.sra_column) headerToField[f.sra_column.toLowerCase()] = f.name;
+	}
+	// Common aliases and NCBI BioSample column names (same as before).
+	const aliases: Record<string, string> = {
+		sample_name: 'samp_name',
+		sample_title: 'samp_name',
+		latitude: 'latitude',
+		longitude: 'longitude',
+		organism: 'samp_taxon_id',
+		host: 'host_taxon_id',
+		elev: 'elevation',
+		alt: 'elevation',
+		diss_oxygen: 'dissolved_oxygen',
+		description: 'notes',
+		assembly_software: 'assembly_software',
+		specific_host: 'host_taxon_id',
+		number_contig: 'number_of_contigs'
+	};
+	for (const [k, v] of Object.entries(aliases)) headerToField[k] = v;
+
+	// NCBI-only columns we deliberately skip.
+	const skip = [
+		'bioproject_accession', 'strain', 'isolate', 'cultivar', 'ecotype',
+		'isol_growth_condt', 'biotic_relationship', 'collection_method',
+		'isolation_source', 'neg_cont_type', 'pos_cont_type', 'rel_to_oxygen',
+		'samp_collect_device', 'samp_mat_process', 'samp_size',
+		'source_material_id', 'subspecf_gen_lin', 'trophic_level',
+		'extrachrom_elements', 'omics_observ_id', 'target_gene',
+		'target_subfragment', 'pcr_primers', 'pcr_cond', 'nucl_acid_ext',
+		'nucl_acid_amp', 'lib_layout', 'lib_size', 'lib_vector', 'seq_meth',
+		'chimera_check', 'samp_collec_device', 'samp_collec_method',
+		'size_frac', 'host_disease_stat', 'host_spec_range', 'pathogenicity',
+		'propagation', 'encoded_traits', 'estimated_size', 'ref_biomaterial',
+		'source_mat_id', 'num_replicons', 'ploidy', 'experimental_factor',
+		'assembly_qual', 'assembly_name', 'annot', 'feat_pred', 'ref_db',
+		'sim_search_meth', 'tax_class', 'associated resource', 'sop',
+		'lib_reads_seqd', 'lib_screen', 'mid', 'adapters', 'seq_quality_check',
+		'project_name'
+	];
+	for (const s of skip) headerToField[s] = '_skip_';
+
+	return headerToField;
+}
+
+/**
+ * Return the list of internal field names that can be targeted by an import
+ * column mapping. Used to populate the column-mapper UI dropdown.
+ */
+export function getImportableFields(): string[] {
+	const fields = new Set<string>();
+	for (const col of EXPORT_COLUMNS) fields.add(col.field);
+	const allFields = [
+		...CORE_FIELDS,
+		...Object.values(PACKAGE_FIELDS).flat(),
+		...MEASUREMENT_FIELDS,
+		...LOGISTICS_FIELDS
+	];
+	for (const f of allFields) fields.add(f.name);
+	fields.delete('_skip_');
+	return Array.from(fields).sort();
+}
+
 /** Parse a MIxS TSV string into sample objects ready for insertion.
- *  Handles NCBI BioSample xlsx format: skips # comment rows, strips * from required field headers. */
-export function parseMixsTsv(tsv: string): { samples: Record<string, unknown>[]; errors: string[]; headers: string[] } {
+ *  Handles NCBI BioSample xlsx format: skips # comment rows, strips * from required field headers.
+ *  Optional `overrideMap` lets the column-mapper UI force specific header→field mappings. */
+export function parseMixsTsv(
+	tsv: string,
+	overrideMap?: Record<string, string>
+): {
+	samples: Record<string, unknown>[];
+	errors: string[];
+	headers: string[];
+	column_map: Record<string, string>;
+} {
 	let lines = tsv.trim().split('\n');
 
 	// Skip NCBI comment rows (start with #)
@@ -106,109 +194,31 @@ export function parseMixsTsv(tsv: string): { samples: Record<string, unknown>[];
 	if (dataLines.length < 2) return { samples: [], errors: ['File must have a header row and at least one data row'], headers: [] };
 
 	// Strip leading * from required field markers (NCBI convention)
-	const headers = dataLines[0].split('\t').map(h => h.trim().replace(/^\*/, '').toLowerCase());
+	const headers = dataLines[0].split('\t').map((h) => h.trim().replace(/^\*/, '').toLowerCase());
 	lines = dataLines;
 	const errors: string[] = [];
 	const samples: Record<string, unknown>[] = [];
 
-	// Build reverse mapping: SRA header -> internal field name
-	const headerToField: Record<string, string> = {};
-	for (const col of EXPORT_COLUMNS) {
-		headerToField[col.header.toLowerCase()] = col.field;
-	}
-	// Also accept internal field names directly
-	const allFields = [...CORE_FIELDS, ...Object.values(PACKAGE_FIELDS).flat(), ...MEASUREMENT_FIELDS, ...LOGISTICS_FIELDS];
-	for (const f of allFields) {
-		headerToField[f.name.toLowerCase()] = f.name;
-		if (f.sra_column) headerToField[f.sra_column.toLowerCase()] = f.name;
-	}
-	// Common aliases and NCBI BioSample column names
-	headerToField['sample_name'] = 'samp_name';
-	headerToField['sample_title'] = 'samp_name';
-	headerToField['latitude'] = 'latitude';
-	headerToField['longitude'] = 'longitude';
-	headerToField['organism'] = 'samp_taxon_id';
-	headerToField['host'] = 'host_taxon_id';
-	headerToField['elev'] = 'elevation';
-	headerToField['alt'] = 'elevation';
-	headerToField['diss_oxygen'] = 'dissolved_oxygen';
-	headerToField['bioproject_accession'] = '_skip_';
-	headerToField['description'] = 'notes';
-	headerToField['strain'] = '_skip_';
-	headerToField['isolate'] = '_skip_';
-	headerToField['cultivar'] = '_skip_';
-	headerToField['ecotype'] = '_skip_';
-	headerToField['isol_growth_condt'] = '_skip_';
-	headerToField['biotic_relationship'] = '_skip_';
-	headerToField['collection_method'] = '_skip_';
-	headerToField['isolation_source'] = '_skip_';
-	headerToField['neg_cont_type'] = '_skip_';
-	headerToField['pos_cont_type'] = '_skip_';
-	headerToField['rel_to_oxygen'] = '_skip_';
-	headerToField['samp_collect_device'] = '_skip_';
-	headerToField['samp_mat_process'] = '_skip_';
-	headerToField['samp_size'] = '_skip_';
-	headerToField['source_material_id'] = '_skip_';
-	headerToField['subspecf_gen_lin'] = '_skip_';
-	headerToField['trophic_level'] = '_skip_';
-	headerToField['extrachrom_elements'] = '_skip_';
-	headerToField['omics_observ_id'] = '_skip_';
-	headerToField['target_gene'] = '_skip_';
-	headerToField['target_subfragment'] = '_skip_';
-	headerToField['pcr_primers'] = '_skip_';
-	headerToField['pcr_cond'] = '_skip_';
-	headerToField['nucl_acid_ext'] = '_skip_';
-	headerToField['nucl_acid_amp'] = '_skip_';
-	headerToField['lib_layout'] = '_skip_';
-	headerToField['lib_size'] = '_skip_';
-	headerToField['lib_vector'] = '_skip_';
-	headerToField['seq_meth'] = '_skip_';
-	headerToField['chimera_check'] = '_skip_';
-	headerToField['assembly_software'] = 'assembly_software';
-	// MIxS v6 structured comment names
-	headerToField['samp_collec_device'] = '_skip_';
-	headerToField['samp_collec_method'] = '_skip_';
-	headerToField['size_frac'] = '_skip_';
-	headerToField['specific_host'] = 'host_taxon_id';
-	headerToField['host_disease_stat'] = '_skip_';
-	headerToField['host_spec_range'] = '_skip_';
-	headerToField['pathogenicity'] = '_skip_';
-	headerToField['propagation'] = '_skip_';
-	headerToField['encoded_traits'] = '_skip_';
-	headerToField['estimated_size'] = '_skip_';
-	headerToField['ref_biomaterial'] = '_skip_';
-	headerToField['source_mat_id'] = '_skip_';
-	headerToField['num_replicons'] = '_skip_';
-	headerToField['ploidy'] = '_skip_';
-	headerToField['experimental_factor'] = '_skip_';
-	headerToField['number_contig'] = 'number_of_contigs';
-	headerToField['assembly_qual'] = '_skip_';
-	headerToField['assembly_name'] = '_skip_';
-	headerToField['annot'] = '_skip_';
-	headerToField['feat_pred'] = '_skip_';
-	headerToField['ref_db'] = '_skip_';
-	headerToField['sim_search_meth'] = '_skip_';
-	headerToField['tax_class'] = '_skip_';
-	headerToField['associated resource'] = '_skip_';
-	headerToField['sop'] = '_skip_';
-	headerToField['lib_reads_seqd'] = '_skip_';
-	headerToField['lib_screen'] = '_skip_';
-	headerToField['mid'] = '_skip_';
-	headerToField['adapters'] = '_skip_';
-	headerToField['seq_quality_check'] = '_skip_';
-	headerToField['project_name'] = '_skip_'; // already set via projectId param
+	const autoMap = buildHeaderToFieldMap();
 
-	// Resolve column indices to field names
+	// Resolve each header → field using the override first, then auto-detection.
+	// column_map is returned so the UI knows what was detected / applied.
+	const column_map: Record<string, string> = {};
 	const colMap: { index: number; field: string }[] = [];
 	const unmapped: string[] = [];
 	headers.forEach((h, i) => {
-		const field = headerToField[h];
+		const override = overrideMap?.[h];
+		// Override can explicitly force _skip_ to drop a column the auto-map would pick up.
+		const field = override !== undefined ? override : autoMap[h];
 		if (field && field !== '_skip_') {
 			colMap.push({ index: i, field });
-		} else if (!field) {
+			column_map[h] = field;
+		} else if (field === '_skip_') {
+			column_map[h] = '_skip_';
+		} else {
 			unmapped.push(h);
+			column_map[h] = '';
 		}
-		// _skip_ fields are silently ignored
 	});
 
 	if (unmapped.length > 0) {
@@ -265,7 +275,7 @@ export function parseMixsTsv(tsv: string): { samples: Record<string, unknown>[];
 		samples.push(sample);
 	}
 
-	return { samples, errors, headers };
+	return { samples, errors, headers, column_map };
 }
 
 function parseTsvLine(line: string): string[] {

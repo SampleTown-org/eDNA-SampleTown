@@ -44,7 +44,7 @@
 		if (res.ok) {
 			goto(`/libraries/${data.library.id}`);
 		} else {
-			errorMsg = 'Failed to update library';
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update library';
 			saving = false;
 		}
 	}
