@@ -52,7 +52,7 @@
 			body: JSON.stringify(body)
 		});
 		if (res.ok) { const site = await res.json(); goto(`/sites/${site.id}`); }
-		else { errorMsg = 'Failed to create site'; saving = false; }
+		else { errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to create site'; saving = false; }
 	}
 
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';

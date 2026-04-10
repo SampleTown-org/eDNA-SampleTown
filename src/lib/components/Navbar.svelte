@@ -9,10 +9,13 @@
 
 	// Role-aware account icon: tells the user (and an admin glancing at someone
 	// else's screen) what role they're signed in as. Clicking goes to /account.
+	// Marine theme — admin = octopus (many arms, manages everything),
+	// user = fish (regular member of the school), viewer = shell (observes
+	// from the seafloor, doesn't move much).
 	const ROLE_ICON: Record<string, string> = {
-		admin: '👑',
-		user: '👤',
-		viewer: '👁️'
+		admin: '🐙',
+		user: '🐟',
+		viewer: '🐚'
 	};
 	const ROLE_LABEL: Record<string, string> = {
 		admin: 'Administrator',

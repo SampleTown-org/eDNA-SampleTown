@@ -23,12 +23,16 @@ function isPublicApi(pathname: string, method: string): boolean {
  * Path prefixes whose mutating verbs require an admin role.
  * GET on these paths still works for any authenticated user (so the
  * Settings page can render dropdowns) — only writes are admin-gated.
+ *
+ * Picklists, primer sets, PCR protocols, naming templates, and personnel
+ * are intentionally NOT here — regular users can edit those. The
+ * admin-only items are user accounts, the DB-snapshot push, and the
+ * feedback queue.
  */
 const ADMIN_WRITE_PREFIXES = [
-	'/api/settings/',
-	'/api/personnel', // covers /api/personnel and /api/personnel/[id]
 	'/api/users', // covers /api/users and /api/users/[id]/...
-	'/api/db/'
+	'/api/db/',
+	'/api/feedback/' // covers /api/feedback/[id] PUT/DELETE
 ];
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

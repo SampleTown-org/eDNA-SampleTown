@@ -67,6 +67,10 @@
 			errorMsg = 'Please select a project';
 			return;
 		}
+		if (!(form.samp_name as string)?.trim()) {
+			errorMsg = 'Sample name is required';
+			return;
+		}
 
 		saving = true;
 		errorMsg = '';
@@ -82,7 +86,7 @@
 			const sample = await res.json();
 			goto(`/samples/${sample.id}`);
 		} else {
-			errorMsg = 'Failed to create sample';
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to create sample';
 			saving = false;
 		}
 	}

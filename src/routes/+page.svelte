@@ -63,12 +63,4 @@
 		</div>
 	{/if}
 
-	<div class="flex gap-3">
-		<a href="/projects/new" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">
-			New Project
-		</a>
-		<a href="/samples/new" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">
-			New Sample
-		</a>
-	</div>
 </div>

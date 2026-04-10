@@ -29,9 +29,49 @@
 	};
 
 	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback';
+
+	// --- Search filter (shared across the list-based tabs, reset on tab switch) ---
+	let searchQuery = $state('');
+	function resetSearch() { searchQuery = ''; }
+
 	let feedbackItems = $state(structuredClone(data.feedback) as any[]);
 	let personnelList = $state(structuredClone(data.personnel) as any[]);
 	let userList = $state(structuredClone(data.users) as any[]);
+
+	// Search-filtered views (matches helper is defined further down in script).
+	let filteredPersonnel = $derived(
+		(() => {
+			if (!searchQuery.trim()) return personnelList;
+			const q = searchQuery.toLowerCase();
+			return personnelList.filter((p: any) =>
+				[p.full_name, p.role, p.email, p.institution, p.github_username].some((s) =>
+					typeof s === 'string' && s.toLowerCase().includes(q)
+				)
+			);
+		})()
+	);
+	let filteredUsers = $derived(
+		(() => {
+			if (!searchQuery.trim()) return userList;
+			const q = searchQuery.toLowerCase();
+			return userList.filter((u: any) =>
+				[u.username, u.display_name, u.email, u.role].some((s) =>
+					typeof s === 'string' && s.toLowerCase().includes(q)
+				)
+			);
+		})()
+	);
+	let filteredFeedback = $derived(
+		(() => {
+			if (!searchQuery.trim()) return feedbackItems;
+			const q = searchQuery.toLowerCase();
+			return feedbackItems.filter((f: any) =>
+				[f.message, f.username, f.page_url, f.status].some((s) =>
+					typeof s === 'string' && s.toLowerCase().includes(q)
+				)
+			);
+		})()
+	);
 
 	// --- User accounts CRUD ---
 	const USER_ROLES = ['admin', 'user', 'viewer'] as const;
@@ -160,10 +200,27 @@
 		personnelList = personnelList.filter(p => p.id !== id);
 	}
 
-	async function resolveFeedback(id: string, status: string) {
-		await fetch(`/api/feedback`, { method: 'GET' }); // just refresh
-		feedbackItems = feedbackItems.map(f => f.id === id ? { ...f, status } : f);
-		// Persist status - we need a PUT endpoint, but for now just update locally
+	async function resolveFeedback(id: string, status: 'open' | 'resolved' | 'wontfix') {
+		const res = await fetch(`/api/feedback/${id}`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ status })
+		});
+		if (res.ok) {
+			feedbackItems = feedbackItems.map((f) => (f.id === id ? { ...f, status } : f));
+		} else {
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update feedback';
+		}
+	}
+
+	async function deleteFeedback(id: string) {
+		if (!confirm('Delete this feedback? This cannot be undone.')) return;
+		const res = await fetch(`/api/feedback/${id}`, { method: 'DELETE' });
+		if (res.ok) {
+			feedbackItems = feedbackItems.filter((f) => f.id !== id);
+		} else {
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to delete';
+		}
 	}
 
 	// Support ?tab= URL parameter to deep-link to a category
@@ -176,6 +233,42 @@
 	let activeCategory = $state(initialCategory);
 	let primerSets = $state(structuredClone(data.primerSets) as any[]);
 	let pcrProtocols = $state(structuredClone(data.pcrProtocols) as any[]);
+
+	const matches = (s: unknown, q: string): boolean =>
+		typeof s === 'string' && s.toLowerCase().includes(q);
+
+	let filteredCategoryItems = $derived(
+		(() => {
+			const items = categories[activeCategory] || [];
+			if (!searchQuery.trim()) return items;
+			const q = searchQuery.toLowerCase();
+			return items.filter((i: any) => matches(i.value, q) || matches(i.label, q));
+		})()
+	);
+	let filteredPrimerSets = $derived(
+		(() => {
+			if (!searchQuery.trim()) return primerSets;
+			const q = searchQuery.toLowerCase();
+			return primerSets.filter(
+				(ps: any) =>
+					matches(ps.name, q) ||
+					matches(ps.target_gene, q) ||
+					matches(ps.target_subfragment, q) ||
+					matches(ps.forward_primer_name, q) ||
+					matches(ps.reverse_primer_name, q) ||
+					matches(ps.reference, q)
+			);
+		})()
+	);
+	let filteredPcrProtocols = $derived(
+		(() => {
+			if (!searchQuery.trim()) return pcrProtocols;
+			const q = searchQuery.toLowerCase();
+			return pcrProtocols.filter(
+				(p: any) => matches(p.name, q) || matches(p.polymerase, q) || matches(p.pcr_conditions, q)
+			);
+		})()
+	);
 
 	// --- Naming templates ---
 	const NAMING_FIELDS = [
@@ -358,18 +451,32 @@
 
 	<!-- Top-level tabs -->
 	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
-		<button onclick={() => tabType = 'naming'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'naming' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Naming</button>
-		<button onclick={() => tabType = 'category'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'category' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Picklists</button>
-		<button onclick={() => tabType = 'primers'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'primers' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Primer Sets</button>
-		<button onclick={() => tabType = 'protocols'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'protocols' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">PCR Protocols</button>
-		<button onclick={() => tabType = 'people'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'people' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">People</button>
-		<button onclick={() => tabType = 'feedback'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'feedback' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">
-			Feedback
-			{#if feedbackItems.filter(f => f.status === 'open').length > 0}
-				<span class="ml-1 px-1.5 py-0.5 bg-red-600 text-white text-xs rounded-full">{feedbackItems.filter(f => f.status === 'open').length}</span>
-			{/if}
-		</button>
+		<button onclick={() => { tabType = 'naming'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'naming' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Naming</button>
+		<button onclick={() => { tabType = 'category'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'category' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Picklists</button>
+		<button onclick={() => { tabType = 'primers'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'primers' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Primer Sets</button>
+		<button onclick={() => { tabType = 'protocols'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'protocols' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">PCR Protocols</button>
+		<button onclick={() => { tabType = 'people'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'people' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">People</button>
+		{#if data.isAdmin}
+			<button onclick={() => { tabType = 'feedback'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'feedback' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">
+				Feedback
+				{#if feedbackItems.filter(f => f.status === 'open').length > 0}
+					<span class="ml-1 px-1.5 py-0.5 bg-red-600 text-white text-xs rounded-full">{feedbackItems.filter(f => f.status === 'open').length}</span>
+				{/if}
+			</button>
+		{/if}
 	</div>
+
+	<!-- Search filter — applies to whichever list-based tab is active. -->
+	{#if tabType !== 'naming'}
+		<div class="flex">
+			<input
+				type="text"
+				bind:value={searchQuery}
+				placeholder="Filter {tabType === 'category' ? 'values' : tabType === 'primers' ? 'primer sets' : tabType === 'protocols' ? 'protocols' : tabType === 'people' ? 'users + personnel' : tabType === 'feedback' ? 'feedback' : 'entries'}..."
+				class="flex-1 max-w-sm px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500 text-sm"
+			/>
+		</div>
+	{/if}
 
 	{#if tabType === 'naming'}
 	<div class="space-y-4">
@@ -409,7 +516,7 @@
 	<div class="space-y-2">
 		<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">{CATEGORY_LABELS[activeCategory]}</h2>
 		<div class="space-y-1 max-h-96 overflow-y-auto">
-			{#each (categories[activeCategory] || []) as item}
+			{#each filteredCategoryItems as item}
 			<div class="flex items-center gap-2 p-2 rounded-lg {item.is_active ? 'bg-slate-800/50' : 'bg-slate-900/50 opacity-50'}">
 				{#if editingId === item.id}
 					<input type="text" bind:value={editValue} class="flex-1 {inputCls} text-sm" onkeydown={(e) => { if (e.key === 'Enter') saveEdit(item); if (e.key === 'Escape') { editingId = ''; } }} />
@@ -451,7 +558,7 @@
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-slate-800">
-					{#each primerSets as ps}
+					{#each filteredPrimerSets as ps}
 					<tr class={ps.is_active ? '' : 'opacity-40'}>
 						<td class="py-2 pr-2 text-white font-medium">{ps.name}</td>
 						<td class="py-2 pr-2 text-slate-300">{ps.target_gene}</td>
@@ -520,7 +627,7 @@
 	<!-- PCR Protocols -->
 	<div class="space-y-3">
 		<div class="space-y-2">
-			{#each pcrProtocols as proto}
+			{#each filteredPcrProtocols as proto}
 			<div class="p-3 rounded-lg bg-slate-800/50 {proto.is_active ? '' : 'opacity-40'}">
 				<div class="flex items-center justify-between">
 					<span class="text-white font-medium">{proto.name}</span>
@@ -578,7 +685,8 @@
 
 	{:else if tabType === 'people'}
 	<div class="space-y-8">
-		<!-- ============ User accounts ============ -->
+		<!-- ============ User accounts (admin only) ============ -->
+		{#if data.isAdmin}
 		<div class="space-y-3">
 			<div>
 				<h2 class="text-base font-semibold text-white">User Accounts</h2>
@@ -589,7 +697,7 @@
 			</div>
 
 			<div class="space-y-2">
-				{#each userList as u (u.id)}
+				{#each filteredUsers as u (u.id)}
 					<div class="p-3 rounded-lg bg-slate-800/50 border {u.is_approved ? 'border-slate-800' : 'border-amber-700'}">
 						<div class="flex items-start justify-between gap-3">
 							<div class="flex items-center gap-3 flex-1">
@@ -671,6 +779,7 @@
 				</form>
 			</details>
 		</div>
+		{/if}
 
 		<!-- ============ Personnel directory ============ -->
 		<div class="space-y-3">
@@ -683,7 +792,7 @@
 			</div>
 
 		<div class="space-y-2">
-			{#each personnelList as person}
+			{#each filteredPersonnel as person}
 			<div class="p-3 rounded-lg bg-slate-800/50 {person.is_active ? '' : 'opacity-50'}">
 				<div class="flex items-start justify-between gap-3">
 					<div class="flex items-center gap-3">
@@ -770,7 +879,7 @@
 			<p class="text-sm text-slate-500">No feedback yet.</p>
 		{:else}
 			<div class="space-y-2">
-				{#each feedbackItems as item}
+				{#each filteredFeedback as item}
 				<div class="p-3 rounded-lg {item.status === 'open' ? 'bg-slate-800/50 border border-slate-700' : 'bg-slate-900/50 border border-slate-800 opacity-60'}">
 					<div class="flex items-start justify-between gap-3">
 						<div class="flex-1">
@@ -782,9 +891,15 @@
 								<span class="px-1.5 rounded {item.status === 'open' ? 'bg-yellow-900/50 text-yellow-400' : item.status === 'resolved' ? 'bg-green-900/50 text-green-400' : 'bg-slate-800 text-slate-500'}">{item.status}</span>
 							</div>
 						</div>
-						{#if item.status === 'open'}
-							<button onclick={() => { item.status = 'resolved'; feedbackItems = [...feedbackItems]; }} class="text-xs text-slate-500 hover:text-green-400 shrink-0">Resolve</button>
-						{/if}
+						<div class="flex items-center gap-2 shrink-0">
+							{#if item.status === 'open'}
+								<button onclick={() => resolveFeedback(item.id, 'resolved')} class="text-xs text-slate-500 hover:text-green-400">Resolve</button>
+								<button onclick={() => resolveFeedback(item.id, 'wontfix')} class="text-xs text-slate-500 hover:text-amber-400">Won't fix</button>
+							{:else}
+								<button onclick={() => resolveFeedback(item.id, 'open')} class="text-xs text-slate-500 hover:text-ocean-400">Reopen</button>
+							{/if}
+							<button onclick={() => deleteFeedback(item.id)} class="text-xs text-slate-600 hover:text-red-400">Del</button>
+						</div>
 					</div>
 				</div>
 				{/each}
