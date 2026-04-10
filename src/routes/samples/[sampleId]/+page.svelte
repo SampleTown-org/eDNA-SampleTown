@@ -41,12 +41,18 @@
 <div class="space-y-6">
 	<div>
 		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
-		<div class="flex items-center gap-3 mt-1">
-			<h1 class="text-2xl font-bold text-white">{data.sample.samp_name}</h1>
-			<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{data.sample.mixs_checklist}</span>
+		<div class="flex items-center justify-between mt-1">
+			<div class="flex items-center gap-3">
+				<h1 class="text-2xl font-bold text-white">{data.sample.samp_name}</h1>
+				<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{data.sample.mixs_checklist}</span>
+			</div>
+			<a href="/samples/{data.sample.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 		<p class="text-slate-400 mt-1">
 			Project: <a href="/projects/{data.sample.project_id}" class="text-ocean-400 hover:text-ocean-300">{data.sample.project_name}</a>
+			{#if data.sample.site_name}
+				&middot; Site: <a href="/sites/{data.sample.site_id}" class="text-ocean-400 hover:text-ocean-300">{data.sample.site_name}</a>
+			{/if}
 		</p>
 	</div>
 
@@ -118,13 +124,4 @@
 		/>
 	</div>
 
-	<!-- Actions -->
-	<div class="flex gap-3 pt-2">
-		<a
-			href="/samples/{data.sample.id}/edit"
-			class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium"
-		>
-			Edit Sample
-		</a>
-	</div>
 </div>

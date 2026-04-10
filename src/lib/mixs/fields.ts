@@ -13,6 +13,7 @@ export interface MixsField {
 	options?: { value: string; label: string }[];
 	placeholder?: string;
 	unit?: string;
+	constrainedCategory?: string;
 }
 
 /** Core fields required for ALL MIxS checklists */
@@ -252,16 +253,7 @@ export const LOGISTICS_FIELDS: MixsField[] = [
 		required: false,
 		description: 'Type of physical sample',
 		sra_column: 'sample_type',
-		options: [
-			{ value: 'water', label: 'Water' },
-			{ value: 'sediment', label: 'Sediment' },
-			{ value: 'tissue', label: 'Tissue' },
-			{ value: 'soil', label: 'Soil' },
-			{ value: 'air_filter', label: 'Air Filter' },
-			{ value: 'biofilm', label: 'Biofilm' },
-			{ value: 'swab', label: 'Swab' },
-			{ value: 'other', label: 'Other' }
-		]
+		constrainedCategory: 'sample_type'
 	},
 	{
 		name: 'volume_filtered_ml',
@@ -275,29 +267,29 @@ export const LOGISTICS_FIELDS: MixsField[] = [
 	{
 		name: 'filter_type',
 		label: 'Filter Type',
-		type: 'text',
+		type: 'select',
 		required: false,
 		description: 'Type and pore size of filter used',
 		sra_column: 'filter_type',
-		placeholder: 'e.g., Sterivex 0.22 µm'
+		constrainedCategory: 'filter_type'
 	},
 	{
 		name: 'preservation_method',
 		label: 'Preservation Method',
-		type: 'text',
+		type: 'select',
 		required: false,
 		description: 'Method used to preserve the sample',
 		sra_column: 'samp_store_sol',
-		placeholder: 'e.g., ethanol, RNAlater, frozen'
+		constrainedCategory: 'preservation_method'
 	},
 	{
 		name: 'storage_conditions',
 		label: 'Storage Conditions',
-		type: 'text',
+		type: 'select',
 		required: false,
 		description: 'Temperature and conditions of storage',
 		sra_column: 'samp_store_temp',
-		placeholder: 'e.g., -20°C'
+		constrainedCategory: 'storage_conditions'
 	},
 	{
 		name: 'collector_name',

@@ -5,9 +5,11 @@ import { getDb, generateId } from '$lib/server/db';
 export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
 	const extractId = url.searchParams.get('extract_id');
-	let query = 'SELECT * FROM pcr_amplifications WHERE is_deleted = 0';
+	const plateId = url.searchParams.get('plate_id');
+	let query = 'SELECT p.*, e.extract_name FROM pcr_amplifications p JOIN extracts e ON e.id = p.extract_id WHERE p.is_deleted = 0';
 	const params: string[] = [];
-	if (extractId) { query += ' AND extract_id = ?'; params.push(extractId); }
+	if (extractId) { query += ' AND p.extract_id = ?'; params.push(extractId); }
+	if (plateId) { query += ' AND p.plate_id = ?'; params.push(plateId); }
 	query += ' ORDER BY created_at DESC';
 	return json(db.prepare(query).all(...params));
 };

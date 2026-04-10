@@ -27,6 +27,33 @@ export interface Project {
 	updated_at: string;
 }
 
+export interface Site {
+	id: string;
+	project_id: string;
+	site_name: string;
+	description: string | null;
+	lat_lon: string | null;
+	latitude: number | null;
+	longitude: number | null;
+	geo_loc_name: string | null;
+	locality: string | null;
+	env_broad_scale: string | null;
+	env_local_scale: string | null;
+	env_medium: string | null;
+	env_package: EnvPackage | null;
+	depth: string | null;
+	elevation: string | null;
+	habitat_type: string | null;
+	access_notes: string | null;
+	notes: string | null;
+	custom_fields: string | null;
+	sync_version: number;
+	is_deleted: number;
+	created_by: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export type MixsChecklist =
 	| 'MIMARKS-SU'
 	| 'MIMARKS-SP'
@@ -53,6 +80,7 @@ export type EnvPackage =
 export interface Sample {
 	id: string;
 	project_id: string;
+	site_id: string | null;
 	mixs_checklist: MixsChecklist;
 
 	// MIxS core
@@ -137,8 +165,32 @@ export interface Extract {
 
 export type TargetGene = '16S' | '18S' | 'CO1' | '12S' | 'ITS' | 'other';
 
+export interface PcrPlate {
+	id: string;
+	plate_name: string;
+	pcr_date: string | null;
+	target_gene: TargetGene;
+	target_subfragment: string | null;
+	forward_primer_name: string | null;
+	forward_primer_seq: string | null;
+	reverse_primer_name: string | null;
+	reverse_primer_seq: string | null;
+	pcr_conditions: string | null;
+	annealing_temp_c: number | null;
+	num_cycles: number | null;
+	polymerase: string | null;
+	notes: string | null;
+	custom_fields: string | null;
+	sync_version: number;
+	is_deleted: number;
+	created_by: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface PcrAmplification {
 	id: string;
+	plate_id: string | null;
 	extract_id: string;
 	pcr_name: string;
 	target_gene: TargetGene;
@@ -175,8 +227,28 @@ export type LibraryType =
 
 export type Platform = 'ILLUMINA' | 'OXFORD_NANOPORE' | 'PACBIO' | 'ION_TORRENT' | 'other';
 
+export interface LibraryPlate {
+	id: string;
+	plate_name: string;
+	library_prep_date: string | null;
+	library_type: LibraryType;
+	library_prep_kit: string | null;
+	platform: Platform | null;
+	instrument_model: string | null;
+	fragment_size_bp: number | null;
+	pcr_plate_id: string | null;
+	notes: string | null;
+	custom_fields: string | null;
+	sync_version: number;
+	is_deleted: number;
+	created_by: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface LibraryPrep {
 	id: string;
+	library_plate_id: string | null;
 	pcr_id: string | null;
 	extract_id: string | null;
 	library_name: string;

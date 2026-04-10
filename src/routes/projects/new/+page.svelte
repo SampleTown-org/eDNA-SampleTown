@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import type { PageData } from './$types';
+	let { data }: { data: PageData } = $props();
 
 	let form = $state({
 		project_name: '',
@@ -51,7 +53,7 @@
 				type="text"
 				bind:value={form.project_name}
 				class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
-				placeholder="e.g., Arctic eDNA Survey 2026"
+				placeholder={data.namingTemplates?.project_name || 'e.g., Arctic eDNA Survey 2026'}
 			/>
 		</div>
 

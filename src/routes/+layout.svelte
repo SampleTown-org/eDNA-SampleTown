@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import Navbar from '$lib/components/Navbar.svelte';
+	import FeedbackForm from '$lib/components/FeedbackForm.svelte';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -16,7 +17,8 @@
 	<main class="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
 		{@render children()}
 	</main>
-	<footer class="border-t border-slate-800 py-4 text-center text-xs text-slate-600">
+	<FeedbackForm />
+	<footer class="py-4 text-center text-xs text-slate-600">
 		SampleTown &middot; MIxS-compliant eDNA sample tracking
 	</footer>
 </div>

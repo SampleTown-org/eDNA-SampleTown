@@ -6,10 +6,12 @@ export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
 	const pcrId = url.searchParams.get('pcr_id');
 	const extractId = url.searchParams.get('extract_id');
+	const plateId = url.searchParams.get('plate_id');
 	let query = 'SELECT * FROM library_preps WHERE is_deleted = 0';
 	const params: string[] = [];
 	if (pcrId) { query += ' AND pcr_id = ?'; params.push(pcrId); }
 	if (extractId) { query += ' AND extract_id = ?'; params.push(extractId); }
+	if (plateId) { query += ' AND library_plate_id = ?'; params.push(plateId); }
 	query += ' ORDER BY created_at DESC';
 	return json(db.prepare(query).all(...params));
 };

@@ -1,19 +1,37 @@
 #!/bin/bash
-# SampleTown setup script for fresh Ubuntu server
-# Usage: ssh arbutus 'bash -s' < setup.sh
-#    or: ssh arbutus && bash /opt/sampletown/setup.sh
+# SampleTown setup for a fresh Linux server (Ubuntu/Debian).
+# Installs Node + pm2, clones the repo, builds, and starts the app under pm2.
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/<owner>/SampleTown/main/setup.sh | bash
+#   # or locally:
+#   ./setup.sh
+#
+# Override defaults via env vars:
+#   APP_DIR       install path                      (default: /opt/sampletown)
+#   PORT          port pm2 will bind                (default: 3000)
+#   NODE_VERSION  major Node version to install     (default: 20)
+#   REPO_URL      git repo to clone                 (default: https://github.com/rec3141/SampleTown.git)
+#   BRANCH        branch to check out               (default: main)
+
 set -euo pipefail
 
-APP_DIR="/opt/sampletown"
-PORT=3001
-NODE_VERSION="18"
+APP_DIR="${APP_DIR:-/opt/sampletown}"
+PORT="${PORT:-3000}"
+NODE_VERSION="${NODE_VERSION:-20}"
+REPO_URL="${REPO_URL:-https://github.com/rec3141/SampleTown.git}"
+BRANCH="${BRANCH:-main}"
 
 echo "=== SampleTown Setup ==="
+echo "    app dir: $APP_DIR"
+echo "    port:    $PORT"
+echo "    repo:    $REPO_URL ($BRANCH)"
+echo
 
 # Node.js via NodeSource
 if ! command -v node &>/dev/null; then
     echo ">> Installing Node.js ${NODE_VERSION}..."
-    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash -
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | sudo -E bash -
     sudo apt-get install -y nodejs
 fi
 echo "Node: $(node --version)"
@@ -32,10 +50,10 @@ sudo chown -R "$(whoami):$(whoami)" "$APP_DIR"
 if [ -d "$APP_DIR/.git" ]; then
     echo ">> Pulling latest..."
     cd "$APP_DIR"
-    git pull --ff-only
+    git pull --ff-only origin "$BRANCH"
 else
-    echo ">> Cloning repo..."
-    git clone https://github.com/Cryomics-Lab/SampleTown.git "$APP_DIR"
+    echo ">> Cloning $REPO_URL..."
+    git clone -b "$BRANCH" "$REPO_URL" "$APP_DIR"
     cd "$APP_DIR"
 fi
 
@@ -47,65 +65,27 @@ npm run build
 
 # .env (create template if missing)
 if [ ! -f "$APP_DIR/.env" ]; then
-    cat > "$APP_DIR/.env" << 'ENVEOF'
-AUTH_MODE=hybrid
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-GITHUB_REPO=Cryomics-Lab/SampleTown
-GITHUB_TOKEN=
-DB_PATH=data/sampletown.db
-ORIGIN=https://microbial.opencommunity.science
-ENVEOF
-    echo ">> Created .env template — edit $APP_DIR/.env with your credentials"
+    echo ">> Creating .env template — edit $APP_DIR/.env before going to production"
+    cp "$APP_DIR/.env.example" "$APP_DIR/.env"
 fi
 
 # pm2
-echo ">> Starting with pm2..."
+echo ">> Starting under pm2 on port $PORT..."
 cd "$APP_DIR"
 pm2 delete sampletown 2>/dev/null || true
-env $(cat .env | grep -v '^#' | grep -v '^$' | xargs) PORT=$PORT HOST=0.0.0.0 \
+env $(grep -v '^#' .env | grep -v '^$' | xargs) PORT="$PORT" HOST=0.0.0.0 \
     pm2 start build/index.js --name sampletown
 pm2 save
 
-# pm2 startup (needs sudo)
-echo ""
-echo ">> To enable auto-start on reboot, run:"
+echo
+echo ">> To enable auto-start on reboot, run the command pm2 prints below:"
 pm2 startup | tail -1
-echo ""
+echo
 
-# nginx config
-NGINX_CONF="/etc/nginx/sites-available/sampletown"
-if [ ! -f "$NGINX_CONF" ]; then
-    echo ">> Writing nginx config..."
-    sudo tee "$NGINX_CONF" > /dev/null << NGINXEOF
-# SampleTown — proxied under /sampletown/ on existing domain
-# Add this as an include or location block in your main site config
-#
-# Standalone subdomain approach (if DNS is set up):
-# server {
-#     server_name sampletown.opencommunity.science;
-#     location / {
-#         proxy_pass http://127.0.0.1:${PORT};
-#         proxy_http_version 1.1;
-#         proxy_set_header Upgrade \$http_upgrade;
-#         proxy_set_header Connection 'upgrade';
-#         proxy_set_header Host \$host;
-#         proxy_set_header X-Real-IP \$remote_addr;
-#         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-#         proxy_set_header X-Forwarded-Proto \$scheme;
-#     }
-# }
-#
-# For now, use the session-proxy pattern already set up:
-# Access at https://microbial.opencommunity.science/session-proxy/${PORT}/
-NGINXEOF
-    echo ">> SampleTown will be accessible via the session-proxy pattern at:"
-    echo "   https://microbial.opencommunity.science/session-proxy/${PORT}/"
-fi
-
-echo ""
 echo "=== Done! ==="
-echo "SampleTown running on port $PORT"
-echo "Access: https://microbial.opencommunity.science/session-proxy/${PORT}/"
+echo "App running on port $PORT"
 echo "Logs:   pm2 logs sampletown"
 echo "Status: pm2 status"
+echo
+echo "Next: configure nginx to proxy your hostname to 127.0.0.1:$PORT"
+echo "      (see docs/DEPLOYMENT.md for an example server block)"

@@ -2,8 +2,10 @@ node_modules
 .svelte-kit
 build
 .env
+.deploy.env
 data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 .DS_Store
+CLAUDE.local.md

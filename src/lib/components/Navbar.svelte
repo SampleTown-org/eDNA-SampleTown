@@ -10,13 +10,15 @@
 	const navLinks = [
 		{ href: '/', label: 'Dashboard' },
 		{ href: '/projects', label: 'Projects' },
+		{ href: '/sites', label: 'Sites' },
 		{ href: '/samples', label: 'Samples' },
 		{ href: '/extracts', label: 'Extracts' },
 		{ href: '/pcr', label: 'PCR' },
 		{ href: '/libraries', label: 'Libraries' },
 		{ href: '/runs', label: 'Runs' },
 		{ href: '/analysis', label: 'Analysis' },
-		{ href: '/export', label: 'Export' }
+		{ href: '/export', label: 'Import/Export' },
+		{ href: '/settings', label: 'Settings' }
 	];
 
 	let mobileOpen = $state(false);

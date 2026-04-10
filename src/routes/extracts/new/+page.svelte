@@ -10,14 +10,14 @@
 		sample_id: data.preselectedSampleId ?? '',
 		extract_name: '', extraction_date: '', extraction_method: '', extraction_kit: '',
 		concentration_ng_ul: '', total_volume_ul: '', a260_280: '', a260_230: '',
-		quantification_method: '', storage_location: '', notes: ''
+		quantification_method: '', storage_room: '', storage_box: '', notes: ''
 	});
 
 	// Batch mode
 	let selectedSampleIds = $state<Set<string>>(new Set());
 	let shared = $state({
 		extraction_date: '', extraction_method: '', extraction_kit: '',
-		quantification_method: '', storage_location: '', notes: ''
+		quantification_method: '', storage_room: '', storage_box: '', notes: ''
 	});
 	type RowItem = { sample_id: string; samp_name: string; project_name: string; extract_name: string; concentration_ng_ul: string; total_volume_ul: string; a260_280: string; a260_230: string };
 	let rows = $state<RowItem[]>([]);
@@ -110,17 +110,28 @@
 				{#each data.samples as s}<option value={s.id}>{s.samp_name} ({s.project_name})</option>{/each}
 			</select>
 		</div>
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-3 gap-4">
 			<div><label for="extract_name" class="block text-sm font-medium text-slate-300 mb-1">Extract Name *</label>
-				<input id="extract_name" type="text" bind:value={form.extract_name} class={inputCls} placeholder="e.g., EXT-001" /></div>
+				<input id="extract_name" type="text" bind:value={form.extract_name} class={inputCls} placeholder={data.namingTemplates?.extract_name || 'e.g., EXT-001'} /></div>
 			<div><label for="extraction_date" class="block text-sm font-medium text-slate-300 mb-1">Extraction Date</label>
 				<input id="extraction_date" type="date" bind:value={form.extraction_date} class={inputCls} /></div>
+			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=people" target="_blank" class="hover:text-ocean-400">Extracted By</a></label>
+				<select bind:value={form.extracted_by} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.personnel as p}<option value={p.id}>{p.full_name}</option>{/each}
+				</select></div>
 		</div>
 		<div class="grid grid-cols-2 gap-4">
-			<div><label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1">Method</label>
-				<input id="extraction_method" type="text" bind:value={form.extraction_method} class={inputCls} placeholder="e.g., Phenol-chloroform" /></div>
-			<div><label for="extraction_kit" class="block text-sm font-medium text-slate-300 mb-1">Kit</label>
-				<input id="extraction_kit" type="text" bind:value={form.extraction_kit} class={inputCls} placeholder="e.g., Qiagen DNeasy" /></div>
+			<div><label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Method</a></label>
+				<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select></div>
+			<div><label for="extraction_kit" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=extraction_kit" target="_blank" class="hover:text-ocean-400">Kit</a></label>
+				<select id="extraction_kit" bind:value={form.extraction_kit} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.extraction_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select></div>
 		</div>
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
 			<div><label for="concentration_ng_ul" class="block text-sm font-medium text-slate-300 mb-1">Conc. (ng/µL)</label>
@@ -132,13 +143,21 @@
 			<div><label for="a260_230" class="block text-sm font-medium text-slate-300 mb-1">260/230</label>
 				<input id="a260_230" type="number" step="any" bind:value={form.a260_230} class={inputCls} /></div>
 		</div>
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-3 gap-4">
 			<div><label for="quantification_method" class="block text-sm font-medium text-slate-300 mb-1">Quantification</label>
 				<select id="quantification_method" bind:value={form.quantification_method} class={selectCls}>
 					<option value="">Select...</option><option>Qubit</option><option>NanoDrop</option><option>Bioanalyzer</option><option>Other</option>
 				</select></div>
-			<div><label for="storage_location" class="block text-sm font-medium text-slate-300 mb-1">Storage Location</label>
-				<input id="storage_location" type="text" bind:value={form.storage_location} class={inputCls} placeholder="e.g., Freezer A, Box 3" /></div>
+			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=storage_room" target="_blank" class="hover:text-ocean-400">Room/Freezer</a></label>
+				<select bind:value={form.storage_room} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.storage_room as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select></div>
+			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=storage_box" target="_blank" class="hover:text-ocean-400">Storage Box</a></label>
+				<select bind:value={form.storage_box} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.storage_box as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select></div>
 		</div>
 		<div><label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea></div>
@@ -180,16 +199,30 @@
 			<div class="grid grid-cols-2 gap-4">
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Extraction Date</label>
 					<input type="date" bind:value={shared.extraction_date} class={inputCls} /></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1">Method</label>
-					<input type="text" bind:value={shared.extraction_method} class={inputCls} placeholder="e.g., Qiagen DNeasy" /></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1">Kit</label>
-					<input type="text" bind:value={shared.extraction_kit} class={inputCls} placeholder="e.g., Qiagen DNeasy PowerSoil" /></div>
+				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Method</a></label>
+					<select bind:value={shared.extraction_method} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select></div>
+				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=extraction_kit" target="_blank" class="hover:text-ocean-400">Kit</a></label>
+					<select bind:value={shared.extraction_kit} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.extraction_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select></div>
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Quantification</label>
 					<select bind:value={shared.quantification_method} class={selectCls}>
 						<option value="">Select...</option><option>Qubit</option><option>NanoDrop</option><option>Bioanalyzer</option><option>Other</option>
 					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1">Storage Location</label>
-					<input type="text" bind:value={shared.storage_location} class={inputCls} placeholder="e.g., -80°C Freezer A" /></div>
+				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=storage_room" target="_blank" class="hover:text-ocean-400">Room/Freezer</a></label>
+					<select bind:value={shared.storage_room} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.storage_room as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select></div>
+				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=storage_box" target="_blank" class="hover:text-ocean-400">Storage Box</a></label>
+					<select bind:value={shared.storage_box} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.storage_box as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select></div>
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
 					<input type="text" bind:value={shared.notes} class={inputCls} /></div>
 			</div>

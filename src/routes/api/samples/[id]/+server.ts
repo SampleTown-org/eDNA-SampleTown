@@ -21,7 +21,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 	db.prepare(`
 		UPDATE samples SET
-			mixs_checklist = ?, samp_name = ?, collection_date = ?,
+			site_id = ?, mixs_checklist = ?, samp_name = ?, collection_date = ?,
 			lat_lon = ?, latitude = ?, longitude = ?,
 			geo_loc_name = ?, env_broad_scale = ?, env_local_scale = ?, env_medium = ?, samp_taxon_id = ?,
 			env_package = ?, depth = ?, elevation = ?, host_taxon_id = ?,
@@ -32,7 +32,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			sync_version = sync_version + 1, updated_at = datetime('now')
 		WHERE id = ?
 	`).run(
-		data.mixs_checklist, data.samp_name, data.collection_date,
+		data.site_id ?? null, data.mixs_checklist, data.samp_name, data.collection_date,
 		data.lat_lon, coords?.latitude ?? null, coords?.longitude ?? null,
 		data.geo_loc_name, data.env_broad_scale, data.env_local_scale, data.env_medium, data.samp_taxon_id ?? null,
 		data.env_package, data.depth ?? null, data.elevation ?? null, data.host_taxon_id ?? null,

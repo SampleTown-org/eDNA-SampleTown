@@ -32,7 +32,10 @@
 <div class="space-y-6">
 	<div>
 		<a href="/extracts" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Extracts</a>
-		<h1 class="text-2xl font-bold text-white mt-1">{data.extract.extract_name}</h1>
+		<div class="flex items-center justify-between mt-1">
+			<h1 class="text-2xl font-bold text-white">{data.extract.extract_name}</h1>
+			<a href="/extracts/{data.extract.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+		</div>
 		<p class="text-slate-400 mt-1">Sample: <a href="/samples/{data.extract.sample_id}" class="text-ocean-400 hover:text-ocean-300">{data.extract.samp_name}</a></p>
 	</div>
 

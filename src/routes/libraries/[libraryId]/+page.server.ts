@@ -4,10 +4,40 @@ import { getDb } from '$lib/server/db';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
-	const library = db.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0').get(params.libraryId);
-	if (!library) throw error(404, 'Library not found');
 
-	// Get source info
+	// Try as library plate first
+	const plate = db.prepare(`
+		SELECT p.*, pp.plate_name AS pcr_plate_name
+		FROM library_plates p
+		LEFT JOIN pcr_plates pp ON pp.id = p.pcr_plate_id
+		WHERE p.id = ? AND p.is_deleted = 0
+	`).get(params.libraryId);
+	if (plate) {
+		const libraries = db.prepare(`
+			SELECT l.*,
+				COALESCE(r.pcr_name, e.extract_name) AS source_name,
+				CASE WHEN l.pcr_id IS NOT NULL THEN 'PCR' ELSE 'Extract' END AS source_type
+			FROM library_preps l
+			LEFT JOIN pcr_amplifications r ON r.id = l.pcr_id
+			LEFT JOIN extracts e ON e.id = l.extract_id
+			WHERE l.library_plate_id = ? AND l.is_deleted = 0
+			ORDER BY l.library_name
+		`).all(params.libraryId);
+
+		const runs = db.prepare(`
+			SELECT DISTINCT sr.* FROM sequencing_runs sr
+			JOIN run_libraries rl ON rl.run_id = sr.id
+			JOIN library_preps l ON l.id = rl.library_id
+			WHERE l.library_plate_id = ? AND sr.is_deleted = 0
+		`).all(params.libraryId);
+
+		return { type: 'plate', plate, libraries, runs };
+	}
+
+	// Fall back to individual library
+	const library = db.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0').get(params.libraryId);
+	if (!library) throw error(404, 'Library plate or library not found');
+
 	let source: { type: string; name: string; id: string; sample_name?: string; sample_id?: string } | null = null;
 	if ((library as any).pcr_id) {
 		const pcr = db.prepare(`SELECT p.pcr_name, p.id, e.extract_name, s.samp_name, s.id as sample_id
@@ -20,6 +50,5 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	const runs = db.prepare(`SELECT r.* FROM sequencing_runs r JOIN run_libraries rl ON rl.run_id = r.id WHERE rl.library_id = ? AND r.is_deleted = 0`).all(params.libraryId);
-
-	return { library, source, runs };
+	return { type: 'library', library, source, runs };
 };

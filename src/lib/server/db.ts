@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 import schema from './schema.sql?raw';
+import { seedConstrainedValues } from './seed-constrained-values';
 
 const DB_PATH = process.env.DB_PATH || 'data/sampletown.db';
 
@@ -16,6 +17,7 @@ export function getDb(): Database.Database {
 		_db.pragma('journal_mode = WAL');
 		_db.pragma('foreign_keys = ON');
 		_db.exec(schema);
+		seedConstrainedValues(_db);
 	}
 	return _db;
 }
