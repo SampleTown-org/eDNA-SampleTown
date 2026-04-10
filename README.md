@@ -12,7 +12,8 @@ Tracks the full chain: **Project → Site → Sample → Extract → PCR → Lib
 - **Constrained vocabularies** — picklist-driven for primers, protocols, kits, instruments, environments, storage locations; managed in-app via the Settings page
 - **Linked composites** — primer sets (gene + region + F/R primer + sequence + reference) and PCR protocols (polymerase + annealing + cycles + conditions) live in dedicated tables and are selected as a unit
 - **Personnel tracking** — every entity (sample/extract/PCR/library/run) records who did the work, optionally linked to a GitHub-authenticated user
-- **Hybrid auth** — GitHub OAuth (`arctic`) for normal use, local bcrypt accounts as a LAN-only fallback for ship deployments with no internet
+- **Hybrid auth + RBAC** — GitHub OAuth (`arctic`) for normal use, local bcrypt accounts as a LAN-only fallback. All `/api/*` mutations require a session; `/api/settings/*`, `/api/personnel`, `/api/db/*`, and the Settings page require `role=admin`. First admin is bootstrapped via a one-time `ADMIN_SETUP_TOKEN`.
+- **Rate limited** — login (5/min/IP), feedback POST (5/h/IP), MIxS import (10/h/IP, 10 MB cap, 10 k row cap)
 - **Map picker** — click a location on a Leaflet map when adding a site; dashboard shows all sites as markers
 - **Feedback form** — single-line form on the bottom of every page captures the current URL for context
 - **GitHub-backed snapshots** — JSON exports of every table can be committed to a configured GitHub repo for version control
@@ -58,6 +59,17 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
 | `ORIGIN` | Public origin URL — required for SvelteKit CSRF and Secure cookies |
 | `ADMIN_SETUP_TOKEN` | One-time token to create the first admin user (unset after first use) |
 
+## Auth model
+
+- **Sessions** are server-side rows in `sessions`, looked up by an opaque 32-char hex cookie. Default lifetime is 14 days, no sliding window. Cookies are `httpOnly`, `sameSite=lax`, and `secure` when `ORIGIN` starts with `https://`.
+- **GitHub OAuth** is implemented with `arctic`. The `state` parameter is round-tripped through an `httpOnly` cookie and compared with `timingSafeEqual` on the callback. The OAuth App's Authorization callback URL must be `https://<host>/auth/login/github/callback` (full path).
+- **Local accounts** use `bcrypt` (cost 12). Username enumeration is mitigated by always running `bcrypt.compare` against a dummy hash on unknown usernames. Passwords are 10–128 characters.
+- **API authorization** is enforced centrally in `src/hooks.server.ts`:
+  - Anonymous: only `POST /api/feedback`
+  - Authenticated: all other `/api/*`
+  - Admin: any mutation under `/api/settings/`, `/api/personnel`, `/api/db/`, plus `GET /api/feedback`. The `/settings` page itself is also admin-gated.
+- **Bootstrapping the first admin**: on a fresh DB the `users` table is empty. Set `ADMIN_SETUP_TOKEN` in `.env`, hit the login form with a matching `setup_token` field once, then unset the env var. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#creating-the-first-admin-user).
+
 ## Repo layout
 
 ```
@@ -67,7 +79,10 @@ src/
 │   │   ├── db.ts                       # better-sqlite3 singleton + schema bootstrap
 │   │   ├── schema.sql                  # full DDL (inlined via ?raw import)
 │   │   ├── seed-constrained-values.ts  # picklist + primer set + protocol seeds
-│   │   ├── auth.ts                     # session helpers, GitHub OAuth via arctic
+│   │   ├── auth.ts                     # sessions, OAuth, bcrypt, sweep
+│   │   ├── guards.ts                   # requireUser / requireAdmin
+│   │   ├── api-errors.ts               # safe SQLite-error wrapper
+│   │   ├── rate-limit.ts               # in-memory sliding window
 │   │   ├── personnel.ts                # active personnel lookup
 │   │   ├── constrained-values.ts       # picklist loader
 │   │   ├── mixs-io.ts                  # MIxS TSV/xlsx import + export

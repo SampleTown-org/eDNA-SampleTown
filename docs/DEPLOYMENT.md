@@ -44,13 +44,16 @@ Then:
 
 This pushes to `origin/$BRANCH`, then on the remote runs `git pull && npm ci && npm run build && pm2 restart sampletown --update-env`. The `.env` file on the server is preserved.
 
-### nginx
+### nginx + TLS
 
 Point an nginx server block at `127.0.0.1:$PORT`:
 
 ```nginx
 server {
+    listen 80;
     server_name sampletown.example.com;
+    client_max_body_size 100M;
+
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
@@ -60,11 +63,62 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300;
     }
 }
 ```
 
-Then `sudo certbot --nginx -d sampletown.example.com` for TLS. **Make sure `ORIGIN` in `.env` matches the public URL** — SvelteKit's CSRF check rejects POST requests whose `Origin` header doesn't match.
+Then run certbot to get a Let's Encrypt cert and let it rewrite the vhost to listen on 443 with auto-HTTP→HTTPS redirect:
+
+```bash
+sudo certbot --nginx -d sampletown.example.com
+```
+
+**Three things that have to line up** for the production deploy to work:
+
+1. **`ORIGIN` in `.env` matches the public URL exactly**, including the scheme. SvelteKit's CSRF check rejects POSTs whose `Origin` header doesn't match, and the session cookie's `Secure` flag is auto-set when `ORIGIN` starts with `https://`.
+2. **The nginx vhost serves both 80 and 443** for the same hostname. If you only listen on 80, HTTPS requests will fall through to whatever default server nginx has, which on a multi-tenant VM means they'll land on someone else's app. Always run certbot — don't leave a hostname HTTP-only.
+3. **The GitHub OAuth App's callback URL points at `https://<host>/auth/login/github/callback`** — the *full* path, not just `/auth/callback`. See the next section.
+
+### GitHub OAuth setup
+
+If you want sign-in-with-GitHub (i.e. `AUTH_MODE=github` or `hybrid`):
+
+1. Go to <https://github.com/settings/developers> → **OAuth Apps** → **New OAuth App**.
+2. Set the fields:
+   - **Application name**: `SampleTown` (or whatever)
+   - **Homepage URL**: `https://sampletown.example.com`
+   - **Authorization callback URL**: `https://sampletown.example.com/auth/login/github/callback` ← the **full path**, not `/auth/callback`. SampleTown does not pass an explicit `redirect_uri` to GitHub, so this registered URL is what GitHub will send the user back to. Getting it wrong fails the entire flow with `mismatching_state` (the request lands on the wrong app or path).
+3. Generate a client secret and copy both the client ID and secret into `.env`:
+   ```
+   GITHUB_CLIENT_ID=Iv23li...
+   GITHUB_CLIENT_SECRET=...
+   ```
+4. `pm2 restart sampletown --update-env`.
+
+**Don't reuse another app's OAuth App.** Each callback URL belongs to exactly one OAuth App in GitHub's database — if you point SampleTown at omc-platform's credentials, GitHub will redirect users to omc-platform's callback handler, which will fail to validate SampleTown's `state` and bounce them with an error.
+
+### Creating the first admin user
+
+After a fresh install the `users` table is empty and there's no way to log in. Set `ADMIN_SETUP_TOKEN` to a random value in `.env`, restart the app, then submit the login form with the matching `setup_token` field. The first user is created as `role=admin`. Once any user exists, the token is ignored — unset it.
+
+```bash
+TOKEN=$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")
+echo "ADMIN_SETUP_TOKEN=$TOKEN" >> .env
+pm2 restart sampletown --update-env
+
+# Either: visit https://sampletown.example.com/auth/login?setup=1 in a browser
+# (the setup_token field will appear), or curl directly:
+curl -X POST https://sampletown.example.com/auth/login/local \
+  -H "Origin: https://sampletown.example.com" \
+  -d "username=admin" \
+  -d "password=<a-strong-password-min-10-chars>" \
+  -d "setup_token=$TOKEN"
+
+# Then unset and restart:
+sed -i '/^ADMIN_SETUP_TOKEN=/d' .env
+pm2 restart sampletown --update-env
+```
 
 ### Ops
 
@@ -101,30 +155,14 @@ Run `node build/index.js` directly under pm2, or wrap it in Docker. The DB is ju
 | `DB_PATH` | `data/sampletown.db` | `data/sampletown.db` |
 | `ADMIN_SETUP_TOKEN` | set once for first-admin creation, unset after | same |
 
-## Creating the first admin user
-
-After a fresh install the `users` table is empty and there's no way to log in.
-Set `ADMIN_SETUP_TOKEN` to a random value in `.env`, restart the app, then on
-the login page submit the form with a hidden `setup_token` field that matches
-(or use curl). The first user is created as `role=admin`. Once a user exists,
-the token is ignored — you should unset it.
-
-```bash
-TOKEN=$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")
-echo "ADMIN_SETUP_TOKEN=$TOKEN" >> .env
-pm2 restart sampletown --update-env
-
-curl -X POST https://sampletown.example.com/auth/login/local \
-  -d "username=admin" -d "password=<a-strong-password>" -d "setup_token=$TOKEN"
-
-# Then unset and restart:
-sed -i '/^ADMIN_SETUP_TOKEN=/d' .env
-pm2 restart sampletown --update-env
-```
-
 ## Troubleshooting
 
-- **`Cross-site POST form submissions are forbidden`** — `ORIGIN` doesn't match the host the browser is hitting. Update `.env` and restart with `pm2 restart sampletown --update-env`.
-- **OAuth 500 on `/auth/login/github`** — `GITHUB_CLIENT_ID/SECRET` unset, or the OAuth callback URL on GitHub doesn't match `$ORIGIN/auth/login/github/callback`.
+- **Every `/api/*` request returns 401 `{"error":"Authentication required"}`** — expected. Every API route requires a session except `POST /api/feedback`. Sign in via `/auth/login` first. If you don't have a user yet, see "Creating the first admin user" above.
+- **`/api/settings/*`, `/api/personnel/*`, `/api/db/*` return 403 `{"error":"Admin role required"}`** — you're signed in but the user's `role` isn't `admin`. The bootstrap user is admin by default; subsequent users default to `role='user'` and need to be promoted via SQL.
+- **`Cross-site POST form submissions are forbidden`** — `ORIGIN` doesn't match the host the browser is hitting. Update `.env` and `pm2 restart sampletown --update-env`. Common cause: deploying behind a new hostname without updating `ORIGIN`.
+- **GitHub OAuth bounces to a "Not Found" or `mismatching_state` error on the wrong host** — the OAuth App's Authorization callback URL is pointed at the wrong app or path. It must be `https://<your-host>/auth/login/github/callback` exactly. See the GitHub OAuth setup section above.
+- **HTTPS requests for your hostname land on the wrong app** (cert mismatch warning, JSON 404 from a different framework) — the nginx vhost only listens on port 80. Run `sudo certbot --nginx -d <host>` so certbot adds the 443 listener and HTTP→HTTPS redirect.
+- **`OAuth state cookie missing or invalid`** — the user's browser dropped the state cookie between the GitHub redirect and the callback. Most common cause: using `http://` (cookies marked `Secure` will be dropped) or hitting the app through a session-proxy that strips path-bound cookies. Use a real `https://` hostname.
 - **`require is not defined`** in xlsx import — out-of-date build; `mixs-io.ts` must use `import * as XLSX from 'xlsx'` (ESM), never `require('xlsx')`. Rebuild with `npm run build`.
-- **`UNIQUE constraint failed: constrained_values.category, value`** — that picklist entry already exists; toggle the existing row's `is_active` from the Settings page instead of re-adding it.
+- **`UNIQUE constraint failed`** on a picklist entry — that `(category, value)` already exists; toggle the existing row's `is_active` from the Settings page instead of re-adding it.
+- **`SqliteError: ambiguous column name: id`** in the auth path — historical bug from an early hardening pass; if you see this on a current build, the columns in `SAFE_USER_COLS` (`src/lib/server/auth.ts`) need to be qualified with `u.` and the table aliased.
