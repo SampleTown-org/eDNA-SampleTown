@@ -2,15 +2,21 @@ import type Database from 'better-sqlite3';
 
 /**
  * Picklist seed data. Each entry is either a bare string (value == label)
- * or a `{value, label}` pair when the canonical value is ugly but needs to
- * match a schema CHECK constraint. The canonical-value form is REQUIRED for
- * any picklist whose values feed a schema-constrained column — `library_type`
- * and `seq_platform` are the current cases. Bare strings are fine for
- * everything else.
+ * or a `{value, label}` pair when the canonical value needs a friendlier
+ * display label. The `{value, label}` form is used for categories like
+ * `seq_platform` whose values must match an SRA/INSDC-mandated string,
+ * and for categories like `library_type` where the canonical underscore
+ * form is ugly but well-established.
  */
 type SeedEntry = string | { value: string; label: string };
 
 const SEED_DATA: Record<string, SeedEntry[]> = {
+	target_gene: [
+		'16S', '18S', 'CO1', '12S', 'ITS', 'rbcL', 'matK', 'trnL', 'other'
+	],
+	pipeline: [
+		'danaseq', 'microscape-nf', 'custom'
+	],
 	person_role: [
 		'collector',
 		'co-collector',
@@ -147,18 +153,19 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'Ion semiconductor sequencing', 'Amplicon sequencing', 'Shotgun metagenomics',
 		'RNA-seq', 'Whole genome sequencing'
 	],
-	// Values must match the schema CHECK constraint on library_plates.library_type
-	// and library_preps.library_type (16S_amplicon / 18S_amplicon / CO1_amplicon /
-	// 12S_amplicon / nanopore_metagenomic / illumina_metagenomic / rnaseq / other).
-	// ITS amplicon and whole genome are not in the schema enum yet — operators
-	// who need them today should pick "Other".
+	// library_type no longer has a schema CHECK constraint — operator-managed
+	// vocabulary. Keep {value, label} form for historical consistency since
+	// existing rows in library_plates/library_preps use the canonical
+	// underscored values.
 	library_type: [
 		{ value: '16S_amplicon', label: '16S amplicon' },
 		{ value: '18S_amplicon', label: '18S amplicon' },
 		{ value: 'CO1_amplicon', label: 'CO1 amplicon' },
 		{ value: '12S_amplicon', label: '12S amplicon' },
+		{ value: 'ITS_amplicon', label: 'ITS amplicon' },
 		{ value: 'nanopore_metagenomic', label: 'Nanopore metagenomic' },
 		{ value: 'illumina_metagenomic', label: 'Illumina metagenomic' },
+		{ value: 'whole_genome', label: 'Whole genome' },
 		{ value: 'rnaseq', label: 'RNA-seq' },
 		{ value: 'other', label: 'Other' }
 	],

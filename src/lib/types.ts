@@ -165,7 +165,8 @@ export interface Extract {
 	updated_at: string;
 }
 
-export type TargetGene = '16S' | '18S' | 'CO1' | '12S' | 'ITS' | 'other';
+/** Operator-managed vocabulary — no hardcoded enum. */
+export type TargetGene = string;
 
 export interface PcrPlate {
 	id: string;
@@ -217,15 +218,8 @@ export interface PcrAmplification {
 	updated_at: string;
 }
 
-export type LibraryType =
-	| '16S_amplicon'
-	| '18S_amplicon'
-	| 'CO1_amplicon'
-	| '12S_amplicon'
-	| 'nanopore_metagenomic'
-	| 'illumina_metagenomic'
-	| 'rnaseq'
-	| 'other';
+/** Operator-managed vocabulary — no hardcoded enum. */
+export type LibraryType = string;
 
 export type Platform = 'ILLUMINA' | 'OXFORD_NANOPORE' | 'PACBIO' | 'ION_TORRENT' | 'other';
 
@@ -308,7 +302,7 @@ export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 'c
 export interface Analysis {
 	id: string;
 	run_id: string;
-	pipeline: 'danaseq' | 'microscape-nf' | 'custom';
+	pipeline: string;
 	pipeline_version: string | null;
 	pipeline_profile: string | null;
 	nextflow_run_name: string | null;

@@ -241,15 +241,12 @@
 					<input id="pcr_name" type="text" bind:value={reactionForm.pcr_name} class={inputCls} />
 				</div>
 				<div>
-					<label for="target_gene_r" class="block text-sm font-medium text-slate-300 mb-1">Target Gene</label>
+					<label for="target_gene_r" class="block text-sm font-medium text-slate-300 mb-1">
+						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Target Gene</a>
+					</label>
 					<select id="target_gene_r" bind:value={reactionForm.target_gene} class={selectCls}>
 						<option value="">Select...</option>
-						<option value="16S">16S</option>
-						<option value="18S">18S</option>
-						<option value="CO1">CO1</option>
-						<option value="12S">12S</option>
-						<option value="ITS">ITS</option>
-						<option value="other">other</option>
+						{#each data.picklists?.target_gene ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select>
 				</div>
 			</div>

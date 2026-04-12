@@ -96,18 +96,12 @@ const peopleField = z.unknown().optional();
 // enums (kept in sync with CHECK constraints in src/lib/server/schema.sql)
 // ----------------------------------------------------------------------------
 
-const TARGET_GENE = z.enum(['16S', '18S', 'CO1', '12S', 'ITS', 'other']);
-
-const LIBRARY_TYPE = z.enum([
-	'16S_amplicon',
-	'18S_amplicon',
-	'CO1_amplicon',
-	'12S_amplicon',
-	'nanopore_metagenomic',
-	'illumina_metagenomic',
-	'rnaseq',
-	'other'
-]);
+// target_gene + library_type are operator-managed picklist vocabulary — no
+// hardcoded enum, just a non-empty string up to SHORT_TEXT length. The DB
+// column is NOT NULL so we require a value, but the picklist is the sole
+// source of truth for what values are valid.
+const TARGET_GENE = z.string().trim().min(1).max(200);
+const LIBRARY_TYPE = z.string().trim().min(1).max(200);
 
 // library_plates.platform allows 'other'; sequencing_runs.platform does not.
 const PLATFORM_WITH_OTHER = z.enum([

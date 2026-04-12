@@ -229,7 +229,7 @@ CREATE TABLE IF NOT EXISTS pcr_plates (
     pcr_date TEXT,
 
     -- Shared conditions for the plate
-    target_gene TEXT NOT NULL CHECK (target_gene IN ('16S', '18S', 'CO1', '12S', 'ITS', 'other')),
+    target_gene TEXT NOT NULL,
     target_subfragment TEXT,
     forward_primer_name TEXT,
     forward_primer_seq TEXT,
@@ -257,7 +257,7 @@ CREATE TABLE IF NOT EXISTS pcr_amplifications (
 
     pcr_name TEXT NOT NULL,
     -- Per-reaction fields (gene/primers inherited from plate if plate_id set)
-    target_gene TEXT NOT NULL CHECK (target_gene IN ('16S', '18S', 'CO1', '12S', 'ITS', 'other')),
+    target_gene TEXT NOT NULL,
     target_subfragment TEXT,
     forward_primer_name TEXT,
     forward_primer_seq TEXT,
@@ -292,10 +292,7 @@ CREATE TABLE IF NOT EXISTS library_plates (
     library_prep_date TEXT,
 
     -- Shared conditions
-    library_type TEXT NOT NULL CHECK (library_type IN (
-        '16S_amplicon', '18S_amplicon', 'CO1_amplicon', '12S_amplicon',
-        'nanopore_metagenomic', 'illumina_metagenomic', 'rnaseq', 'other'
-    )),
+    library_type TEXT NOT NULL,
     library_prep_kit TEXT,
     platform TEXT CHECK (platform IN ('ILLUMINA', 'OXFORD_NANOPORE', 'PACBIO', 'ION_TORRENT', 'other')),
     instrument_model TEXT,
@@ -323,10 +320,7 @@ CREATE TABLE IF NOT EXISTS library_preps (
     extract_id TEXT REFERENCES extracts(id) ON DELETE SET NULL,
 
     library_name TEXT NOT NULL,
-    library_type TEXT NOT NULL CHECK (library_type IN (
-        '16S_amplicon', '18S_amplicon', 'CO1_amplicon', '12S_amplicon',
-        'nanopore_metagenomic', 'illumina_metagenomic', 'rnaseq', 'other'
-    )),
+    library_type TEXT NOT NULL,
     library_prep_kit TEXT,
     library_prep_date TEXT,
     platform TEXT CHECK (platform IN ('ILLUMINA', 'OXFORD_NANOPORE', 'PACBIO', 'ION_TORRENT', 'other')),
@@ -395,7 +389,7 @@ CREATE TABLE IF NOT EXISTS analyses (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     run_id TEXT NOT NULL REFERENCES sequencing_runs(id) ON DELETE CASCADE,
 
-    pipeline TEXT NOT NULL CHECK (pipeline IN ('danaseq', 'microscape-nf', 'custom')),
+    pipeline TEXT NOT NULL,
     pipeline_version TEXT,
     pipeline_profile TEXT,
 
@@ -444,7 +438,7 @@ CREATE INDEX IF NOT EXISTS idx_cv_category ON constrained_values(category);
 CREATE TABLE IF NOT EXISTS primer_sets (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     name TEXT NOT NULL UNIQUE,
-    target_gene TEXT NOT NULL CHECK (target_gene IN ('16S', '18S', 'CO1', '12S', 'ITS', 'other')),
+    target_gene TEXT NOT NULL,
     target_subfragment TEXT,
     forward_primer_name TEXT,
     forward_primer_seq TEXT,

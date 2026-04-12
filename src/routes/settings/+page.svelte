@@ -26,7 +26,9 @@
 		index_i7: 'i7 Indices',
 		index_i5: 'i5 Indices',
 		barcode: 'Barcodes',
-		person_role: 'Person Roles'
+		person_role: 'Person Roles',
+		target_gene: 'Target Genes',
+		pipeline: 'Pipelines'
 	};
 
 	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback';

@@ -60,6 +60,20 @@ function runMigrations(db: Database.Database) {
 	// old table, rename. Idempotent — runs only if the old NOT NULL is still
 	// in place.
 	relaxSequencingRunsNotNull(db);
+
+	// Drop CHECK enum constraints on columns whose values are operator
+	// vocabulary, not externally mandated (SRA / MIxS). These columns
+	// become plain TEXT NOT NULL with the picklist as the sole source of
+	// truth. Uses a generic helper that reads the existing DDL, strips
+	// CHECK clauses from specific columns, and does the rebuild if needed.
+	// Columns NOT listed (e.g. platform, status) keep their CHECKs.
+	dropColumnChecks(db, {
+		pcr_plates: ['target_gene'],
+		pcr_amplifications: ['target_gene'],
+		library_plates: ['library_type'],
+		library_preps: ['library_type'],
+		analyses: ['pipeline']
+	});
 }
 
 /**
@@ -120,6 +134,95 @@ function relaxSequencingRunsNotNull(db: Database.Database) {
 		console.log('[migration] Relaxed NOT NULL on sequencing_runs.platform + seq_meth');
 	} finally {
 		db.pragma('foreign_keys = ON');
+	}
+}
+
+/**
+ * For each table, strip CHECK constraints from ONLY the named columns,
+ * preserving CHECKs on other columns (e.g. platform, status). Reads the
+ * existing DDL from sqlite_master, does line-by-line surgery, and rebuilds
+ * the table if anything changed. Table-level CHECK constraints are always
+ * preserved.
+ *
+ * Idempotent: if the target columns already have no CHECK, the table is
+ * skipped. Foreign keys are temporarily disabled during each rebuild.
+ */
+function dropColumnChecks(
+	db: Database.Database,
+	spec: Record<string, string[]>
+) {
+	for (const [table, targetColumns] of Object.entries(spec)) {
+		const row = db.prepare(
+			"SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
+		).get(table) as { sql: string } | undefined;
+		if (!row) continue;
+
+		const original = row.sql;
+		const targets = new Set(targetColumns);
+
+		const lines = original.split('\n');
+		const newLines = lines.map((line) => {
+			const trimmed = line.trimStart();
+			// Table-level CHECK — always preserve
+			if (trimmed.startsWith('CHECK')) return line;
+			// Only strip if the line is for one of the target columns
+			if (!/CHECK\s*\(/i.test(line)) return line;
+			const colMatch = trimmed.match(/^(\w+)\s+/);
+			if (!colMatch || !targets.has(colMatch[1])) return line;
+
+			// Strip the CHECK(...) including nested parens
+			let result = '';
+			let depth = 0;
+			let inCheck = false;
+			let i = 0;
+			while (i < line.length) {
+				if (!inCheck && line.substring(i).match(/^CHECK\s*\(/i)) {
+					inCheck = true;
+					const match = line.substring(i).match(/^CHECK\s*\(/i)!;
+					i += match[0].length;
+					depth = 1;
+					continue;
+				}
+				if (inCheck) {
+					if (line[i] === '(') depth++;
+					else if (line[i] === ')') {
+						depth--;
+						if (depth === 0) { inCheck = false; i++; continue; }
+					}
+					i++;
+					continue;
+				}
+				result += line[i];
+				i++;
+			}
+			return result.replace(/\s+,/, ',').replace(/\s+$/, '');
+		});
+
+		const newSql = newLines.join('\n');
+		if (newSql === original) continue;
+
+		const newTableSql = newSql.replace(
+			`CREATE TABLE ${table}`,
+			`CREATE TABLE ${table}_new`
+		).replace(
+			`CREATE TABLE IF NOT EXISTS ${table}`,
+			`CREATE TABLE ${table}_new`
+		);
+
+		db.pragma('foreign_keys = OFF');
+		try {
+			db.exec(`
+				BEGIN;
+				${newTableSql};
+				INSERT INTO ${table}_new SELECT * FROM ${table};
+				DROP TABLE ${table};
+				ALTER TABLE ${table}_new RENAME TO ${table};
+				COMMIT;
+			`);
+			console.log(`[migration] Dropped CHECK on [${targetColumns.join(', ')}] from ${table}`);
+		} finally {
+			db.pragma('foreign_keys = ON');
+		}
 	}
 }
 
