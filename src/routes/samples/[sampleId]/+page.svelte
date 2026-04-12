@@ -2,11 +2,9 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import { CHECKLISTS } from '$lib/mixs/checklists';
-	import { validateSample } from '$lib/mixs/validators';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let validation = $derived(validateSample(data.sample as any));
 
 	const extractColumns = [
 		{ key: 'extract_name', label: 'Extract', sortable: true },
@@ -22,7 +20,6 @@
 		['Broad-scale Env', data.sample.env_broad_scale],
 		['Local Env', data.sample.env_local_scale],
 		['Env Medium', data.sample.env_medium],
-		['Env Package', data.sample.env_package],
 		['Taxon ID', data.sample.samp_taxon_id]
 	];
 
@@ -55,19 +52,6 @@
 				&middot; Site: <a href="/sites/{data.sample.site_id}" class="text-ocean-400 hover:text-ocean-300">{data.sample.site_name}</a>
 			{/if}
 		</p>
-	</div>
-
-	<!-- MIxS Completeness -->
-	<div class="flex items-center gap-3">
-		<div class="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-			<div
-				class="h-full rounded-full {validation.completeness === 100 ? 'bg-green-500' : 'bg-ocean-500'}"
-				style="width: {validation.completeness}%"
-			></div>
-		</div>
-		<span class="text-sm {validation.valid ? 'text-green-400' : 'text-slate-400'}">
-			{validation.valid ? 'MIxS valid' : `${validation.completeness}%`}
-		</span>
 	</div>
 
 	<!-- Core fields -->

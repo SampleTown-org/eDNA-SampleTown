@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
-import { parseLatLon } from '$lib/mixs/validators';
 import { apiError } from '$lib/server/api-errors';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 
@@ -21,15 +20,19 @@ export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
 	const projectId = url.searchParams.get('project_id');
 
-	let query = 'SELECT * FROM samples WHERE is_deleted = 0';
+	let query = `SELECT s.*, st.lat_lon, st.latitude, st.longitude, st.geo_loc_name,
+		st.env_broad_scale, st.env_local_scale, st.site_name
+		FROM samples s
+		JOIN sites st ON st.id = s.site_id
+		WHERE s.is_deleted = 0`;
 	const params: string[] = [];
 
 	if (projectId) {
-		query += ' AND project_id = ?';
+		query += ' AND s.project_id = ?';
 		params.push(projectId);
 	}
 
-	query += ' ORDER BY created_at DESC';
+	query += ' ORDER BY s.created_at DESC';
 	const samples = db.prepare(query).all(...params);
 	return json(samples);
 };
@@ -38,32 +41,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
 		const data = await request.json();
 
-		// Only project_id and samp_name are user-required. Everything else
-		// either has a sensible default or is filled with the MIxS
-		// "not collected" sentinel so the NOT NULL constraints stay
-		// satisfied without forcing the user to enter junk.
 		if (!data?.project_id) return json({ error: 'project_id is required' }, { status: 400 });
 		if (!data?.samp_name?.trim()) return json({ error: 'samp_name is required' }, { status: 400 });
+		if (!data?.site_id) return json({ error: 'site_id is required' }, { status: 400 });
 
 		const db = getDb();
 		const id = generateId();
-		const coords = parseLatLon(data.lat_lon || '');
 
 		db.prepare(
 			`INSERT INTO samples (
 				id, project_id, site_id, mixs_checklist,
-				samp_name, collection_date, lat_lon, latitude, longitude,
-				geo_loc_name, env_broad_scale, env_local_scale, env_medium, samp_taxon_id,
-				env_package, depth, elevation, host_taxon_id,
+				samp_name, collection_date, env_medium, samp_taxon_id,
+				depth, elevation, host_taxon_id,
 				assembly_software, number_of_contigs, genome_coverage, reference_genome, annotation_source,
 				temp, salinity, ph, dissolved_oxygen, pressure, turbidity, chlorophyll, nitrate, phosphate,
 				sample_type, volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
 				notes, custom_fields, created_by
 			) VALUES (
 				?, ?, ?, ?,
-				?, ?, ?, ?, ?,
-				?, ?, ?, ?, ?,
 				?, ?, ?, ?,
+				?, ?, ?,
 				?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?,
@@ -72,19 +69,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		).run(
 			id,
 			data.project_id,
-			nn(data.site_id),
+			data.site_id,
 			data.mixs_checklist || 'MIMARKS-SU',
 			data.samp_name.trim(),
 			orMissing(data.collection_date),
-			orMissing(data.lat_lon),
-			coords?.latitude ?? data.latitude ?? null,
-			coords?.longitude ?? data.longitude ?? null,
-			orMissing(data.geo_loc_name),
-			orMissing(data.env_broad_scale),
-			orMissing(data.env_local_scale),
 			orMissing(data.env_medium),
 			nn(data.samp_taxon_id),
-			data.env_package || 'water', // env_package has a CHECK constraint and a default
 			nn(data.depth),
 			nn(data.elevation),
 			nn(data.host_taxon_id),

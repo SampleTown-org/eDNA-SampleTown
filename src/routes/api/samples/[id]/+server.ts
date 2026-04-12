@@ -1,7 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
-import { parseLatLon } from '$lib/mixs/validators';
 import { apiError } from '$lib/server/api-errors';
 import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 
@@ -17,7 +16,13 @@ const orMissing = (v: unknown): string => {
 
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
-	const sample = db.prepare('SELECT * FROM samples WHERE id = ? AND is_deleted = 0').get(params.id);
+	const sample = db.prepare(`
+		SELECT s.*, st.lat_lon, st.latitude, st.longitude, st.geo_loc_name,
+			st.env_broad_scale, st.env_local_scale, st.site_name
+		FROM samples s
+		JOIN sites st ON st.id = s.site_id
+		WHERE s.id = ? AND s.is_deleted = 0
+	`).get(params.id);
 	if (!sample) throw error(404, 'Sample not found');
 	const people = getEntityPersonnel('sample', params.id!);
 	return json({ ...sample, people });
@@ -33,15 +38,15 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		if (!data?.samp_name?.trim()) {
 			return json({ error: 'samp_name is required' }, { status: 400 });
 		}
-
-		const coords = data.lat_lon ? parseLatLon(data.lat_lon) : null;
+		if (!data?.site_id) {
+			return json({ error: 'site_id is required' }, { status: 400 });
+		}
 
 		db.prepare(
 			`UPDATE samples SET
 				site_id = ?, mixs_checklist = ?, samp_name = ?, collection_date = ?,
-				lat_lon = ?, latitude = ?, longitude = ?,
-				geo_loc_name = ?, env_broad_scale = ?, env_local_scale = ?, env_medium = ?, samp_taxon_id = ?,
-				env_package = ?, depth = ?, elevation = ?, host_taxon_id = ?,
+				env_medium = ?, samp_taxon_id = ?,
+				depth = ?, elevation = ?, host_taxon_id = ?,
 				assembly_software = ?, number_of_contigs = ?, genome_coverage = ?, reference_genome = ?, annotation_source = ?,
 				temp = ?, salinity = ?, ph = ?, dissolved_oxygen = ?, pressure = ?, turbidity = ?, chlorophyll = ?, nitrate = ?, phosphate = ?,
 				sample_type = ?, volume_filtered_ml = ?, filter_type = ?, preservation_method = ?, storage_conditions = ?, collector_name = ?,
@@ -49,19 +54,12 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
-			nn(data.site_id),
+			data.site_id,
 			data.mixs_checklist || 'MIMARKS-SU',
 			data.samp_name.trim(),
 			orMissing(data.collection_date),
-			orMissing(data.lat_lon),
-			coords?.latitude ?? data.latitude ?? null,
-			coords?.longitude ?? data.longitude ?? null,
-			orMissing(data.geo_loc_name),
-			orMissing(data.env_broad_scale),
-			orMissing(data.env_local_scale),
 			orMissing(data.env_medium),
 			nn(data.samp_taxon_id),
-			data.env_package || 'water',
 			nn(data.depth),
 			nn(data.elevation),
 			nn(data.host_taxon_id),
@@ -90,9 +88,6 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			params.id
 		);
 
-		// Replace the attributed people if the request supplied a list. We
-		// only touch entity_personnel when `people` is explicitly present so
-		// callers that update other fields don't accidentally clear it.
 		if (data.people !== undefined) {
 			setEntityPersonnel(db, 'sample', params.id!, normalizePeople(data.people));
 		}

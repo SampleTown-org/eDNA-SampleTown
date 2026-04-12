@@ -9,16 +9,12 @@
 		['Lat/Lon', data.site.lat_lon],
 		['Geographic Location', data.site.geo_loc_name],
 		['Locality', data.site.locality],
-		['Habitat Type', data.site.habitat_type],
-		['Depth', data.site.depth],
-		['Elevation', data.site.elevation]
+		['Habitat Type', data.site.habitat_type]
 	].filter(([_, v]) => v);
 
 	const envFields = [
-		['Env Package', data.site.env_package],
 		['Broad-scale Env', data.site.env_broad_scale],
-		['Local Env', data.site.env_local_scale],
-		['Env Medium', data.site.env_medium]
+		['Local Env', data.site.env_local_scale]
 	].filter(([_, v]) => v);
 
 	const sampleColumns = [
@@ -35,10 +31,7 @@
 		<div class="flex items-center justify-between mt-1">
 			<div class="flex items-center gap-3">
 				<h1 class="text-2xl font-bold text-white">{data.site.site_name}</h1>
-				{#if data.site.env_package}
-					<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{data.site.env_package}</span>
-				{/if}
-			</div>
+				</div>
 			<a href="/sites/{data.site.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 		<p class="text-slate-400 mt-1">

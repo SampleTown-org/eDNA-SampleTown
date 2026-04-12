@@ -74,6 +74,8 @@ function runMigrations(db: Database.Database) {
 		library_preps: ['library_type'],
 		analyses: ['pipeline']
 	});
+
+	deduplicateSiteSampleColumns(db);
 }
 
 /**
@@ -213,6 +215,203 @@ function dropColumnChecks(
 		} finally {
 			db.pragma('foreign_keys = ON');
 		}
+	}
+}
+
+/**
+ * Move location/environment columns from samples → sites and make site_id
+ * required. Idempotent: no-op once the `geo_loc_name` column has been removed
+ * from the samples table.
+ *
+ * Steps:
+ *  A) Create sites for orphaned samples (grouped by project_id + lat_lon)
+ *  B) Rebuild sites table (drop env_package, depth, elevation, env_medium)
+ *  C) Rebuild samples table (drop location/env columns, make site_id NOT NULL)
+ */
+function deduplicateSiteSampleColumns(db: Database.Database) {
+	const cols = db.prepare(`PRAGMA table_info(samples)`).all() as { name: string }[];
+	if (!cols.some((c) => c.name === 'geo_loc_name')) return; // already migrated
+
+	// Step A: create sites for orphaned samples
+	const orphanGroups = db
+		.prepare(
+			`SELECT DISTINCT project_id, lat_lon, latitude, longitude,
+				geo_loc_name, env_broad_scale, env_local_scale
+			 FROM samples
+			 WHERE (site_id IS NULL OR site_id = '') AND is_deleted = 0
+			   AND lat_lon IS NOT NULL`
+		)
+		.all() as {
+		project_id: string;
+		lat_lon: string;
+		latitude: number | null;
+		longitude: number | null;
+		geo_loc_name: string | null;
+		env_broad_scale: string | null;
+		env_local_scale: string | null;
+	}[];
+
+	const insertSite = db.prepare(
+		`INSERT INTO sites (id, project_id, site_name, lat_lon, latitude, longitude,
+			geo_loc_name, env_broad_scale, env_local_scale, created_by)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+	);
+	const linkSamples = db.prepare(
+		`UPDATE samples SET site_id = ?
+		 WHERE project_id = ? AND lat_lon = ? AND (site_id IS NULL OR site_id = '')`
+	);
+
+	for (const g of orphanGroups) {
+		const id = generateId();
+		insertSite.run(
+			id,
+			g.project_id,
+			id, // site_name = hash ID
+			g.lat_lon,
+			g.latitude,
+			g.longitude,
+			g.geo_loc_name,
+			g.env_broad_scale,
+			g.env_local_scale
+		);
+		linkSamples.run(id, g.project_id, g.lat_lon);
+	}
+
+	// Backfill env_broad_scale/env_local_scale on sites that have NULL values
+	// but whose samples have data (sites may have been created before these
+	// fields were site-level)
+	db.exec(`
+		UPDATE sites SET
+			env_broad_scale = COALESCE(env_broad_scale,
+				(SELECT env_broad_scale FROM samples WHERE samples.site_id = sites.id AND env_broad_scale IS NOT NULL LIMIT 1)),
+			env_local_scale = COALESCE(env_local_scale,
+				(SELECT env_local_scale FROM samples WHERE samples.site_id = sites.id AND env_local_scale IS NOT NULL LIMIT 1))
+		WHERE env_broad_scale IS NULL OR env_local_scale IS NULL
+	`);
+
+	db.pragma('foreign_keys = OFF');
+	try {
+		db.exec(`
+			BEGIN;
+
+			-- Step B: rebuild sites (drop env_package, depth, elevation, env_medium)
+			CREATE TABLE sites_new (
+				id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+				project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+				site_name TEXT NOT NULL,
+				description TEXT,
+				lat_lon TEXT,
+				latitude REAL,
+				longitude REAL,
+				geo_loc_name TEXT,
+				locality TEXT,
+				env_broad_scale TEXT,
+				env_local_scale TEXT,
+				habitat_type TEXT,
+				access_notes TEXT,
+				notes TEXT,
+				custom_fields TEXT,
+				sync_version INTEGER NOT NULL DEFAULT 1,
+				is_deleted INTEGER NOT NULL DEFAULT 0,
+				created_by TEXT REFERENCES users(id),
+				created_at TEXT NOT NULL DEFAULT (datetime('now')),
+				updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+				UNIQUE(project_id, site_name)
+			);
+
+			INSERT INTO sites_new (id, project_id, site_name, description,
+				lat_lon, latitude, longitude, geo_loc_name, locality,
+				env_broad_scale, env_local_scale,
+				habitat_type, access_notes, notes, custom_fields,
+				sync_version, is_deleted, created_by, created_at, updated_at)
+			SELECT id, project_id, site_name, description,
+				lat_lon, latitude, longitude, geo_loc_name, locality,
+				env_broad_scale, env_local_scale,
+				habitat_type, access_notes, notes, custom_fields,
+				sync_version, is_deleted, created_by, created_at, updated_at
+			FROM sites;
+
+			DROP TABLE sites;
+			ALTER TABLE sites_new RENAME TO sites;
+			CREATE INDEX IF NOT EXISTS idx_sites_project ON sites(project_id);
+			CREATE INDEX IF NOT EXISTS idx_sites_coords ON sites(latitude, longitude);
+
+			-- Step C: rebuild samples (drop location/env columns, site_id NOT NULL)
+			CREATE TABLE samples_new (
+				id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+				project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+				site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE RESTRICT,
+				mixs_checklist TEXT NOT NULL DEFAULT 'MIMARKS-SU' CHECK (mixs_checklist IN (
+					'MIMARKS-SU', 'MIMARKS-SP', 'MIMS', 'MIMAG', 'MISAG',
+					'MIGS-EU', 'MIGS-BA', 'MIGS-PL', 'MIGS-VI', 'MIGS-ORG', 'MIUViG'
+				)),
+				samp_name TEXT NOT NULL,
+				collection_date TEXT NOT NULL,
+				env_medium TEXT NOT NULL,
+				samp_taxon_id TEXT,
+				depth TEXT,
+				elevation TEXT,
+				host_taxon_id TEXT,
+				assembly_software TEXT,
+				number_of_contigs INTEGER,
+				genome_coverage TEXT,
+				reference_genome TEXT,
+				annotation_source TEXT,
+				temp REAL,
+				salinity REAL,
+				ph REAL,
+				dissolved_oxygen REAL,
+				pressure REAL,
+				turbidity REAL,
+				chlorophyll REAL,
+				nitrate REAL,
+				phosphate REAL,
+				sample_type TEXT,
+				volume_filtered_ml REAL,
+				filter_type TEXT,
+				preservation_method TEXT,
+				storage_conditions TEXT,
+				collector_name TEXT,
+				notes TEXT,
+				custom_fields TEXT,
+				client_id TEXT,
+				local_created_at TEXT,
+				sync_version INTEGER NOT NULL DEFAULT 1,
+				is_deleted INTEGER NOT NULL DEFAULT 0,
+				created_by TEXT REFERENCES users(id),
+				created_at TEXT NOT NULL DEFAULT (datetime('now')),
+				updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+				UNIQUE(project_id, samp_name)
+			);
+
+			INSERT INTO samples_new (id, project_id, site_id, mixs_checklist,
+				samp_name, collection_date, env_medium, samp_taxon_id,
+				depth, elevation, host_taxon_id,
+				assembly_software, number_of_contigs, genome_coverage, reference_genome, annotation_source,
+				temp, salinity, ph, dissolved_oxygen, pressure, turbidity, chlorophyll, nitrate, phosphate,
+				sample_type, volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
+				notes, custom_fields, client_id, local_created_at,
+				sync_version, is_deleted, created_by, created_at, updated_at)
+			SELECT id, project_id, site_id, mixs_checklist,
+				samp_name, collection_date, env_medium, samp_taxon_id,
+				depth, elevation, host_taxon_id,
+				assembly_software, number_of_contigs, genome_coverage, reference_genome, annotation_source,
+				temp, salinity, ph, dissolved_oxygen, pressure, turbidity, chlorophyll, nitrate, phosphate,
+				sample_type, volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
+				notes, custom_fields, client_id, local_created_at,
+				sync_version, is_deleted, created_by, created_at, updated_at
+			FROM samples;
+
+			DROP TABLE samples;
+			ALTER TABLE samples_new RENAME TO samples;
+			CREATE INDEX IF NOT EXISTS idx_samples_project ON samples(project_id);
+			CREATE INDEX IF NOT EXISTS idx_samples_collection_date ON samples(collection_date);
+
+			COMMIT;
+		`);
+		console.log('[migration] De-duplicated site/sample columns');
+	} finally {
+		db.pragma('foreign_keys = ON');
 	}
 }
 

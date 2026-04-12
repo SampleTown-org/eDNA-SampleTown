@@ -75,18 +75,11 @@ CREATE TABLE IF NOT EXISTS sites (
     geo_loc_name TEXT,                     -- INSDC country:region
     locality TEXT,                         -- finer-grained locality name
 
-    -- ENVO terms (defaults for samples at this site)
+    -- ENVO terms (site-level environment descriptors)
     env_broad_scale TEXT,                  -- ENVO biome term
     env_local_scale TEXT,                  -- ENVO feature term
-    env_medium TEXT,                       -- ENVO material term
 
     -- Site characteristics
-    env_package TEXT CHECK (env_package IN (
-        'water', 'soil', 'sediment', 'host-associated',
-        'air', 'built', 'plant-associated', 'agriculture'
-    )),
-    depth TEXT,
-    elevation TEXT,
     habitat_type TEXT,
     access_notes TEXT,                     -- how to get there, permits, etc.
 
@@ -111,7 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_sites_coords ON sites(latitude, longitude);
 CREATE TABLE IF NOT EXISTS samples (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    site_id TEXT REFERENCES sites(id) ON DELETE SET NULL,
+    site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE RESTRICT,
 
     -- MIxS checklist type
     mixs_checklist TEXT NOT NULL DEFAULT 'MIMARKS-SU' CHECK (mixs_checklist IN (
@@ -122,20 +115,8 @@ CREATE TABLE IF NOT EXISTS samples (
     -- MIxS mandatory core
     samp_name TEXT NOT NULL,
     collection_date TEXT NOT NULL,        -- ISO 8601
-    lat_lon TEXT NOT NULL,                -- 'd[d.dddd] N|S d[dd.dddd] W|E'
-    latitude REAL,                        -- parsed for indexing/mapping
-    longitude REAL,                       -- parsed for indexing/mapping
-    geo_loc_name TEXT NOT NULL,           -- INSDC country:region
-    env_broad_scale TEXT NOT NULL,        -- ENVO biome term
-    env_local_scale TEXT NOT NULL,        -- ENVO feature term
-    env_medium TEXT NOT NULL,             -- ENVO material term
+    env_medium TEXT NOT NULL,             -- ENVO material term (per-sample: water/ice/sediment at same site)
     samp_taxon_id TEXT,                   -- NCBI taxonomy ID
-
-    -- Environmental package
-    env_package TEXT NOT NULL DEFAULT 'water' CHECK (env_package IN (
-        'water', 'soil', 'sediment', 'host-associated',
-        'air', 'built', 'plant-associated', 'agriculture'
-    )),
 
     -- Package-specific fields
     depth TEXT,                           -- mandatory for water/sediment
@@ -187,7 +168,6 @@ CREATE TABLE IF NOT EXISTS samples (
 
 CREATE INDEX IF NOT EXISTS idx_samples_project ON samples(project_id);
 CREATE INDEX IF NOT EXISTS idx_samples_collection_date ON samples(collection_date);
-CREATE INDEX IF NOT EXISTS idx_samples_coords ON samples(latitude, longitude);
 
 -- ============================================================
 -- DNA EXTRACTS

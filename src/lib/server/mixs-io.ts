@@ -2,6 +2,12 @@ import { getDb } from './db';
 import { CORE_FIELDS, PACKAGE_FIELDS, MEASUREMENT_FIELDS, LOGISTICS_FIELDS } from '$lib/mixs/fields';
 import * as XLSX from 'xlsx';
 
+/** Fields that live on the sites table (location/environment context). */
+export const SITE_FIELDS = new Set([
+	'lat_lon', 'latitude', 'longitude', 'geo_loc_name',
+	'env_broad_scale', 'env_local_scale'
+]);
+
 /** MIxS v6 TSV column definitions — maps internal field names to SRA/BioSample column headers.
  *  Follows GSC MIxS v6 structured comment names. */
 const EXPORT_COLUMNS = [
@@ -18,7 +24,7 @@ const EXPORT_COLUMNS = [
 	{ header: '*env_local_scale', field: 'env_local_scale' },
 	{ header: '*env_medium', field: 'env_medium' },
 	// MIxS v6 environment-dependent (E) fields
-	{ header: 'env_package', field: 'env_package' },
+	{ header: 'env_package', field: '_env_package_' },
 	{ header: 'depth', field: 'depth' },
 	{ header: 'alt', field: 'elevation' },
 	{ header: 'elev', field: 'elevation' },
@@ -54,9 +60,14 @@ function escTsv(val: unknown): string {
 	return s;
 }
 
-export function exportMixsTsv(options: { projectId?: string; checklist?: string } = {}): string {
+export function exportMixsTsv(options: { projectId?: string; checklist?: string; envPackage?: string } = {}): string {
 	const db = getDb();
-	let query = `SELECT s.*, p.project_name FROM samples s JOIN projects p ON p.id = s.project_id WHERE s.is_deleted = 0`;
+	let query = `SELECT s.*, st.lat_lon, st.geo_loc_name, st.env_broad_scale, st.env_local_scale,
+		p.project_name
+		FROM samples s
+		JOIN sites st ON st.id = s.site_id
+		JOIN projects p ON p.id = s.project_id
+		WHERE s.is_deleted = 0`;
 	const params: string[] = [];
 	if (options.projectId) { query += ' AND s.project_id = ?'; params.push(options.projectId); }
 	if (options.checklist) { query += ' AND s.mixs_checklist = ?'; params.push(options.checklist); }
@@ -64,10 +75,11 @@ export function exportMixsTsv(options: { projectId?: string; checklist?: string 
 
 	const samples = db.prepare(query).all(...params) as Record<string, unknown>[];
 
+	const envPackage = options.envPackage || 'water';
+
 	// Deduplicate columns (elev/alt both map to elevation — only emit once)
 	const seen = new Set<string>();
 	const columns = EXPORT_COLUMNS.filter(c => {
-		const key = c.field + ':' + c.header.replace(/^\*/, '');
 		if (c.header === 'alt') return false; // skip alt, keep elev
 		if (c.header === 'sample_title') return false; // skip duplicate of sample_name
 		if (seen.has(c.field)) return false;
@@ -78,6 +90,8 @@ export function exportMixsTsv(options: { projectId?: string; checklist?: string 
 	const headers = columns.map(c => c.header.replace(/^\*/, ''));
 	const rows = samples.map(sample =>
 		columns.map(col => {
+			// env_package is a parameter, not stored in DB
+			if (col.field === '_env_package_') return envPackage;
 			const val = sample[col.field];
 			if ((val == null || val === '') && col.default) return col.default;
 			return escTsv(val);
@@ -103,7 +117,8 @@ export function xlsxToTsv(buffer: Buffer): string {
 export function buildHeaderToFieldMap(): Record<string, string> {
 	const headerToField: Record<string, string> = {};
 	for (const col of EXPORT_COLUMNS) {
-		headerToField[col.header.toLowerCase().replace(/^\*/, '')] = col.field;
+		const field = col.field === '_env_package_' ? '_skip_' : col.field;
+		headerToField[col.header.toLowerCase().replace(/^\*/, '')] = field;
 	}
 	const allFields = [
 		...CORE_FIELDS,
@@ -150,7 +165,7 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		'assembly_qual', 'assembly_name', 'annot', 'feat_pred', 'ref_db',
 		'sim_search_meth', 'tax_class', 'associated resource', 'sop',
 		'lib_reads_seqd', 'lib_screen', 'mid', 'adapters', 'seq_quality_check',
-		'project_name'
+		'project_name', 'env_package'
 	];
 	for (const s of skip) headerToField[s] = '_skip_';
 
@@ -159,11 +174,13 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 
 /**
  * Return the list of internal field names that can be targeted by an import
- * column mapping. Used to populate the column-mapper UI dropdown.
+ * column mapping, with table prefix (e.g. "site: lat_lon", "sample: nitrate").
  */
-export function getImportableFields(): string[] {
+export function getImportableFields(): { value: string; label: string }[] {
 	const fields = new Set<string>();
-	for (const col of EXPORT_COLUMNS) fields.add(col.field);
+	for (const col of EXPORT_COLUMNS) {
+		if (col.field !== '_env_package_') fields.add(col.field);
+	}
 	const allFields = [
 		...CORE_FIELDS,
 		...Object.values(PACKAGE_FIELDS).flat(),
@@ -172,7 +189,12 @@ export function getImportableFields(): string[] {
 	];
 	for (const f of allFields) fields.add(f.name);
 	fields.delete('_skip_');
-	return Array.from(fields).sort();
+	fields.delete('project_name');
+
+	return Array.from(fields).sort().map(f => ({
+		value: f,
+		label: SITE_FIELDS.has(f) ? `site: ${f}` : `sample: ${f}`
+	}));
 }
 
 /** Parse a MIxS TSV string into sample objects ready for insertion.
@@ -275,7 +297,6 @@ export function parseMixsTsv(
 
 		// Default checklist
 		if (!sample.mixs_checklist) sample.mixs_checklist = 'MIMARKS-SU';
-		if (!sample.env_package) sample.env_package = 'water';
 
 		// Parse numeric fields
 		for (const numField of ['temp', 'salinity', 'ph', 'dissolved_oxygen', 'pressure', 'turbidity', 'chlorophyll', 'nitrate', 'phosphate', 'volume_filtered_ml', 'latitude', 'longitude']) {

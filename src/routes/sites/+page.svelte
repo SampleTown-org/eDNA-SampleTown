@@ -50,7 +50,6 @@
 		{ key: 'site_name', label: 'Site', sortable: true },
 		{ key: 'project_name', label: 'Project', sortable: true },
 		{ key: 'geo_loc_name', label: 'Location', sortable: true },
-		{ key: 'env_package', label: 'Env Package', sortable: true },
 		{ key: 'habitat_type', label: 'Habitat', sortable: true },
 		{ key: 'sample_count', label: 'Samples', sortable: true }
 	];

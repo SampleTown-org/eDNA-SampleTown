@@ -41,10 +41,6 @@ export interface Site {
 	locality: string | null;
 	env_broad_scale: string | null;
 	env_local_scale: string | null;
-	env_medium: string | null;
-	env_package: EnvPackage | null;
-	depth: string | null;
-	elevation: string | null;
 	habitat_type: string | null;
 	access_notes: string | null;
 	notes: string | null;
@@ -82,23 +78,16 @@ export type EnvPackage =
 export interface Sample {
 	id: string;
 	project_id: string;
-	site_id: string | null;
+	site_id: string;
 	mixs_checklist: MixsChecklist;
 
 	// MIxS core
 	samp_name: string;
 	collection_date: string;
-	lat_lon: string;
-	latitude: number | null;
-	longitude: number | null;
-	geo_loc_name: string;
-	env_broad_scale: string;
-	env_local_scale: string;
 	env_medium: string;
 	samp_taxon_id: string | null;
 
-	// Environmental package
-	env_package: EnvPackage;
+	// Package-specific fields
 	depth: string | null;
 	elevation: string | null;
 	host_taxon_id: string | null;

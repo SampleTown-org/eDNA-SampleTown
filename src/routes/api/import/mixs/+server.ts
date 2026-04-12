@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
-import { parseMixsTsv, xlsxToTsv, getImportableFields } from '$lib/server/mixs-io';
+import { parseMixsTsv, xlsxToTsv, getImportableFields, SITE_FIELDS } from '$lib/server/mixs-io';
 import { parseLatLon } from '$lib/mixs/validators';
 import { checkRate } from '$lib/server/rate-limit';
 import { apiError } from '$lib/server/api-errors';
@@ -11,8 +11,8 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_TSV_BYTES = 20 * 1024 * 1024; // post-decompression cap (xlsx is zipped)
 const MAX_ROWS = 10_000;
 
-/** Radius used to auto-link imported samples to nearby existing sites. */
-const SITE_MATCH_KM = 1;
+/** Default radius for auto-linking imported samples to nearby existing sites. */
+const DEFAULT_SITE_MATCH_KM = 1;
 
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
 	// Rate limit per IP: 10 imports / hour. Hooks already require a session.
@@ -27,6 +27,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	let projectId: string;
 	let dryRun: boolean;
 	let columnMap: Record<string, string> | undefined;
+	let siteMatchKm: number = DEFAULT_SITE_MATCH_KM;
 
 	try {
 		if (contentType.includes('multipart/form-data')) {
@@ -37,6 +38,11 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			if (colMapRaw) {
 				try { columnMap = JSON.parse(colMapRaw); }
 				catch { return json({ error: 'Invalid columnMap JSON' }, { status: 400 }); }
+			}
+			const kmRaw = formData.get('siteMatchKm') as string | null;
+			if (kmRaw) {
+				const km = Number(kmRaw);
+				if (!isNaN(km) && km > 0 && km <= 100) siteMatchKm = km;
 			}
 			const file = formData.get('file') as File;
 			if (!file || !projectId) {
@@ -63,6 +69,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			projectId = body.projectId;
 			dryRun = body.dryRun;
 			columnMap = body.columnMap;
+			if (body.siteMatchKm != null) {
+				const km = Number(body.siteMatchKm);
+				if (!isNaN(km) && km > 0 && km <= 100) siteMatchKm = km;
+			}
 			if (typeof tsv === 'string' && tsv.length > MAX_TSV_BYTES) {
 				return json({ error: 'TSV payload too large' }, { status: 413 });
 			}
@@ -84,18 +94,46 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		);
 	}
 
-	// Augment each sample with the matched site_id (if any). Works for both
-	// dry runs (preview) and real imports.
+	// Parse coordinates and match each sample to nearby sites.
 	const matched = samples.map((s) => {
 		const coords = s.lat_lon ? parseLatLon(s.lat_lon as string) : null;
 		const lat = coords?.latitude ?? (s.latitude as number | null) ?? null;
 		const lon = coords?.longitude ?? (s.longitude as number | null) ?? null;
 		if (lat == null || lon == null) {
-			return { sample: s, lat, lon, matched_site: null };
+			return { sample: s, lat, lon, matched_site: null as { id: string; site_name: string; distance_km: number } | null, new_site: false };
 		}
-		const nearby = findNearbySites(lat, lon, SITE_MATCH_KM, projectId);
-		return { sample: s, lat, lon, matched_site: nearby[0] ?? null };
+		const nearby = findNearbySites(lat, lon, siteMatchKm, projectId);
+		return { sample: s, lat, lon, matched_site: nearby[0] ?? null, new_site: false };
 	});
+
+	// Auto-create sites for unmatched samples, grouped by lat_lon string.
+	const newSitesByLatLon = new Map<string, { id: string; site_name: string; lat: number; lon: number; lat_lon: string; geo_loc_name: string | null; env_broad_scale: string | null; env_local_scale: string | null }>();
+
+	for (const row of matched) {
+		if (row.matched_site || row.lat == null || row.lon == null) continue;
+
+		// Build a lat_lon key — either from the parsed sample or compose one
+		const latLonKey = (row.sample.lat_lon as string) ||
+			`${Math.abs(row.lat).toFixed(4)} ${row.lat >= 0 ? 'N' : 'S'} ${Math.abs(row.lon).toFixed(4)} ${row.lon >= 0 ? 'E' : 'W'}`;
+
+		if (!newSitesByLatLon.has(latLonKey)) {
+			const id = generateId();
+			newSitesByLatLon.set(latLonKey, {
+				id,
+				site_name: id,
+				lat: row.lat,
+				lon: row.lon,
+				lat_lon: latLonKey,
+				geo_loc_name: (row.sample.geo_loc_name as string) || null,
+				env_broad_scale: (row.sample.env_broad_scale as string) || null,
+				env_local_scale: (row.sample.env_local_scale as string) || null
+			});
+		}
+
+		const site = newSitesByLatLon.get(latLonKey)!;
+		row.matched_site = { id: site.id, site_name: site.site_name, distance_km: 0 };
+		row.new_site = true;
+	}
 
 	if (dryRun) {
 		return json({
@@ -105,8 +143,11 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			count: samples.length,
 			column_map,
 			available_fields: getImportableFields(),
+			site_fields: SITE_FIELDS,
+			site_match_km: siteMatchKm,
 			site_matches: matched.map((m) => ({
 				samp_name: m.sample.samp_name,
+				new_site: m.new_site,
 				site: m.matched_site
 					? {
 							id: m.matched_site.id,
@@ -114,41 +155,77 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 							distance_km: Number(m.matched_site.distance_km.toFixed(3))
 						}
 					: null
+			})),
+			new_sites: Array.from(newSitesByLatLon.values()).map((s) => ({
+				id: s.id,
+				site_name: s.site_name,
+				lat_lon: s.lat_lon,
+				geo_loc_name: s.geo_loc_name
 			}))
 		});
 	}
 
-	// Insert samples
+	// Insert sites and samples
 	const db = getDb();
 	const userId = locals.user?.id ?? null;
 	const inserted: any[] = [];
 	const insertErrors: string[] = [...errors];
 	let matchedCount = 0;
+	let newSiteCount = 0;
+
+	const insertSiteStmt = db.prepare(`
+		INSERT INTO sites (id, project_id, site_name, lat_lon, latitude, longitude,
+			geo_loc_name, env_broad_scale, env_local_scale, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`);
 
 	const insertStmt = db.prepare(`
 		INSERT INTO samples (id, project_id, site_id, mixs_checklist,
-			samp_name, collection_date, lat_lon, latitude, longitude,
-			geo_loc_name, env_broad_scale, env_local_scale, env_medium, samp_taxon_id,
-			env_package, depth, elevation, host_taxon_id,
+			samp_name, collection_date, env_medium, samp_taxon_id,
+			depth, elevation, host_taxon_id,
 			temp, salinity, ph, dissolved_oxygen, pressure, turbidity, chlorophyll, nitrate, phosphate,
 			sample_type, volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
 			notes, custom_fields, created_by)
 		VALUES (?, ?, ?, ?,
-			?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?,
 			?, ?, ?, ?,
+			?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?,
 			?, ?, ?)
 	`);
 
-	const insertSample = db.transaction((rows: typeof matched) => {
+	const insertAll = db.transaction((rows: typeof matched) => {
+		// First, insert all new sites
+		const insertedSiteIds = new Set<string>();
+		for (const site of newSitesByLatLon.values()) {
+			if (insertedSiteIds.has(site.id)) continue;
+			insertSiteStmt.run(
+				site.id,
+				projectId,
+				site.site_name,
+				site.lat_lon,
+				site.lat,
+				site.lon,
+				site.geo_loc_name,
+				site.env_broad_scale,
+				site.env_local_scale,
+				userId
+			);
+			insertedSiteIds.add(site.id);
+			newSiteCount++;
+		}
+
+		// Then insert samples
 		for (const row of rows) {
 			const sample = row.sample;
+			const siteId = row.matched_site?.id ?? null;
+			if (!siteId) {
+				insertErrors.push(`${sample.samp_name}: no site match and no coordinates — skipped`);
+				continue;
+			}
 			try {
 				const id = generateId();
-				const siteId = row.matched_site?.id ?? null;
-				if (siteId) matchedCount++;
+				if (!row.new_site) matchedCount++;
 
 				insertStmt.run(
 					id,
@@ -157,15 +234,8 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 					sample.mixs_checklist || 'MIMARKS-SU',
 					sample.samp_name,
 					sample.collection_date || 'not collected',
-					sample.lat_lon || 'not collected',
-					row.lat,
-					row.lon,
-					sample.geo_loc_name || 'not collected',
-					sample.env_broad_scale || 'not collected',
-					sample.env_local_scale || 'not collected',
 					sample.env_medium || 'not collected',
 					sample.samp_taxon_id || null,
-					sample.env_package || 'water',
 					sample.depth || null,
 					sample.elevation || null,
 					sample.host_taxon_id || null,
@@ -203,7 +273,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	});
 
 	try {
-		insertSample(matched);
+		insertAll(matched);
 	} catch (err) {
 		return apiError(err);
 	}
@@ -212,6 +282,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		{
 			imported: inserted.length,
 			site_matches: matchedCount,
+			new_sites: newSiteCount,
 			errors: insertErrors,
 			samples: inserted
 		},

@@ -7,10 +7,12 @@ export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
 
 	const sample = db.prepare(`
-		SELECT s.*, p.project_name, st.site_name
+		SELECT s.*, p.project_name, st.site_name,
+			st.lat_lon, st.latitude, st.longitude, st.geo_loc_name,
+			st.env_broad_scale, st.env_local_scale
 		FROM samples s
 		JOIN projects p ON p.id = s.project_id
-		LEFT JOIN sites st ON st.id = s.site_id
+		JOIN sites st ON st.id = s.site_id
 		WHERE s.id = ? AND s.is_deleted = 0
 	`).get(params.sampleId);
 	if (!sample) throw error(404, 'Sample not found');

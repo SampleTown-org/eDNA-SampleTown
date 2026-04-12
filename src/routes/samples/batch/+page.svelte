@@ -20,7 +20,7 @@
 
 	const CORE_COLUMNS: ColumnDef[] = [
 		{ key: 'project_id', label: 'Project *', width: 'w-40', required: true, widget: 'select-project' },
-		{ key: 'site_id', label: 'Site', width: 'w-40', widget: 'select-site' },
+		{ key: 'site_id', label: 'Site *', width: 'w-40', required: true, widget: 'select-site' },
 		{ key: 'samp_name', label: 'Sample name *', required: true },
 		{ key: 'collection_date', label: 'Collection date', placeholder: 'YYYY-MM-DD', width: 'w-36' },
 		{ key: 'notes', label: 'Notes' }
@@ -28,9 +28,6 @@
 
 	const ADDITIONAL_COLUMNS: ColumnDef[] = [
 		{ key: 'env_medium', label: 'Env medium', width: 'w-40' },
-		{ key: 'geo_loc_name', label: 'Geo location', width: 'w-40' },
-		{ key: 'env_broad_scale', label: 'Env broad scale', width: 'w-40' },
-		{ key: 'env_local_scale', label: 'Env local scale', width: 'w-40' },
 		{ key: 'depth', label: 'Depth (m)', width: 'w-24' },
 		{ key: 'elevation', label: 'Elevation (m)', width: 'w-24' },
 		{ key: 'temp', label: 'Temp (°C)', width: 'w-24' },
@@ -38,9 +35,7 @@
 		{ key: 'ph', label: 'pH', width: 'w-20' },
 		{ key: 'volume_filtered_ml', label: 'Vol filtered (mL)', width: 'w-28' },
 		{ key: 'filter_type', label: 'Filter type', width: 'w-32' },
-		{ key: 'preservation_method', label: 'Preservation', width: 'w-32' },
-		{ key: 'latitude', label: 'Latitude', width: 'w-28' },
-		{ key: 'longitude', label: 'Longitude', width: 'w-28' }
+		{ key: 'preservation_method', label: 'Preservation', width: 'w-32' }
 	];
 
 	let extraColumnKeys = $state<string[]>([]);
@@ -162,23 +157,12 @@
 		for (const row of nonEmptyRows) {
 			const body: Record<string, unknown> = {
 				project_id: row.project_id,
-				site_id: row.site_id || null,
+				site_id: row.site_id,
 				samp_name: row.samp_name.trim(),
 				people
 			};
-			if (row.latitude && row.longitude) {
-				const lat = Number(row.latitude);
-				const lon = Number(row.longitude);
-				if (!isNaN(lat) && !isNaN(lon)) {
-					const ns = lat >= 0 ? 'N' : 'S';
-					const ew = lon >= 0 ? 'E' : 'W';
-					body.lat_lon = `${Math.abs(lat).toFixed(4)} ${ns} ${Math.abs(lon).toFixed(4)} ${ew}`;
-					body.latitude = lat;
-					body.longitude = lon;
-				}
-			}
 			for (const col of columns) {
-				if (['samp_name', 'project_id', 'site_id', 'latitude', 'longitude'].includes(col.key)) continue;
+				if (['samp_name', 'project_id', 'site_id'].includes(col.key)) continue;
 				const v = row[col.key];
 				if (v && v.toString().trim()) body[col.key] = v;
 			}

@@ -3,7 +3,6 @@
 	import { CHECKLIST_OPTIONS } from '$lib/mixs/checklists';
 	import { ENV_PACKAGES } from '$lib/mixs/controlled-vocab';
 	import { CORE_FIELDS, PACKAGE_FIELDS, MEASUREMENT_FIELDS, LOGISTICS_FIELDS } from '$lib/mixs/fields';
-	import { validateSample, formatLatLon } from '$lib/mixs/validators';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { EnvPackage, MixsChecklist } from '$lib/types';
 	import type { PageData } from './$types';
@@ -14,56 +13,33 @@
 		project_id: data.preselectedProjectId as string,
 		site_id: data.preselectedSiteId as string,
 		mixs_checklist: 'MIMARKS-SU',
-		env_package: 'water',
 		samp_name: '',
 		collection_date: '',
-		latitude: '',
-		longitude: '',
-		geo_loc_name: '',
-		env_broad_scale: '',
-		env_local_scale: '',
 		env_medium: ''
 	});
 
+	/** env_package is a UI-only filter for showing package-specific fields — not saved to DB. */
+	let envPackage = $state<EnvPackage>('water');
+
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
-
-	// Compose lat_lon for validation and submission
-	let latLonStr = $derived(
-		form.latitude && form.longitude
-			? formatLatLon(+(form.latitude as string), +(form.longitude as string))
-			: ''
-	);
-
-	// Build a sample-like object for validation (with lat_lon composed)
-	let sampleForValidation = $derived({ ...form, lat_lon: latLonStr });
 
 	// Sites filtered by selected project
 	let availableSites = $derived(
 		(data.sites as any[]).filter((s: any) => !form.project_id || s.project_id === form.project_id)
 	);
 
-	// Auto-fill from site when selected
+	// Auto-fill project from site if not set
 	function onSiteChange() {
 		const site = (data.sites as any[]).find((s: any) => s.id === form.site_id);
-		if (site) {
-			if (site.latitude != null) form.latitude = site.latitude;
-			if (site.longitude != null) form.longitude = site.longitude;
-			if (site.geo_loc_name) form.geo_loc_name = site.geo_loc_name;
-			if (site.env_broad_scale) form.env_broad_scale = site.env_broad_scale;
-			if (site.env_local_scale) form.env_local_scale = site.env_local_scale;
-			if (site.env_medium) form.env_medium = site.env_medium;
-			if (site.env_package) form.env_package = site.env_package;
-			if (site.depth) form.depth = site.depth;
-			if (site.elevation) form.elevation = site.elevation;
-			if (!form.project_id && site.project_id) form.project_id = site.project_id;
+		if (site && !form.project_id && site.project_id) {
+			form.project_id = site.project_id;
 		}
 	}
 
 	let saving = $state(false);
 	let errorMsg = $state('');
 
-	let validation = $derived(validateSample(sampleForValidation as any));
-	let packageFields = $derived(PACKAGE_FIELDS[(form.env_package as EnvPackage) || 'water'] || []);
+	let packageFields = $derived(PACKAGE_FIELDS[envPackage] || []);
 
 	async function submit() {
 		if (!form.project_id) {
@@ -82,7 +58,7 @@
 		saving = true;
 		errorMsg = '';
 
-		const body = { ...form, lat_lon: latLonStr, people };
+		const body = { ...form, people };
 		const res = await fetch('/api/samples', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -98,16 +74,7 @@
 		}
 	}
 
-	function fieldError(name: string): string | undefined {
-		return validation.errors.find((e) => e.field === name)?.message;
-	}
-
-	// Border class helper — red if the field has an error AND has been left empty
-	function bc(name: string): string {
-		return fieldError(name) ? 'border-red-700' : 'border-slate-700';
-	}
-
-	const inputCls = 'w-full px-3 py-2 bg-slate-800 border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
+	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 	const selectCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';
 </script>
 
@@ -215,8 +182,8 @@
 						<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find(o => o.value === form.mixs_checklist)?.description}</p>
 					</div>
 					<div>
-						<label for="env_package" class="block text-sm font-medium text-slate-300 mb-1">Env Package</label>
-						<select id="env_package" bind:value={form.env_package} class={selectCls}>
+						<label for="env_package" class="block text-sm font-medium text-slate-300 mb-1">Env Package <span class="text-xs text-slate-500 font-normal">(field filter only)</span></label>
+						<select id="env_package" bind:value={envPackage} class={selectCls}>
 							{#each ENV_PACKAGES as pkg}
 								<option value={pkg.value}>{pkg.label}</option>
 							{/each}
@@ -229,14 +196,14 @@
 		<!-- Package-specific fields -->
 		{#if packageFields.length > 0}
 			<fieldset class="space-y-4">
-				<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">{form.env_package} Package Fields</legend>
+				<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">{envPackage} Package Fields</legend>
 				{#each packageFields as field}
 					<div>
 						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">
 							{field.label} {field.unit ? `(${field.unit})` : ''}
 						</label>
 						<input id={field.name} type="text" bind:value={form[field.name]}
-							class="{inputCls} {bc(field.name)}" placeholder={field.placeholder} />
+							class="{inputCls} border-slate-700" placeholder={field.placeholder} />
 					</div>
 				{/each}
 			</fieldset>

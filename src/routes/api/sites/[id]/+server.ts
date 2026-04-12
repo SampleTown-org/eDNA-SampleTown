@@ -28,8 +28,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				site_name = ?, description = ?,
 				lat_lon = ?, latitude = ?, longitude = ?,
 				geo_loc_name = ?, locality = ?,
-				env_broad_scale = ?, env_local_scale = ?, env_medium = ?,
-				env_package = ?, depth = ?, elevation = ?, habitat_type = ?, access_notes = ?,
+				env_broad_scale = ?, env_local_scale = ?,
+				habitat_type = ?, access_notes = ?,
 				notes = ?, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
@@ -42,10 +42,6 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			nn(data.locality),
 			nn(data.env_broad_scale),
 			nn(data.env_local_scale),
-			nn(data.env_medium),
-			nn(data.env_package),
-			nn(data.depth),
-			nn(data.elevation),
 			nn(data.habitat_type),
 			nn(data.access_notes),
 			nn(data.notes),
@@ -65,6 +61,10 @@ export const DELETE: RequestHandler = async ({ params }) => {
 		);
 		return json({ ok: true });
 	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (msg.includes('FOREIGN KEY constraint failed')) {
+			return json({ error: 'Cannot delete site with existing samples. Reassign or delete the samples first.' }, { status: 409 });
+		}
 		return apiError(err);
 	}
 };

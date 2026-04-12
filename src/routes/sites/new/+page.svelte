@@ -17,8 +17,6 @@
 		locality: '',
 		env_broad_scale: '',
 		env_local_scale: '',
-		depth: '',
-		elevation: '',
 		habitat_type: '',
 		access_notes: '',
 		notes: ''
@@ -135,10 +133,6 @@
 
 		<fieldset class="space-y-4">
 			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Environment</legend>
-			<div>
-				<label for="depth" class="block text-sm font-medium text-slate-300 mb-1">Depth (m)</label>
-				<input id="depth" type="number" step="any" bind:value={form.depth} class={inputCls} placeholder="e.g., 10" />
-			</div>
 			<div>
 				<label for="env_broad_scale" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=env_broad_scale" target="_blank" class="hover:text-ocean-400">Broad-scale Environment</a></label>
 				<select id="env_broad_scale" bind:value={form.env_broad_scale} class={selectCls}>

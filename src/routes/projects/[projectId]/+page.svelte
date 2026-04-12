@@ -7,8 +7,7 @@
 	const sampleColumns = [
 		{ key: 'samp_name', label: 'Sample', sortable: true },
 		{ key: 'mixs_checklist', label: 'Checklist', sortable: true },
-		{ key: 'env_package', label: 'Env Package', sortable: true },
-		{ key: 'geo_loc_name', label: 'Location', sortable: true },
+		{ key: 'site_name', label: 'Site', sortable: true },
 		{ key: 'collection_date', label: 'Collected', sortable: true }
 	];
 </script>

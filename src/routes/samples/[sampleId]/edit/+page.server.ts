@@ -19,7 +19,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const projects = db.prepare('SELECT id, project_name FROM projects ORDER BY project_name').all();
 	const sites = db.prepare(`
 		SELECT s.id, s.site_name, s.project_id, s.lat_lon, s.latitude, s.longitude, s.geo_loc_name,
-			s.env_broad_scale, s.env_local_scale, s.env_medium, s.env_package, s.depth, s.elevation
+			s.env_broad_scale, s.env_local_scale
 		FROM sites s WHERE s.is_deleted = 0 ORDER BY s.site_name
 	`).all();
 	const picklists = getConstrainedValues(

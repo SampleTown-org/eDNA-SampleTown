@@ -34,10 +34,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		db.prepare(
 			`INSERT INTO sites (id, project_id, site_name, description,
 				lat_lon, latitude, longitude, geo_loc_name, locality,
-				env_broad_scale, env_local_scale, env_medium,
-				env_package, depth, elevation, habitat_type, access_notes,
+				env_broad_scale, env_local_scale,
+				habitat_type, access_notes,
 				notes, custom_fields, created_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		).run(
 			id,
 			data.project_id,
@@ -50,10 +50,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			nn(data.locality),
 			nn(data.env_broad_scale),
 			nn(data.env_local_scale),
-			nn(data.env_medium),
-			nn(data.env_package),
-			nn(data.depth),
-			nn(data.elevation),
 			nn(data.habitat_type),
 			nn(data.access_notes),
 			nn(data.notes),

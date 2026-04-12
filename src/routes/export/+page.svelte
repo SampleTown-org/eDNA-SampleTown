@@ -8,6 +8,7 @@
 	// --- Export ---
 	let exportProject = $state('');
 	let exportChecklist = $state('');
+	let exportEnvPackage = $state('water');
 	let previewTsv = $state('');
 	let previewRows = $state(0);
 	let exporting = $state(false);
@@ -18,6 +19,7 @@
 		const params = new URLSearchParams({ format: 'preview' });
 		if (exportProject) params.set('project_id', exportProject);
 		if (exportChecklist) params.set('checklist', exportChecklist);
+		if (exportEnvPackage) params.set('env_package', exportEnvPackage);
 		const res = await fetch(`/api/export/mixs?${params}`);
 		if (res.ok) {
 			const data = await res.json();
@@ -31,6 +33,7 @@
 		const params = new URLSearchParams();
 		if (exportProject) params.set('project_id', exportProject);
 		if (exportChecklist) params.set('checklist', exportChecklist);
+		if (exportEnvPackage) params.set('env_package', exportEnvPackage);
 		window.location.href = `/api/export/mixs?${params}`;
 	}
 
@@ -38,24 +41,36 @@
 	let importProject = $state('');
 	let importTsv = $state('');
 	let importFileName = $state('');
-	type SiteMatch = { samp_name: string; site: { id: string; site_name: string; distance_km: number } | null };
+	let siteMatchKm = $state(1);
+	type SiteMatch = { samp_name: string; new_site: boolean; site: { id: string; site_name: string; distance_km: number } | null };
+	type NewSite = { id: string; site_name: string; lat_lon: string; geo_loc_name: string | null };
 	let importPreview: {
 		samples: any[];
 		errors: string[];
 		headers: string[];
 		count: number;
 		site_matches?: SiteMatch[];
+		new_sites?: NewSite[];
 		column_map?: Record<string, string>;
-		available_fields?: string[];
+		available_fields?: { value: string; label: string }[];
+		site_fields?: string[];
 	} | null = $state(null);
 	let importing = $state(false);
-	let importResult: { imported: number; errors: string[]; site_matches?: number } | null = $state(null);
+	let importResult: { imported: number; errors: string[]; site_matches?: number; new_sites?: number } | null = $state(null);
 
 	// Column mapper state — populated from the dry-run response and editable by the user.
 	let columnMap = $state<Record<string, string>>({});
 	let showMapper = $state(false);
 
 	let importFile: File | null = $state(null);
+
+	// Set of fields that belong to the sites table (for display in mapper)
+	let siteFieldSet = $derived(new Set(importPreview?.site_fields ?? ['lat_lon', 'latitude', 'longitude', 'geo_loc_name', 'env_broad_scale', 'env_local_scale']));
+
+	function fieldLabel(field: string): string {
+		if (!field || field === '_skip_') return field;
+		return siteFieldSet.has(field) ? `site: ${field}` : `sample: ${field}`;
+	}
 
 	function handleFile(e: Event) {
 		const input = e.target as HTMLInputElement;
@@ -88,6 +103,7 @@
 			fd.append('file', importFile);
 			fd.append('projectId', importProject);
 			fd.append('dryRun', String(dryRun));
+			fd.append('siteMatchKm', String(siteMatchKm));
 			if (colMapJson) fd.append('columnMap', colMapJson);
 			res = await fetch('/api/import/mixs', { method: 'POST', body: fd });
 		} else {
@@ -98,6 +114,7 @@
 					tsv: importTsv,
 					projectId: importProject,
 					dryRun,
+					siteMatchKm,
 					columnMap: colMapJson ? JSON.parse(colMapJson) : undefined
 				})
 			});
@@ -148,7 +165,7 @@
 	<div class="space-y-4">
 		<p class="text-sm text-slate-400">Export samples as MIxS-compliant TSV for NCBI BioSample / SRA submission.</p>
 
-		<div class="flex gap-4 items-end">
+		<div class="flex gap-4 items-end flex-wrap">
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">Project</label>
 				<select bind:value={exportProject} class={selectCls}>
@@ -161,6 +178,14 @@
 				<select bind:value={exportChecklist} class={selectCls}>
 					<option value="">All checklists</option>
 					{#each data.checklists as c}<option value={c.mixs_checklist}>{c.mixs_checklist}</option>{/each}
+				</select>
+			</div>
+			<div>
+				<label class="block text-xs font-medium text-slate-400 mb-1">Env Package</label>
+				<select bind:value={exportEnvPackage} class={selectCls}>
+					{#each ['water', 'soil', 'sediment', 'host-associated', 'air', 'built', 'plant-associated', 'agriculture'] as pkg}
+						<option value={pkg}>{pkg}</option>
+					{/each}
 				</select>
 			</div>
 			<button onclick={previewExport} disabled={exporting} class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
@@ -204,9 +229,9 @@
 	{:else}
 	<!-- Import -->
 	<div class="space-y-4">
-		<p class="text-sm text-slate-400">Import samples from a MIxS-compliant TSV file. Accepts both SRA/BioSample column headers and internal field names.</p>
+		<p class="text-sm text-slate-400">Import samples from a MIxS-compliant TSV file. Sites are auto-created or matched by proximity.</p>
 
-		<div class="flex gap-4 items-end">
+		<div class="flex gap-4 items-end flex-wrap">
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">Target Project</label>
 				<select bind:value={importProject} class={selectCls}>
@@ -218,6 +243,16 @@
 				<label class="block text-xs font-medium text-slate-400 mb-1">File (.xlsx, .tsv, .csv)</label>
 				<input type="file" accept=".xlsx,.xls,.tsv,.txt,.csv" onchange={handleFile}
 					class="text-sm text-slate-400 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-700 file:text-white file:text-sm file:cursor-pointer hover:file:bg-slate-600" />
+			</div>
+			<div>
+				<label class="block text-xs font-medium text-slate-400 mb-1">Site match radius</label>
+				<div class="flex items-center gap-2">
+					<input type="range" min="0.001" max="10" step="0.001" bind:value={siteMatchKm}
+						class="w-24 accent-ocean-500" />
+					<input type="number" min="0.001" max="100" step="0.001" bind:value={siteMatchKm}
+						class="w-20 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500" />
+					<span class="text-xs text-slate-500">km</span>
+				</div>
 			</div>
 		</div>
 
@@ -264,13 +299,15 @@
 							<p class="text-xs text-slate-500">
 								Override SampleTown's auto-detection. Unmapped columns are ignored. Use
 								<code>_skip_</code> to deliberately drop a column.
+								Fields prefixed with <code class="text-ocean-400">site:</code> populate the site record;
+								<code class="text-green-400">sample:</code> fields go on the sample.
 							</p>
 							<div class="max-h-72 overflow-y-auto">
 								<table class="w-full text-xs">
 									<thead class="sticky top-0 bg-slate-900/80 backdrop-blur">
 										<tr class="text-slate-400 border-b border-slate-800">
 											<th class="px-2 py-1.5 text-left font-medium">File column</th>
-											<th class="px-2 py-1.5 text-left font-medium">→ Target field</th>
+											<th class="px-2 py-1.5 text-left font-medium">Target field</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -286,7 +323,7 @@
 														<option value="_skip_">(skip — drop column)</option>
 														<option value="custom:{header}">(add as custom field)</option>
 														{#each importPreview.available_fields ?? [] as f}
-															<option value={f}>{f}</option>
+															<option value={f.value} class="{siteFieldSet.has(f.value) ? 'text-ocean-400' : 'text-green-400'}">{f.label}</option>
 														{/each}
 													</select>
 												</td>
@@ -318,14 +355,16 @@
 			{/if}
 
 			{#if importPreview.site_matches && importPreview.site_matches.length > 0}
-				{@const linked = importPreview.site_matches.filter((m) => m.site)}
-				{#if linked.length > 0}
-				<div class="p-3 rounded-lg bg-ocean-900/20 border border-ocean-800 text-ocean-200 text-sm">
+				{@const linked = importPreview.site_matches.filter((m) => m.site && !m.new_site)}
+				{@const newSites = importPreview.new_sites ?? []}
+				{#if linked.length > 0 || newSites.length > 0}
+				<div class="p-3 rounded-lg bg-ocean-900/20 border border-ocean-800 text-ocean-200 text-sm space-y-2">
+					{#if linked.length > 0}
 					<p class="font-medium">
-						{linked.length} of {importPreview.site_matches.length} samples will auto-link
-						to an existing site within 1&nbsp;km
+						{linked.length} sample{linked.length === 1 ? '' : 's'} matched to existing site{linked.length === 1 ? '' : 's'}
+						(within {siteMatchKm}&nbsp;km)
 					</p>
-					<details class="mt-2">
+					<details>
 						<summary class="cursor-pointer text-xs text-ocean-300 hover:text-ocean-200">
 							Show matches
 						</summary>
@@ -335,6 +374,22 @@
 							{/each}
 						</div>
 					</details>
+					{/if}
+					{#if newSites.length > 0}
+					<p class="font-medium text-green-300">
+						{newSites.length} new site{newSites.length === 1 ? '' : 's'} will be created
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-green-400 hover:text-green-300">
+							Show new sites
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each newSites as s}
+								<div>{s.site_name} — {s.lat_lon} {s.geo_loc_name ? `(${s.geo_loc_name})` : ''}</div>
+							{/each}
+						</div>
+					</details>
+					{/if}
 				</div>
 				{/if}
 			{/if}
@@ -347,11 +402,11 @@
 							<tr class="bg-slate-900">
 								<th class="px-2 py-1.5 text-left font-medium text-slate-400 border-b border-slate-700">sample_name</th>
 								<th class="px-2 py-1.5 text-left font-medium text-slate-400 border-b border-slate-700">collection_date</th>
-								<th class="px-2 py-1.5 text-left font-medium text-slate-400 border-b border-slate-700">lat_lon</th>
-								<th class="px-2 py-1.5 text-left font-medium text-slate-400 border-b border-slate-700">geo_loc_name</th>
-								<th class="px-2 py-1.5 text-left font-medium text-slate-400 border-b border-slate-700">env_broad_scale</th>
+								<th class="px-2 py-1.5 text-left font-medium text-ocean-400 border-b border-slate-700">site: lat_lon</th>
+								<th class="px-2 py-1.5 text-left font-medium text-ocean-400 border-b border-slate-700">site: geo_loc_name</th>
+								<th class="px-2 py-1.5 text-left font-medium text-ocean-400 border-b border-slate-700">site: env_broad_scale</th>
+								<th class="px-2 py-1.5 text-left font-medium text-slate-400 border-b border-slate-700">env_medium</th>
 								<th class="px-2 py-1.5 text-left font-medium text-slate-400 border-b border-slate-700">checklist</th>
-								<th class="px-2 py-1.5 text-left font-medium text-slate-400 border-b border-slate-700">env_package</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -362,8 +417,8 @@
 								<td class="px-2 py-1 text-slate-300">{s.lat_lon || '—'}</td>
 								<td class="px-2 py-1 text-slate-300">{s.geo_loc_name || '—'}</td>
 								<td class="px-2 py-1 text-slate-300">{s.env_broad_scale || '—'}</td>
+								<td class="px-2 py-1 text-slate-300">{s.env_medium || '—'}</td>
 								<td class="px-2 py-1 text-slate-300">{s.mixs_checklist}</td>
-								<td class="px-2 py-1 text-slate-300">{s.env_package}</td>
 							</tr>
 							{/each}
 						</tbody>
@@ -378,7 +433,10 @@
 			{#if importResult.imported > 0}
 				<p class="text-green-300 font-medium">{importResult.imported} samples imported successfully</p>
 				{#if importResult.site_matches && importResult.site_matches > 0}
-					<p class="text-sm text-ocean-300 mt-1">{importResult.site_matches} auto-linked to nearby sites (within 1 km)</p>
+					<p class="text-sm text-ocean-300 mt-1">{importResult.site_matches} matched to existing sites (within {siteMatchKm} km)</p>
+				{/if}
+				{#if importResult.new_sites && importResult.new_sites > 0}
+					<p class="text-sm text-green-400 mt-1">{importResult.new_sites} new sites created</p>
 				{/if}
 				<a href="/samples" class="text-sm text-ocean-400 hover:text-ocean-300 mt-1 inline-block">View samples &rarr;</a>
 			{/if}

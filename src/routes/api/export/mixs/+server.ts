@@ -4,9 +4,10 @@ import { exportMixsTsv } from '$lib/server/mixs-io';
 export const GET: RequestHandler = async ({ url }) => {
 	const projectId = url.searchParams.get('project_id') || undefined;
 	const checklist = url.searchParams.get('checklist') || undefined;
+	const envPackage = url.searchParams.get('env_package') || undefined;
 	const format = url.searchParams.get('format') || 'tsv';
 
-	const tsv = exportMixsTsv({ projectId, checklist });
+	const tsv = exportMixsTsv({ projectId, checklist, envPackage });
 
 	if (format === 'preview') {
 		return new Response(JSON.stringify({ tsv }), {
