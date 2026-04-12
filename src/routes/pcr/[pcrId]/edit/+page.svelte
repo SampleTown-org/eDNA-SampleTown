@@ -5,7 +5,13 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// Plate-edit branch state
+	// Plate-edit branch state. Mirrors pcr/new: plate_name + pcr_date + notes
+	// are direct fields; primer details (forward/reverse name+seq, target_gene,
+	// target_subfragment) are sourced from a Primer Set picker; PCR conditions
+	// (polymerase, annealing temp, cycles, conditions string) come from a PCR
+	// Protocol picker. Both pickers start unselected and overwrite the
+	// underlying fields when chosen — the existing values are surfaced as
+	// read-only "current" lines so the operator knows what's already set.
 	let plateForm = $state(
 		data.type === 'plate'
 			? {
@@ -28,6 +34,30 @@
 	let platePeople = $state<{ personnel_id: string; role?: string | null }[]>(
 		data.type === 'plate' ? data.people ?? [] : []
 	);
+
+	let selectedPrimerSetId = $state('');
+	function onPrimerSetChange() {
+		if (data.type !== 'plate') return;
+		const ps = (data.primerSets as any[] | undefined)?.find((p: any) => p.id === selectedPrimerSetId);
+		if (!ps) return;
+		plateForm.target_gene = ps.target_gene;
+		plateForm.target_subfragment = ps.target_subfragment || '';
+		plateForm.forward_primer_name = ps.forward_primer_name || '';
+		plateForm.forward_primer_seq = ps.forward_primer_seq || '';
+		plateForm.reverse_primer_name = ps.reverse_primer_name || '';
+		plateForm.reverse_primer_seq = ps.reverse_primer_seq || '';
+	}
+
+	let selectedProtocolId = $state('');
+	function onProtocolChange() {
+		if (data.type !== 'plate') return;
+		const proto = (data.pcrProtocols as any[] | undefined)?.find((p: any) => p.id === selectedProtocolId);
+		if (!proto) return;
+		plateForm.polymerase = proto.polymerase || '';
+		plateForm.annealing_temp_c = proto.annealing_temp_c ?? '';
+		plateForm.num_cycles = proto.num_cycles ?? '';
+		plateForm.pcr_conditions = proto.pcr_conditions || '';
+	}
 
 	// Reaction-edit branch state (legacy form, unchanged from before plates landed)
 	let reactionForm = $state(
@@ -144,69 +174,44 @@
 				label="People"
 			/>
 
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				<div>
-					<label for="target_gene" class="block text-sm font-medium text-slate-300 mb-1">Target Gene</label>
-					<select id="target_gene" bind:value={plateForm.target_gene} class={selectCls}>
-						<option value="">Select...</option>
-						<option value="16S">16S</option>
-						<option value="18S">18S</option>
-						<option value="CO1">CO1</option>
-						<option value="12S">12S</option>
-						<option value="ITS">ITS</option>
-						<option value="other">other</option>
-					</select>
-				</div>
-				<div>
-					<label for="target_subfragment" class="block text-sm font-medium text-slate-300 mb-1">Target Subfragment</label>
-					<input id="target_subfragment" type="text" bind:value={plateForm.target_subfragment} class={inputCls} />
-				</div>
-			</div>
-
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">Forward Primer Name</label>
-					<input type="text" bind:value={plateForm.forward_primer_name} class={inputCls} />
-				</div>
-				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">Forward Primer Sequence</label>
-					<input type="text" bind:value={plateForm.forward_primer_seq} class="{inputCls} font-mono" />
-				</div>
-			</div>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">Reverse Primer Name</label>
-					<input type="text" bind:value={plateForm.reverse_primer_name} class={inputCls} />
-				</div>
-				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">Reverse Primer Sequence</label>
-					<input type="text" bind:value={plateForm.reverse_primer_seq} class="{inputCls} font-mono" />
-				</div>
-			</div>
-
-			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">Annealing Temp (°C)</label>
-					<input type="number" step="any" bind:value={plateForm.annealing_temp_c} class={inputCls} />
-				</div>
-				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">Cycles</label>
-					<input type="number" bind:value={plateForm.num_cycles} class={inputCls} />
-				</div>
-				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Polymerase</a>
-					</label>
-					<input type="text" bind:value={plateForm.polymerase} list="polymerase-list" class={inputCls} />
-					<datalist id="polymerase-list">
-						{#each data.picklists.polymerase ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</datalist>
-				</div>
-			</div>
-
+			<!-- Primer Set picker (mirrors pcr/new) -->
 			<div>
-				<label class="block text-sm font-medium text-slate-300 mb-1">PCR Conditions</label>
-				<textarea bind:value={plateForm.pcr_conditions} rows="2" class="{inputCls} font-mono text-xs"></textarea>
+				<label class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=primers" target="_blank" class="hover:text-ocean-400">Primer Set</a>
+				</label>
+				<select bind:value={selectedPrimerSetId} onchange={onPrimerSetChange} class={selectCls}>
+					<option value="">Keep current ({plateForm.target_gene}{plateForm.target_subfragment ? ` ${plateForm.target_subfragment}` : ''})</option>
+					{#each data.primerSets ?? [] as ps}
+						<option value={ps.id}>{ps.name}</option>
+					{/each}
+				</select>
+				<div class="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400 space-y-1">
+					{#if plateForm.forward_primer_name || plateForm.forward_primer_seq}
+						<div class="font-mono">F: {plateForm.forward_primer_name} — {plateForm.forward_primer_seq}</div>
+					{/if}
+					{#if plateForm.reverse_primer_name || plateForm.reverse_primer_seq}
+						<div class="font-mono">R: {plateForm.reverse_primer_name} — {plateForm.reverse_primer_seq}</div>
+					{/if}
+					{#if !plateForm.forward_primer_name && !plateForm.reverse_primer_name}
+						<div class="italic text-slate-500">No primers set — pick a primer set above to populate.</div>
+					{/if}
+				</div>
+			</div>
+
+			<!-- PCR Protocol picker (mirrors pcr/new) -->
+			<div>
+				<label class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=protocols" target="_blank" class="hover:text-ocean-400">PCR Protocol</a>
+				</label>
+				<select bind:value={selectedProtocolId} onchange={onProtocolChange} class={selectCls}>
+					<option value="">Keep current ({plateForm.polymerase || '—'} · {plateForm.annealing_temp_c || '—'}°C · {plateForm.num_cycles || '—'} cycles)</option>
+					{#each data.pcrProtocols ?? [] as proto}
+						<option value={proto.id}>{proto.name}</option>
+					{/each}
+				</select>
+				{#if plateForm.pcr_conditions}
+					<div class="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400 font-mono">{plateForm.pcr_conditions}</div>
+				{/if}
 			</div>
 
 			<div>
@@ -215,8 +220,8 @@
 			</div>
 
 			<p class="text-xs text-slate-500">
-				Editing plate-level fields only. To edit an individual reaction, open it
-				from the plate detail page.
+				Editing plate-level fields only. Click any reaction in the table on the
+				plate detail page to open and edit it individually.
 			</p>
 
 			<div class="flex gap-3 pt-2">

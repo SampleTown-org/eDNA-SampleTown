@@ -20,12 +20,18 @@ export const load: PageServerLoad = async ({ params }) => {
 		.get(params.pcrId);
 	if (plate) {
 		const personnel = getActivePersonnel();
-		const picklists = getConstrainedValues('person_role', 'polymerase');
+		const picklists = getConstrainedValues('person_role');
+		const primerSets = db
+			.prepare('SELECT * FROM primer_sets WHERE is_active = 1 ORDER BY sort_order, name')
+			.all();
+		const pcrProtocols = db
+			.prepare('SELECT * FROM pcr_protocols WHERE is_active = 1 ORDER BY sort_order, name')
+			.all();
 		const people = getEntityPersonnel('pcr_plate', params.pcrId).map((p) => ({
 			personnel_id: p.personnel_id,
 			role: p.role
 		}));
-		return { type: 'plate' as const, plate, personnel, picklists, people };
+		return { type: 'plate' as const, plate, personnel, picklists, primerSets, pcrProtocols, people };
 	}
 
 	const pcr = db

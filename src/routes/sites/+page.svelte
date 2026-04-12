@@ -7,6 +7,8 @@
 	let { data }: { data: PageData } = $props();
 
 	let sites = $state(data.sites as any[]);
+	/** Mirrored from the DataTable so the map pins can adopt the same tint. */
+	let colorByKey = $state('');
 
 	const columns = [
 		{ key: 'site_name', label: 'Site', sortable: true },
@@ -17,10 +19,28 @@
 		{ key: 'sample_count', label: 'Samples', sortable: true }
 	];
 
+	/** Same hash → HSL hue function as DataTable.colorForValue, but shaped for
+	 *  Leaflet circleMarker fills (slightly more saturation/lightness so the
+	 *  tint reads against tile imagery). */
+	function pinColorForValue(v: unknown): string | undefined {
+		if (v == null || v === '') return undefined;
+		const s = String(v);
+		let h = 0;
+		for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+		const hue = Math.abs(h) % 360;
+		return `hsl(${hue}, 65%, 55%)`;
+	}
+
 	let markers = $derived(
 		sites
 			.filter((s: any) => s.latitude != null && s.longitude != null)
-			.map((s: any) => ({ lat: s.latitude, lng: s.longitude, label: `${s.site_name} (${s.sample_count} samples)`, href: `/sites/${s.id}` }))
+			.map((s: any) => ({
+				lat: s.latitude,
+				lng: s.longitude,
+				label: `${s.site_name} (${s.sample_count} samples)`,
+				href: `/sites/${s.id}`,
+				color: colorByKey ? pinColorForValue(s[colorByKey]) : undefined
+			}))
 	);
 
 	async function deleteSite(row: Record<string, unknown>) {
@@ -52,6 +72,7 @@
 	<DataTable
 		{columns}
 		bind:rows={sites}
+		bind:colorByKey
 		href={(row) => `/sites/${row.id}`}
 		empty="No sites yet."
 		showId

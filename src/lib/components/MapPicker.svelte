@@ -7,7 +7,13 @@
 		onchange?: (lat: number, lng: number) => void;
 		height?: string;
 		readonly?: boolean;
-		markers?: Array<{ lat: number; lng: number; label: string; href?: string }>;
+		/**
+		 * Multi-marker mode. Each marker can optionally specify a `color` (any
+		 * CSS color string, typically `hsl(...)`) — when set, the marker is
+		 * rendered as a colored circle instead of the default Leaflet pin.
+		 * Used by /sites to mirror the DataTable's color-by tint.
+		 */
+		markers?: Array<{ lat: number; lng: number; label: string; href?: string; color?: string }>;
 	}
 
 	let { latitude = $bindable(), longitude = $bindable(), onchange, height = '300px', readonly = false, markers = [] }: Props = $props();
@@ -15,6 +21,7 @@
 	let mapEl: HTMLDivElement;
 	let map: any;
 	let marker: any;
+	let markerLayer: any;
 	let L: any;
 
 	onMount(async () => {
@@ -58,25 +65,64 @@
 			});
 		}
 
-		// Multi-marker mode (dashboard)
+		// Multi-marker mode (dashboard / sites list)
 		if (markers.length > 0) {
-			const group: any[] = [];
-			for (const m of markers) {
-				const mk = L.marker([m.lat, m.lng]).addTo(map);
-				if (m.href) {
-					mk.bindPopup(`<a href="${m.href}" style="font-weight:600">${m.label}</a>`);
-				} else {
-					mk.bindPopup(m.label);
-				}
-				group.push(mk);
-			}
-			if (group.length > 1) {
-				const bounds = L.featureGroup(group).getBounds();
-				map.fitBounds(bounds, { padding: [40, 40] });
-			}
+			renderMarkers();
 		}
 
 		return () => { map.remove(); };
+	});
+
+	/**
+	 * Re-render the marker layer. Pulled into its own function so the reactive
+	 * effect below can re-run it when the parent passes a new `markers` array
+	 * (e.g. when the operator changes the color-by column on the sites list).
+	 */
+	function renderMarkers() {
+		if (!map || !L) return;
+		if (markerLayer) {
+			markerLayer.remove();
+			markerLayer = null;
+		}
+		if (markers.length === 0) return;
+
+		const layer = L.featureGroup();
+		for (const m of markers) {
+			let mk: any;
+			if (m.color) {
+				// Colored circle — matches the DataTable color-by tint when the
+				// row uses an HSL string. White outline keeps it visible against
+				// dark and light tile patches.
+				mk = L.circleMarker([m.lat, m.lng], {
+					radius: 7,
+					color: '#ffffff',
+					weight: 1.5,
+					fillColor: m.color,
+					fillOpacity: 0.85
+				});
+			} else {
+				mk = L.marker([m.lat, m.lng]);
+			}
+			if (m.href) {
+				mk.bindPopup(`<a href="${m.href}" style="font-weight:600">${m.label}</a>`);
+			} else {
+				mk.bindPopup(m.label);
+			}
+			layer.addLayer(mk);
+		}
+		layer.addTo(map);
+		markerLayer = layer;
+
+		if (markers.length > 1) {
+			map.fitBounds(layer.getBounds(), { padding: [40, 40] });
+		}
+	}
+
+	// Re-render markers when the parent passes a new array (color change, etc.)
+	$effect(() => {
+		// touch markers so the effect re-runs on changes
+		markers;
+		renderMarkers();
 	});
 
 	// Update marker when lat/lng props change externally

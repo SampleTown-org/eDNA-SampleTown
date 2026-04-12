@@ -20,6 +20,11 @@
 		onduplicate?: (row: Record<string, unknown>) => void;
 		/** Show the filter input above the table and narrow rows to matching cells. */
 		filterable?: boolean;
+		/**
+		 * Bindable: lets the parent observe which column is currently coloring
+		 * the rows. Used by /sites to mirror the color onto map pins.
+		 */
+		colorByKey?: string;
 	}
 
 	let {
@@ -32,14 +37,13 @@
 		editHref,
 		ondelete,
 		onduplicate,
-		filterable = false
+		filterable = false,
+		colorByKey = $bindable('')
 	}: Props = $props();
 
 	let sortKey = $state('');
 	let sortDir = $state<'asc' | 'desc'>('asc');
 	let searchQuery = $state('');
-	/** When set, rows are tinted by their value for this column. */
-	let colorByKey = $state('');
 
 	function toggleSort(key: string) {
 		if (sortKey === key) {
