@@ -204,12 +204,14 @@
 						class="text-xs text-slate-500 hover:text-ocean-400"
 					>Clear {selectedDates.size} date{selectedDates.size === 1 ? '' : 's'}</button>
 				{/if}
-				<select
-					bind:value={selectedYear}
-					class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
-				>
-					{#each years as y}<option value={y}>{y}</option>{/each}
-				</select>
+				<div class="flex gap-1">
+					{#each years as y}
+						<button
+							onclick={() => (selectedYear = y)}
+							class="px-2 py-1 rounded text-sm transition-colors {selectedYear === y ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}"
+						>{y}</button>
+					{/each}
+				</div>
 			</div>
 		</div>
 
