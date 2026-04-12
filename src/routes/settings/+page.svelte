@@ -31,6 +31,36 @@
 		pipeline: 'Pipelines'
 	};
 
+	/** Picklist categories grouped by vocabulary authority. */
+	const VOCAB_GROUPS = [
+		{
+			label: 'MIxS',
+			description: 'Minimum Information about any (x) Sequence — standardized environment descriptors',
+			categories: ['geo_loc_name', 'env_broad_scale', 'env_local_scale', 'env_medium', 'habitat_type']
+		},
+		{
+			label: 'SRA / ENA',
+			description: 'Sequence Read Archive & European Nucleotide Archive — sequencing metadata',
+			categories: ['sample_type', 'library_type', 'target_gene', 'pipeline', 'seq_platform', 'seq_instrument', 'seq_method']
+		},
+		{
+			label: 'Custom',
+			description: 'Lab-specific vocabulary — equipment, storage, indices, roles',
+			categories: ['locality', 'filter_type', 'preservation_method', 'storage_conditions', 'storage_room', 'storage_box', 'extraction_method', 'extraction_kit', 'library_prep_kit', 'index_i7', 'index_i5', 'barcode', 'person_role']
+		}
+	];
+
+	// Which vocab group is active? Default to whichever group contains the initial category.
+	let activeVocabGroup = $state(
+		VOCAB_GROUPS.find(g => g.categories.includes(initialCategory))?.label || 'MIxS'
+	);
+	let activeGroupCategories = $derived(
+		VOCAB_GROUPS.find(g => g.label === activeVocabGroup)?.categories ?? []
+	);
+	let activeGroupDescription = $derived(
+		VOCAB_GROUPS.find(g => g.label === activeVocabGroup)?.description ?? ''
+	);
+
 	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback';
 
 	// --- Search filter (shared across the list-based tabs, reset on tab switch) ---
@@ -506,9 +536,20 @@
 	</div>
 
 	{:else if tabType === 'category'}
-	<!-- Category tabs -->
+	<!-- Vocabulary group tabs -->
+	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
+		{#each VOCAB_GROUPS as group}
+			<button onclick={() => { activeVocabGroup = group.label; activeCategory = group.categories[0]; clearMsg(); }}
+				class="px-4 py-1.5 rounded text-sm font-medium transition-colors {activeVocabGroup === group.label ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">
+				{group.label}
+			</button>
+		{/each}
+	</div>
+	<p class="text-xs text-slate-500 -mt-3">{activeGroupDescription}</p>
+
+	<!-- Category pills within active group -->
 	<div class="flex flex-wrap gap-1 p-1 bg-slate-800/50 rounded-lg">
-		{#each Object.keys(CATEGORY_LABELS) as cat}
+		{#each activeGroupCategories as cat}
 			<button onclick={() => { activeCategory = cat; clearMsg(); }}
 				class="px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap {activeCategory === cat ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">
 				{CATEGORY_LABELS[cat]}
