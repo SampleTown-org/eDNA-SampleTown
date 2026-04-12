@@ -92,18 +92,33 @@
 		library_plate: 'Library Plate', run: 'Run'
 	};
 
-	// Sort control
-	let sortDir = $state<'desc' | 'asc'>('desc');
+	// Sort control — supports sorting by any column
+	let sortKey = $state<'date' | 'type' | 'name' | 'detail'>('date');
+	let sortDir = $state<'asc' | 'desc'>('desc');
+
+	function toggleSort(key: typeof sortKey) {
+		if (sortKey === key) {
+			sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortKey = key;
+			sortDir = key === 'date' ? 'desc' : 'asc';
+		}
+	}
 
 	// Filtered + sorted activities
 	let filteredActivities = $derived.by(() => {
-		let result = data.activities;
+		let result = data.activities as typeof data.activities;
 		if (selectedDates.size > 0) {
 			result = result.filter((a) => selectedDates.has(a.date));
 		}
-		return sortDir === 'desc'
-			? result
-			: [...result].reverse();
+		const sorted = [...result].sort((a, b) => {
+			const av = (a as any)[sortKey] ?? '';
+			const bv = (b as any)[sortKey] ?? '';
+			if (av < bv) return sortDir === 'asc' ? -1 : 1;
+			if (av > bv) return sortDir === 'asc' ? 1 : -1;
+			return 0;
+		});
+		return sorted;
 	});
 
 	// Pagination
@@ -122,6 +137,21 @@
 
 	// Cart integration
 	let selectedIds = $state<Set<string>>(new Set());
+
+	const allPageSelected = $derived(
+		pagedActivities.length > 0 && pagedActivities.every((a) => selectedIds.has(a.id))
+	);
+
+	function toggleSelectAll() {
+		if (allPageSelected) {
+			const pageIds = new Set(pagedActivities.map((a) => a.id));
+			selectedIds = new Set([...selectedIds].filter((id) => !pageIds.has(id)));
+		} else {
+			const next = new Set(selectedIds);
+			for (const a of pagedActivities) next.add(a.id);
+			selectedIds = next;
+		}
+	}
 
 	function toggleActivity(id: string) {
 		const next = new Set(selectedIds);
@@ -261,12 +291,21 @@
 						class="px-3 py-1.5 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium"
 					>Add {selectedIds.size} to Cart</button>
 				{/if}
-				<button
-					onclick={() => (sortDir = sortDir === 'desc' ? 'asc' : 'desc')}
-					class="text-xs text-slate-500 hover:text-ocean-400 px-2 py-1"
-				>
-					{sortDir === 'desc' ? 'Newest first ↓' : 'Oldest first ↑'}
-				</button>
+				{#if totalPages > 1}
+					<div class="flex items-center gap-1 text-xs text-slate-500">
+						<button
+							onclick={() => (currentPage = Math.max(0, currentPage - 1))}
+							disabled={currentPage === 0}
+							class="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 disabled:opacity-30"
+						>&laquo; Prev</button>
+						<span>{currentPage + 1}/{totalPages}</span>
+						<button
+							onclick={() => (currentPage = Math.min(totalPages - 1, currentPage + 1))}
+							disabled={currentPage >= totalPages - 1}
+							class="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 disabled:opacity-30"
+						>Next &raquo;</button>
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -274,11 +313,35 @@
 			<table class="w-full text-sm">
 				<thead>
 					<tr class="bg-slate-900/50 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
-						<th class="w-8 px-2 py-2"></th>
-						<th class="px-3 py-2 text-left font-medium">Date</th>
-						<th class="px-3 py-2 text-left font-medium">Type</th>
-						<th class="px-3 py-2 text-left font-medium">Name</th>
-						<th class="px-3 py-2 text-left font-medium">Detail</th>
+						<th class="w-8 px-2 py-2">
+							<input
+								type="checkbox"
+								checked={allPageSelected}
+								onchange={toggleSelectAll}
+								class="accent-ocean-500"
+								title={allPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+							/>
+						</th>
+						<th class="px-3 py-2 text-left font-medium">
+							<button onclick={() => toggleSort('date')} class="hover:text-white transition-colors">
+								Date {sortKey === 'date' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+							</button>
+						</th>
+						<th class="px-3 py-2 text-left font-medium">
+							<button onclick={() => toggleSort('type')} class="hover:text-white transition-colors">
+								Type {sortKey === 'type' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+							</button>
+						</th>
+						<th class="px-3 py-2 text-left font-medium">
+							<button onclick={() => toggleSort('name')} class="hover:text-white transition-colors">
+								Name {sortKey === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+							</button>
+						</th>
+						<th class="px-3 py-2 text-left font-medium">
+							<button onclick={() => toggleSort('detail')} class="hover:text-white transition-colors">
+								Detail {sortKey === 'detail' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+							</button>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -321,21 +384,20 @@
 			</table>
 		</div>
 
-		<!-- Pagination -->
 		{#if totalPages > 1}
-			<div class="flex items-center justify-between text-xs text-slate-500">
-				<span>Page {currentPage + 1} of {totalPages}</span>
-				<div class="flex gap-1">
+			<div class="flex items-center justify-end text-xs text-slate-500">
+				<div class="flex items-center gap-1">
 					<button
 						onclick={() => (currentPage = Math.max(0, currentPage - 1))}
 						disabled={currentPage === 0}
 						class="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 disabled:opacity-30"
-					>Prev</button>
+					>&laquo; Prev</button>
+					<span>{currentPage + 1}/{totalPages}</span>
 					<button
 						onclick={() => (currentPage = Math.min(totalPages - 1, currentPage + 1))}
 						disabled={currentPage >= totalPages - 1}
 						class="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 disabled:opacity-30"
-					>Next</button>
+					>Next &raquo;</button>
 				</div>
 			</div>
 		{/if}
