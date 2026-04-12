@@ -11,9 +11,6 @@ import type Database from 'better-sqlite3';
 type SeedEntry = string | { value: string; label: string };
 
 const SEED_DATA: Record<string, SeedEntry[]> = {
-	target_gene: [
-		'16S', '18S', 'CO1', '12S', 'ITS', 'rbcL', 'matK', 'trnL', 'other'
-	],
 	pipeline: [
 		'danaseq', 'microscape-nf', 'custom'
 	],
@@ -30,12 +27,6 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'lab tech',
 		'student',
 		'analyst'
-	],
-	habitat_type: [
-		'estuary', 'kelp forest', 'intertidal', 'subtidal', 'river', 'lake', 'pond',
-		'open ocean', 'coral reef', 'mangrove', 'salt marsh', 'freshwater wetland',
-		'deep sea', 'hydrothermal vent', 'cold seep', 'fjord', 'bay', 'harbor',
-		'stream', 'spring', 'groundwater', 'glacier', 'sea ice'
 	],
 	geo_loc_name: [
 		'Canada: British Columbia', 'Canada: Alberta', 'Canada: Ontario', 'Canada: Quebec',
@@ -76,10 +67,6 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'biofilm [ENVO:00005792]', 'saline water [ENVO:00002010]',
 		'brackish water [ENVO:00002043]', 'porewater [ENVO:00005791]'
 	],
-	sample_type: [
-		'Water', 'Sediment', 'Tissue', 'Soil', 'Air filter', 'Biofilm', 'Swab',
-		'Mucus', 'Gut content', 'Feces', 'Blood', 'Biopsy', 'Plankton tow', 'Other'
-	],
 	filter_type: [
 		'Sterivex 0.22 µm', 'Sterivex 0.45 µm', 'Sterivex 0.1 µm',
 		'GF/F 0.7 µm', 'MCE 0.22 µm', 'MCE 0.45 µm', 'PC 0.2 µm', 'PC 0.4 µm',
@@ -95,11 +82,11 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 	storage_conditions: [
 		'-80°C', '-20°C', '-196°C (LN₂)', '4°C', 'Room temperature', 'Desiccated'
 	],
+	// Extraction methods + kits merged into one picklist (was previously
+	// split into extraction_method + extraction_kit — redundant).
 	extraction_method: [
 		'Column-based', 'Phenol-chloroform', 'Bead-beating + column',
-		'Magnetic bead', 'CTAB', 'Chelex', 'Direct PCR (no extraction)'
-	],
-	extraction_kit: [
+		'Magnetic bead', 'CTAB', 'Chelex', 'Direct PCR (no extraction)',
 		'Qiagen DNeasy Blood & Tissue', 'Qiagen DNeasy PowerSoil Pro',
 		'Qiagen DNeasy PowerWater', 'Qiagen DNeasy PowerMax Soil',
 		'Zymo Quick-DNA Miniprep', 'Zymo Quick-DNA/RNA MagBead',
@@ -148,11 +135,6 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'PacBio Sequel', 'PacBio Sequel II', 'PacBio Sequel IIe', 'PacBio Revio',
 		'Ion GeneStudio S5', 'Ion Torrent PGM', 'Ion Torrent Proton'
 	],
-	seq_method: [
-		'Sequencing by synthesis', 'Nanopore sequencing', 'SMRT sequencing',
-		'Ion semiconductor sequencing', 'Amplicon sequencing', 'Shotgun metagenomics',
-		'RNA-seq', 'Whole genome sequencing'
-	],
 	// SRA controlled vocabulary — exact values from NCBI SRA_metadata.xlsx
 	library_strategy: [
 		{ value: 'AMPLICON', label: 'Amplicon' },
@@ -189,36 +171,6 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		{ value: 'PolyA', label: 'PolyA' },
 		{ value: 'other', label: 'Other' },
 		{ value: 'unspecified', label: 'Unspecified' }
-	],
-	// library_type no longer has a schema CHECK constraint — operator-managed
-	// vocabulary. Keep {value, label} form for historical consistency since
-	// existing rows in library_plates/library_preps use the canonical
-	// underscored values.
-	library_type: [
-		{ value: '16S_amplicon', label: '16S amplicon' },
-		{ value: '18S_amplicon', label: '18S amplicon' },
-		{ value: 'CO1_amplicon', label: 'CO1 amplicon' },
-		{ value: '12S_amplicon', label: '12S amplicon' },
-		{ value: 'ITS_amplicon', label: 'ITS amplicon' },
-		{ value: 'nanopore_metagenomic', label: 'Nanopore metagenomic' },
-		{ value: 'illumina_metagenomic', label: 'Illumina metagenomic' },
-		{ value: 'whole_genome', label: 'Whole genome' },
-		{ value: 'rnaseq', label: 'RNA-seq' },
-		{ value: 'other', label: 'Other' }
-	],
-	index_i7: [
-		'N701 (TAAGGCGA)', 'N702 (CGTACTAG)', 'N703 (AGGCAGAA)', 'N704 (TCCTGAGC)',
-		'N705 (GGACTCCT)', 'N706 (TAGGCATG)', 'N707 (CTCTCTAC)', 'N708 (CAGAGAGG)',
-		'N709 (GCTACGCT)', 'N710 (CGAGGCTG)', 'N711 (AAGAGGCA)', 'N712 (GTAGAGGA)',
-		'UDP0001 (GAACTGAGCG)', 'UDP0002 (AGGTCAGATA)', 'UDP0003 (CGTCTCATAT)',
-		'UDP0004 (ATTCCATAAG)', 'UDP0005 (GACGAGATTA)', 'UDP0006 (AACATCGCGC)',
-		'UDP0007 (CTAGTCGAAT)', 'UDP0008 (GATCAAGGCA)'
-	],
-	index_i5: [
-		'S501 (TAGATCGC)', 'S502 (CTCTCTAT)', 'S503 (TATCCTCT)', 'S504 (AGAGTAGA)',
-		'S505 (GTAAGGAG)', 'S506 (ACTGCATA)', 'S507 (AAGGAGTA)', 'S508 (CTAAGCCT)',
-		'UDP0001 (CGCTCCACGA)', 'UDP0002 (TATGAGACTT)', 'UDP0003 (AGGTGCGT)',
-		'UDP0004 (GAACATACGG)', 'UDP0005 (AACTGTAG)', 'UDP0006 (CATGCCTA)'
 	],
 	barcode: [
 		'BC01', 'BC02', 'BC03', 'BC04', 'BC05', 'BC06', 'BC07', 'BC08',

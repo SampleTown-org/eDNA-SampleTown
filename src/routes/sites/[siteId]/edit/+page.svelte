@@ -17,7 +17,6 @@
 		locality: data.site.locality || '',
 		env_broad_scale: data.site.env_broad_scale || '',
 		env_local_scale: data.site.env_local_scale || '',
-		habitat_type: data.site.habitat_type || '',
 		access_notes: data.site.access_notes || '',
 		notes: data.site.notes || ''
 	});
@@ -127,17 +126,6 @@
 						{#each data.picklists.locality as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select>
 				</div>
-			</div>
-			<div>
-				<label for="habitat_type" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Habitat Type</a>
-				</label>
-				<select id="habitat_type" bind:value={form.habitat_type} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.habitat_type as opt}
-						<option value={opt.value}>{opt.label}</option>
-					{/each}
-				</select>
 			</div>
 		</fieldset>
 

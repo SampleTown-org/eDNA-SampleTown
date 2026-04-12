@@ -241,13 +241,8 @@
 					<input id="pcr_name" type="text" bind:value={reactionForm.pcr_name} class={inputCls} />
 				</div>
 				<div>
-					<label for="target_gene_r" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Target Gene</a>
-					</label>
-					<select id="target_gene_r" bind:value={reactionForm.target_gene} class={selectCls}>
-						<option value="">Select...</option>
-						{#each data.picklists?.target_gene ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select>
+					<label for="target_gene_r" class="block text-sm font-medium text-slate-300 mb-1">Target Gene</label>
+					<input id="target_gene_r" type="text" bind:value={reactionForm.target_gene} class={inputCls} placeholder="e.g., 16S, 18S, CO1 (from primer set)" />
 				</div>
 			</div>
 			<div>

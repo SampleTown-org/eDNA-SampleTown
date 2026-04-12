@@ -10,7 +10,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const extract = db.prepare('SELECT * FROM extracts WHERE id = ? AND is_deleted = 0').get(params.extractId);
 	if (!extract) throw error(404, 'Extract not found');
 	const picklists = getConstrainedValues(
-		'extraction_method', 'extraction_kit', 'storage_room', 'storage_box', 'person_role'
+		'extraction_method', 'storage_room', 'storage_box', 'person_role'
 	);
 	const personnel = getActivePersonnel();
 	const people = getEntityPersonnel('extract', params.extractId).map((p) => ({

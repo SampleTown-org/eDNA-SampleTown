@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		.get(params.libraryId);
 	if (plate) {
 		const personnel = getActivePersonnel();
-		const picklists = getConstrainedValues('person_role', 'library_type', 'library_prep_kit', 'seq_instrument');
+		const picklists = getConstrainedValues('person_role', 'library_strategy', 'library_prep_kit', 'seq_platform');
 		const people = getEntityPersonnel('library_plate', params.libraryId).map((p) => ({
 			personnel_id: p.personnel_id,
 			role: p.role
@@ -30,6 +30,6 @@ export const load: PageServerLoad = async ({ params }) => {
 		.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0')
 		.get(params.libraryId);
 	if (!library) throw error(404, 'Library plate or library not found');
-	const picklists = getConstrainedValues('index_i7', 'index_i5', 'barcode');
+	const picklists = getConstrainedValues('barcode');
 	return { type: 'library' as const, library, picklists };
 };

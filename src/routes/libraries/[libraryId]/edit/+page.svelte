@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
-	import { inferPlatformFromInstrument } from '$lib/platform-infer';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -14,7 +13,6 @@
 					library_prep_date: (data.plate as any).library_prep_date || '',
 					library_type: (data.plate as any).library_type || '',
 					library_prep_kit: (data.plate as any).library_prep_kit || '',
-					instrument_model: (data.plate as any).instrument_model || '',
 					platform: (data.plate as any).platform || '',
 					fragment_size_bp: (data.plate as any).fragment_size_bp ?? '',
 					notes: (data.plate as any).notes || ''
@@ -24,18 +22,6 @@
 	let platePeople = $state<{ personnel_id: string; role?: string | null }[]>(
 		data.type === 'plate' ? data.people ?? [] : []
 	);
-
-	// Re-infer platform from the chosen instrument so the picker can stay
-	// hidden — matches the create page UX.
-	const inferredPlatePlatform = $derived(
-		data.type === 'plate'
-			? inferPlatformFromInstrument(plateForm.instrument_model) ??
-					(plateForm.instrument_model ? 'other' : '')
-			: ''
-	);
-	$effect(() => {
-		if (data.type === 'plate') plateForm.platform = inferredPlatePlatform;
-	});
 
 	// ============ Library-edit branch ============
 	// Mirrors the per-row table on libraries/new — only the fields that vary
@@ -162,16 +148,16 @@
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
 					<label for="library_type" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Library Type</a>
+						<a href="/settings?tab=library_strategy" target="_blank" class="hover:text-ocean-400">Library Strategy (SRA)</a>
 					</label>
 					<select id="library_type" bind:value={plateForm.library_type} class={selectCls}>
 						<option value="">Select...</option>
-						{#each data.picklists.library_type ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
+						{#each data.picklists.library_strategy ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select>
 				</div>
 				<div>
 					<label for="library_prep_kit" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Prep Kit</a>
+						<a href="/settings?tab=library_prep_kit" target="_blank" class="hover:text-ocean-400">Prep Kit</a>
 					</label>
 					<select id="library_prep_kit" bind:value={plateForm.library_prep_kit} class={selectCls}>
 						<option value="">Select...</option>
@@ -181,19 +167,13 @@
 			</div>
 
 			<div>
-				<label for="instrument_model" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Instrument</a>
+				<label for="platform" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=seq_platform" target="_blank" class="hover:text-ocean-400">Platform</a>
 				</label>
-				<select id="instrument_model" bind:value={plateForm.instrument_model} class={selectCls}>
+				<select id="platform" bind:value={plateForm.platform} class={selectCls}>
 					<option value="">Select...</option>
-					{#each data.picklists.seq_instrument ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					{#each data.picklists.seq_platform ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
-				{#if inferredPlatePlatform}
-					<p class="text-xs text-slate-500 mt-1">
-						Platform: <span class="text-slate-300">{inferredPlatePlatform}</span>
-						<span class="text-slate-600">(inferred)</span>
-					</p>
-				{/if}
 			</div>
 
 			<div>
@@ -227,22 +207,12 @@
 			</div>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="index_sequence_i7" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">i7 Index</a>
-					</label>
-					<select id="index_sequence_i7" bind:value={form.index_sequence_i7} class={selectCls}>
-						<option value="">—</option>
-						{#each data.picklists.index_i7 ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select>
+					<label for="index_sequence_i7" class="block text-sm font-medium text-slate-300 mb-1">i7 Index</label>
+					<input id="index_sequence_i7" type="text" bind:value={form.index_sequence_i7} class={inputCls} placeholder="e.g., N701 or TAAGGCGA" />
 				</div>
 				<div>
-					<label for="index_sequence_i5" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">i5 Index</a>
-					</label>
-					<select id="index_sequence_i5" bind:value={form.index_sequence_i5} class={selectCls}>
-						<option value="">—</option>
-						{#each data.picklists.index_i5 ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select>
+					<label for="index_sequence_i5" class="block text-sm font-medium text-slate-300 mb-1">i5 Index</label>
+					<input id="index_sequence_i5" type="text" bind:value={form.index_sequence_i5} class={inputCls} placeholder="e.g., S501 or TAGATCGC" />
 				</div>
 			</div>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

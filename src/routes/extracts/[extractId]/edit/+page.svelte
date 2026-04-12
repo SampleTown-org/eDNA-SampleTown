@@ -10,7 +10,6 @@
 		extract_name: data.extract.extract_name || '',
 		extraction_date: data.extract.extraction_date || '',
 		extraction_method: data.extract.extraction_method || '',
-		extraction_kit: data.extract.extraction_kit || '',
 		concentration_ng_ul: data.extract.concentration_ng_ul ?? '',
 		total_volume_ul: data.extract.total_volume_ul ?? '',
 		a260_280: data.extract.a260_280 ?? '',
@@ -100,15 +99,6 @@
 				<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select>
-			</div>
-			<div>
-				<label for="extraction_kit" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Kit</a>
-				</label>
-				<select id="extraction_kit" bind:value={form.extraction_kit} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.extraction_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 		</div>

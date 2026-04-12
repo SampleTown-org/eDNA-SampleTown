@@ -9,7 +9,7 @@ export const load: PageServerLoad = async () => {
 	const libraryPlates = db.prepare(`SELECT p.id, p.plate_name, p.library_type, p.platform,
 		(SELECT COUNT(*) FROM library_preps WHERE library_plate_id = p.id AND is_deleted = 0) AS library_count
 		FROM library_plates p WHERE p.is_deleted = 0 ORDER BY p.created_at DESC`).all();
-	const picklists = getConstrainedValues('seq_platform', 'seq_instrument', 'seq_method', 'person_role');
+	const picklists = getConstrainedValues('seq_platform', 'seq_instrument', 'person_role');
 	const personnel = getActivePersonnel();
 	return { libraries, libraryPlates, picklists, personnel };
 };

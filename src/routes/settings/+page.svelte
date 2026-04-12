@@ -6,31 +6,23 @@
 	const CATEGORY_LABELS: Record<string, string> = {
 		geo_loc_name: 'Geographic Locations',
 		locality: 'Localities',
-		habitat_type: 'Habitat Types',
 		env_broad_scale: 'Broad-scale Environment',
 		env_local_scale: 'Local Environment',
 		env_medium: 'Environmental Medium',
-		sample_type: 'Sample Types',
 		filter_type: 'Filter Types',
 		preservation_method: 'Preservation Methods',
 		storage_conditions: 'Storage Conditions',
 		storage_room: 'Storage Rooms/Freezers',
 		storage_box: 'Storage Boxes',
-		extraction_method: 'Extraction Methods',
-		extraction_kit: 'Extraction Kits',
+		extraction_method: 'Extraction Methods / Kits',
 		library_prep_kit: 'Library Prep Kits',
-		library_type: 'Library Types',
 		library_strategy: 'Strategy',
 		library_source: 'Source',
 		library_selection: 'Selection',
 		seq_platform: 'Platforms',
 		seq_instrument: 'Instruments',
-		seq_method: 'Seq Methods',
-		index_i7: 'i7 Indices',
-		index_i5: 'i5 Indices',
 		barcode: 'Barcodes',
 		person_role: 'Person Roles',
-		target_gene: 'Target Genes',
 		pipeline: 'Pipelines'
 	};
 
@@ -64,7 +56,7 @@
 		{
 			label: 'MIxS',
 			description: 'Minimum Information about any (x) Sequence — standardized environment descriptors',
-			categories: ['geo_loc_name', 'env_broad_scale', 'env_local_scale', 'env_medium', 'habitat_type']
+			categories: ['geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale', 'env_medium']
 		},
 		{
 			label: 'SRA / ENA',
@@ -73,8 +65,8 @@
 		},
 		{
 			label: 'Custom',
-			description: 'Lab-specific vocabulary — sequencing methods, storage, indices, roles',
-			categories: ['library_type', 'sample_type', 'target_gene', 'pipeline', 'seq_method', 'locality', 'filter_type', 'preservation_method', 'storage_conditions', 'storage_room', 'storage_box', 'extraction_method', 'extraction_kit', 'library_prep_kit', 'index_i7', 'index_i5', 'barcode', 'person_role']
+			description: 'Lab-specific vocabulary — storage, kits, roles',
+			categories: ['pipeline', 'filter_type', 'preservation_method', 'storage_conditions', 'storage_room', 'storage_box', 'extraction_method', 'library_prep_kit', 'barcode', 'person_role']
 		}
 	];
 

@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	// Mirror runs/new's loader: same picklists + library catalog so the edit
 	// form can re-attach / detach libraries with the same affordance.
-	const picklists = getConstrainedValues('seq_platform', 'seq_instrument', 'seq_method', 'person_role');
+	const picklists = getConstrainedValues('seq_platform', 'seq_instrument', 'person_role');
 	const personnel = getActivePersonnel();
 	const libraries = db.prepare(
 		`SELECT l.id, l.library_name, l.library_type, l.platform FROM library_preps l WHERE l.is_deleted = 0 ORDER BY l.library_name`

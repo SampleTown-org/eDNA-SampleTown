@@ -11,7 +11,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			s.env_broad_scale, s.env_local_scale
 		FROM sites s WHERE s.is_deleted = 0 ORDER BY s.site_name
 	`).all();
-	const picklists = getConstrainedValues('geo_loc_name', 'env_broad_scale', 'env_local_scale', 'env_medium', 'sample_type', 'filter_type', 'preservation_method', 'storage_conditions', 'person_role');
+	const picklists = getConstrainedValues('geo_loc_name', 'env_broad_scale', 'env_local_scale', 'env_medium', 'filter_type', 'preservation_method', 'storage_conditions', 'person_role');
 	const personnel = getActivePersonnel();
 	return {
 		projects, sites, picklists, personnel,

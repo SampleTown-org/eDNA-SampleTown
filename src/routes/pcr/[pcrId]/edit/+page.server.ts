@@ -38,6 +38,5 @@ export const load: PageServerLoad = async ({ params }) => {
 		.prepare('SELECT * FROM pcr_amplifications WHERE id = ? AND is_deleted = 0')
 		.get(params.pcrId);
 	if (!pcr) throw error(404, 'PCR plate or reaction not found');
-	const picklists = getConstrainedValues('target_gene');
-	return { type: 'reaction' as const, pcr, picklists };
+	return { type: 'reaction' as const, pcr, picklists: {} };
 };

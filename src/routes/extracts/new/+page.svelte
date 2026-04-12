@@ -21,7 +21,7 @@
 	// Single mode
 	let form = $state({
 		sample_id: data.preselectedSampleId ?? '',
-		extract_name: '', extraction_date: '', extraction_method: '', extraction_kit: '',
+		extract_name: '', extraction_date: '', extraction_method: '',
 		concentration_ng_ul: '', total_volume_ul: '', a260_280: '', a260_230: '',
 		quantification_method: '', storage_room: '', storage_box: '', notes: ''
 	});
@@ -29,7 +29,7 @@
 	// Batch mode
 	let selectedSampleIds = $state<Set<string>>(new Set());
 	let shared = $state({
-		extraction_date: '', extraction_method: '', extraction_kit: '',
+		extraction_date: '', extraction_method: '',
 		quantification_method: '', storage_room: '', storage_box: '', notes: ''
 	});
 	type RowItem = { sample_id: string; samp_name: string; project_name: string; extract_name: string; concentration_ng_ul: string; total_volume_ul: string; a260_280: string; a260_230: string };
@@ -168,17 +168,12 @@
 			defaultRole="extractor"
 			label="People"
 		/>
-		<div class="grid grid-cols-2 gap-4">
-			<div><label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Method</a></label>
-				<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select></div>
-			<div><label for="extraction_kit" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=extraction_kit" target="_blank" class="hover:text-ocean-400">Kit</a></label>
-				<select id="extraction_kit" bind:value={form.extraction_kit} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.extraction_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select></div>
+		<div>
+			<label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Extraction Method / Kit</a></label>
+			<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
+				<option value="">Select...</option>
+				{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
+			</select>
 		</div>
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
 			<div><label for="concentration_ng_ul" class="block text-sm font-medium text-slate-300 mb-1">Conc. (ng/µL)</label>
@@ -246,15 +241,10 @@
 			<div class="grid grid-cols-2 gap-4">
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Extraction Date</label>
 					<input type="date" bind:value={shared.extraction_date} class={inputCls} /></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Method</a></label>
+				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Extraction Method / Kit</a></label>
 					<select bind:value={shared.extraction_method} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=extraction_kit" target="_blank" class="hover:text-ocean-400">Kit</a></label>
-					<select bind:value={shared.extraction_kit} class={selectCls}>
-						<option value="">Select...</option>
-						{#each data.picklists.extraction_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select></div>
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Quantification</label>
 					<select bind:value={shared.quantification_method} class={selectCls}>

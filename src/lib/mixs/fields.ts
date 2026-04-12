@@ -249,11 +249,10 @@ export const LOGISTICS_FIELDS: MixsField[] = [
 	{
 		name: 'sample_type',
 		label: 'Sample Type',
-		type: 'select',
+		type: 'text',
 		required: false,
-		description: 'Type of physical sample',
-		sra_column: 'sample_type',
-		constrainedCategory: 'sample_type'
+		description: 'Type of physical sample (free text — prefer env_medium ENVO term)',
+		sra_column: 'sample_type'
 	},
 	{
 		name: 'volume_filtered_ml',

@@ -67,7 +67,6 @@
 		{ key: 'geo_loc_name', label: 'Location', sortable: true },
 		{ key: 'env_broad_scale', label: 'Biome', sortable: true },
 		{ key: 'env_local_scale', label: 'Feature', sortable: true },
-		{ key: 'habitat_type', label: 'Habitat', sortable: true },
 		{ key: 'sample_count', label: 'Samples', sortable: true }
 	];
 

@@ -8,8 +8,7 @@
 	const locationFields = [
 		['Lat/Lon', data.site.lat_lon],
 		['Geographic Location', data.site.geo_loc_name],
-		['Locality', data.site.locality],
-		['Habitat Type', data.site.habitat_type]
+		['Locality', data.site.locality]
 	].filter(([_, v]) => v);
 
 	const envFields = [

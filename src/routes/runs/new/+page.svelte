@@ -8,7 +8,7 @@
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
 	let form = $state({
-		run_name: '', run_date: '', platform: '', instrument_model: '', seq_meth: '',
+		run_name: '', run_date: '', platform: '', instrument_model: '',
 		flow_cell_id: '', run_directory: '', fastq_directory: '', total_reads: '', total_bases: '', notes: ''
 	});
 
@@ -116,11 +116,6 @@
 				<select bind:value={form.instrument_model} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.seq_instrument as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select></div>
-			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=seq_method" target="_blank" class="hover:text-ocean-400">Seq Method</a></label>
-				<select bind:value={form.seq_meth} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.seq_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select></div>
 		</div>
 		<div class="grid grid-cols-2 gap-4">

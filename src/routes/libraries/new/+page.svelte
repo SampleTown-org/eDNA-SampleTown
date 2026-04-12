@@ -4,7 +4,6 @@
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
-	import { inferPlatformFromInstrument } from '$lib/platform-infer';
 	let { data }: { data: PageData } = $props();
 
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
@@ -26,17 +25,7 @@
 
 	let plate = $state({
 		plate_name: '', library_prep_date: '', library_type: '',
-		library_prep_kit: '', platform: '', instrument_model: '', notes: ''
-	});
-
-	// Platform is inferred from the selected instrument — the user never
-	// picks it directly. Falls back to 'other' if the instrument isn't
-	// recognized (e.g. a custom picklist entry the operator added).
-	const inferredPlatform = $derived(
-		inferPlatformFromInstrument(plate.instrument_model) ?? (plate.instrument_model ? 'other' : '')
-	);
-	$effect(() => {
-		plate.platform = inferredPlatform;
+		library_prep_kit: '', platform: '', notes: ''
 	});
 
 	// Source selection
@@ -308,10 +297,10 @@
 				label="People"
 			/>
 			<div class="grid grid-cols-2 gap-4">
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_type" target="_blank" class="hover:text-ocean-400">Library Type</a></label>
+				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_strategy" target="_blank" class="hover:text-ocean-400">Library Strategy (SRA)</a></label>
 					<select bind:value={plate.library_type} class={selectCls}>
 						<option value="">Select...</option>
-						{#each data.picklists.library_type as opt}<option value={opt.value}>{opt.label}</option>{/each}
+						{#each data.picklists.library_strategy as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select></div>
 				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_prep_kit" target="_blank" class="hover:text-ocean-400">Prep Kit</a></label>
 					<select bind:value={plate.library_prep_kit} class={selectCls}>
@@ -321,18 +310,12 @@
 			</div>
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">
-					<a href="/settings?tab=seq_instrument" target="_blank" class="hover:text-ocean-400">Instrument</a>
+					<a href="/settings?tab=seq_platform" target="_blank" class="hover:text-ocean-400">Platform</a>
 				</label>
-				<select bind:value={plate.instrument_model} class={selectCls}>
+				<select bind:value={plate.platform} class={selectCls}>
 					<option value="">Select...</option>
-					{#each data.picklists.seq_instrument as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					{#each data.picklists.seq_platform as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
-				{#if inferredPlatform}
-					<p class="text-xs text-slate-500 mt-1">
-						Platform: <span class="text-slate-300">{inferredPlatform}</span>
-						<span class="text-slate-600">(inferred)</span>
-					</p>
-				{/if}
 			</div>
 			<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
 				<input type="text" bind:value={plate.notes} class={inputCls} /></div>
@@ -367,8 +350,8 @@
 				<tr class="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
 					<th class="text-left pb-2 pr-3 font-medium">Source</th>
 					<th class="text-left pb-2 pr-3 font-medium min-w-36">Library Name</th>
-					<th class="text-left pb-2 pr-3 font-medium w-36"><a href="/settings?tab=index_i7" target="_blank" class="hover:text-ocean-400">i7 Index</a></th>
-					<th class="text-left pb-2 pr-3 font-medium w-36"><a href="/settings?tab=index_i5" target="_blank" class="hover:text-ocean-400">i5 Index</a></th>
+					<th class="text-left pb-2 pr-3 font-medium w-36">i7 Index</th>
+					<th class="text-left pb-2 pr-3 font-medium w-36">i5 Index</th>
 					<th class="text-left pb-2 pr-3 font-medium w-24"><a href="/settings?tab=barcode" target="_blank" class="hover:text-ocean-400">Barcode</a></th>
 					<th class="text-left pb-2 pr-3 font-medium w-24">Conc. ng/µL</th>
 					<th class="pb-2 w-8"></th>
@@ -383,15 +366,11 @@
 					</td>
 					<td class="py-2 pr-3"><input type="text" bind:value={rows[i].library_name} class={cellInput} /></td>
 					<td class="py-2 pr-3">
-						<select bind:value={rows[i].index_sequence_i7} class="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500">
-							<option value="">--</option>
-							{#each data.picklists.index_i7 as opt}<option value={opt.value}>{opt.label}</option>{/each}
-						</select></td>
+						<input type="text" bind:value={rows[i].index_sequence_i7} class="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500" placeholder="e.g., N701 or TAAGGCGA" />
+					</td>
 					<td class="py-2 pr-3">
-						<select bind:value={rows[i].index_sequence_i5} class="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500">
-							<option value="">--</option>
-							{#each data.picklists.index_i5 as opt}<option value={opt.value}>{opt.label}</option>{/each}
-						</select></td>
+						<input type="text" bind:value={rows[i].index_sequence_i5} class="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500" placeholder="e.g., S501 or TAGATCGC" />
+					</td>
 					<td class="py-2 pr-3">
 						<select bind:value={rows[i].barcode} class="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500">
 							<option value="">--</option>

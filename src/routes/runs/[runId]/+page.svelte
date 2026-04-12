@@ -19,7 +19,6 @@
 	const fields = [
 		['Platform', data.run.platform],
 		['Instrument', data.run.instrument_model],
-		['Seq Method', data.run.seq_meth],
 		['Flow Cell', data.run.flow_cell_id],
 		['FASTQ Dir', data.run.fastq_directory],
 		['Total Reads', data.run.total_reads?.toLocaleString()],

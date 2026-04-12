@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	const projects = db.prepare('SELECT id, project_name FROM projects ORDER BY project_name').all();
 	const picklists = getConstrainedValues(
-		'habitat_type', 'geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale'
+		'geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale'
 	);
 
 	return { site, projects, picklists };

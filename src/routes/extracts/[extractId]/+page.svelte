@@ -18,8 +18,7 @@
 	];
 
 	const fields = [
-		['Method', data.extract.extraction_method],
-		['Kit', data.extract.extraction_kit],
+		['Extraction Method', data.extract.extraction_method],
 		['Concentration', data.extract.concentration_ng_ul != null ? `${data.extract.concentration_ng_ul} ng/µL` : null],
 		['Volume', data.extract.total_volume_ul != null ? `${data.extract.total_volume_ul} µL` : null],
 		['260/280', data.extract.a260_280],
