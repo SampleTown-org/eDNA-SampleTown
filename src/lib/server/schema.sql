@@ -80,7 +80,6 @@ CREATE TABLE IF NOT EXISTS sites (
     env_local_scale TEXT,                  -- ENVO feature term
 
     -- Site characteristics
-    habitat_type TEXT,
     access_notes TEXT,                     -- how to get there, permits, etc.
 
     notes TEXT,
@@ -99,58 +98,83 @@ CREATE INDEX IF NOT EXISTS idx_sites_project ON sites(project_id);
 CREATE INDEX IF NOT EXISTS idx_sites_coords ON sites(latitude, longitude);
 
 -- ============================================================
--- PHYSICAL SAMPLES (MIxS-compliant)
+-- PHYSICAL SAMPLES (MIxS 6.3-aligned)
+--
+-- Column names here mirror MIxS LinkML slot names 1:1 so import/export is a
+-- straight copy. The combination of (mixs_checklist, extension) drives which
+-- slots are required — resolved at runtime via src/lib/mixs/schema-index.ts.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS samples (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE RESTRICT,
 
-    -- MIxS checklist type
-    mixs_checklist TEXT NOT NULL DEFAULT 'MIMARKS-SU' CHECK (mixs_checklist IN (
-        'MIMARKS-SU', 'MIMARKS-SP', 'MIMS', 'MIMAG', 'MISAG',
-        'MIGS-EU', 'MIGS-BA', 'MIGS-PL', 'MIGS-VI', 'MIGS-ORG', 'MIUViG'
-    )),
+    -- MIxS checklist class name (LinkML class in src/lib/mixs/schema/v<ver>/mixs.yaml).
+    -- Not CHECK-constrained — the valid set evolves between MIxS releases;
+    -- enforced in app code against schema-index.ts instead.
+    mixs_checklist TEXT NOT NULL DEFAULT 'MimarksS',
+
+    -- MIxS Extension (formerly "env_package" in pre-6.3). Resolved to a
+    -- combination class `<mixs_checklist><extension>` to look up required slots.
+    extension TEXT,                       -- e.g. 'Water', 'Soil', 'HostAssociated'
 
     -- MIxS mandatory core
     samp_name TEXT NOT NULL,
     collection_date TEXT NOT NULL,        -- ISO 8601
     env_medium TEXT NOT NULL,             -- ENVO material term (per-sample: water/ice/sediment at same site)
-    samp_taxon_id TEXT,                   -- NCBI taxonomy ID
+    samp_taxon_id TEXT,                   -- NCBI taxonomy ID of the sampled material
+    project_name TEXT,                    -- MIxS project name (for MIxS export; distinct from projects.project_name)
 
-    -- Package-specific fields
-    depth TEXT,                           -- mandatory for water/sediment
-    elevation TEXT,                       -- mandatory for soil/air
-    host_taxon_id TEXT,                   -- mandatory for host-associated
+    -- Extension-specific location context
+    depth TEXT,                           -- required for water/sediment
+    elev TEXT,                            -- required for soil/air (formerly 'elevation')
 
-    -- MIGS/MIMS/MISAG/MIMAG-specific
-    assembly_software TEXT,
-    number_of_contigs INTEGER,
-    genome_coverage TEXT,
-    reference_genome TEXT,
-    annotation_source TEXT,
+    -- Host-associated context
+    host_taxid TEXT,                      -- NCBI taxid (formerly 'host_taxon_id')
+    specific_host TEXT,                   -- host scientific name
 
-    -- Environmental measurements
+    -- Environmental measurements (numeric where MIxS allows; unit handled in app)
     temp REAL,
     salinity REAL,
     ph REAL,
-    dissolved_oxygen REAL,
+    diss_oxygen REAL,                     -- formerly 'dissolved_oxygen'
     pressure REAL,
     turbidity REAL,
     chlorophyll REAL,
     nitrate REAL,
     phosphate REAL,
 
-    -- Sample logistics
-    volume_filtered_ml REAL,
-    filter_type TEXT,
-    preservation_method TEXT,
-    storage_conditions TEXT,
-    collector_name TEXT,
+    -- Sampling (MIxS sample-collection slots)
+    samp_collect_device TEXT,
+    samp_collect_method TEXT,
+    samp_mat_process TEXT,
+    samp_size TEXT,                       -- amount or size of sample collected
+    samp_vol_we_dna_ext REAL,             -- volume/weight for DNA extraction (formerly 'volume_filtered_ml')
+    size_frac TEXT,                       -- size fraction selected
+    source_mat_id TEXT,
+
+    -- Sample storage
+    samp_store_sol TEXT,                  -- formerly 'preservation_method'
+    samp_store_temp REAL,                 -- °C (formerly 'storage_conditions' — now numeric)
+    samp_store_dur TEXT,                  -- duration
+    samp_store_loc TEXT,                  -- storage location
+
+    -- Extraction / amplification protocol references (URLs or PIDs per MIxS)
+    nucl_acid_ext TEXT,
+    nucl_acid_amp TEXT,
+
+    -- MIGS/MIMAG/MISAG genome context
+    ref_biomaterial TEXT,
+    isol_growth_condt TEXT,
+    tax_ident TEXT,                       -- taxonomic identity marker
+
+    -- SampleTown-local extras (no MIxS slot)
+    filter_type TEXT,                     -- filter pore/type; MIxS has filter_type slot
+    collector_name TEXT,                  -- free-text; primary attribution lives in entity_personnel
 
     -- Metadata
     notes TEXT,
-    custom_fields TEXT,                   -- JSON for arbitrary extra fields
+    custom_fields TEXT,                   -- JSON for arbitrary extra fields not in the active MIxS version
 
     -- Sync tracking
     client_id TEXT,
@@ -166,7 +190,9 @@ CREATE TABLE IF NOT EXISTS samples (
 );
 
 CREATE INDEX IF NOT EXISTS idx_samples_project ON samples(project_id);
+CREATE INDEX IF NOT EXISTS idx_samples_site ON samples(site_id);
 CREATE INDEX IF NOT EXISTS idx_samples_collection_date ON samples(collection_date);
+CREATE INDEX IF NOT EXISTS idx_samples_checklist ON samples(mixs_checklist, extension);
 
 -- ============================================================
 -- DNA EXTRACTS

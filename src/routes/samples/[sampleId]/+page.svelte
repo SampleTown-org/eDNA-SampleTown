@@ -1,7 +1,6 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
-	import { CHECKLISTS } from '$lib/mixs/checklists';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -27,7 +26,7 @@
 		['Temperature', data.sample.temp, '°C'],
 		['Salinity', data.sample.salinity, 'PSU'],
 		['pH', data.sample.ph, ''],
-		['Dissolved O₂', data.sample.dissolved_oxygen, 'mg/L'],
+		['Dissolved O₂', data.sample.diss_oxygen, 'mg/L'],
 		['Pressure', data.sample.pressure, 'atm'],
 		['Turbidity', data.sample.turbidity, 'NTU'],
 		['Chlorophyll', data.sample.chlorophyll, 'µg/L'],

@@ -1,54 +1,57 @@
+/**
+ * MIxS 6.3 TSV import/export.
+ *
+ * Column headers in emitted TSVs are MIxS slot names verbatim (plus leading `*`
+ * for MIxS-mandatory slots). Headers in imported TSVs are matched against the
+ * active MIxS schema slot names; unknown headers are flagged for the column
+ * mapper. This replaces the pre-6.3 hand-rolled SRA-column alias table.
+ *
+ * Phase 4 will layer per-(checklist, extension) template selection + ajv
+ * validation on top of this. For now: plain MIxS slot-name columns.
+ */
 import { getDb } from './db';
-import { CORE_FIELDS, PACKAGE_FIELDS, MEASUREMENT_FIELDS, LOGISTICS_FIELDS } from '$lib/mixs/fields';
+import { allSlotNames, getSlot } from '$lib/mixs/schema-index';
 import * as XLSX from 'xlsx';
 
-/** Fields that live on the sites table (location/environment context). */
+/** Fields that live on the sites table, not the samples table. */
 export const SITE_FIELDS = new Set([
 	'site_name', 'lat_lon', 'latitude', 'longitude', 'geo_loc_name',
 	'env_broad_scale', 'env_local_scale'
 ]);
 
-/** MIxS v6 TSV column definitions — maps internal field names to SRA/BioSample column headers.
- *  Follows GSC MIxS v6 structured comment names. */
-const EXPORT_COLUMNS = [
-	// MIxS v6 mandatory (M) fields — investigation section
-	{ header: '*sample_name', field: 'samp_name' },
-	{ header: 'sample_title', field: 'samp_name' },
-	{ header: '*organism', field: 'samp_taxon_id', default: 'metagenome' },
-	{ header: '*project_name', field: 'project_name' },
-	// MIxS v6 mandatory (M) fields — environment section
-	{ header: '*collection_date', field: 'collection_date' },
-	{ header: '*geo_loc_name', field: 'geo_loc_name' },
-	{ header: '*lat_lon', field: 'lat_lon' },
-	{ header: '*env_broad_scale', field: 'env_broad_scale' },
-	{ header: '*env_local_scale', field: 'env_local_scale' },
-	{ header: '*env_medium', field: 'env_medium' },
-	// MIxS v6 environment-dependent (E) fields
-	{ header: 'env_package', field: '_env_package_' },
-	{ header: 'depth', field: 'depth' },
-	{ header: 'alt', field: 'elevation' },
-	{ header: 'elev', field: 'elevation' },
-	{ header: 'temp', field: 'temp' },
-	// Host
-	{ header: 'host', field: 'host_taxon_id' },
-	// MIxS v6 optional environmental measurements
-	{ header: 'salinity', field: 'salinity' },
-	{ header: 'ph', field: 'ph' },
-	{ header: 'diss_oxygen', field: 'dissolved_oxygen' },
-	{ header: 'pressure', field: 'pressure' },
-	{ header: 'turbidity', field: 'turbidity' },
-	{ header: 'chlorophyll', field: 'chlorophyll' },
-	{ header: 'nitrate', field: 'nitrate' },
-	{ header: 'phosphate', field: 'phosphate' },
-	// Sample logistics
-	{ header: 'samp_vol_we_dna_ext', field: 'volume_filtered_ml' },
-	{ header: 'filter_type', field: 'filter_type' },
-	{ header: 'samp_store_sol', field: 'preservation_method' },
-	{ header: 'samp_store_temp', field: 'storage_conditions' },
-	{ header: 'collected_by', field: 'collector_name' },
-	// Checklist identifier
-	{ header: 'mixs_checklist', field: 'mixs_checklist' },
-];
+/** Sample columns that exist as real columns in the samples table and are
+ *  MIxS slots. Kept explicit so we don't accidentally expose sync internals. */
+const SAMPLE_SLOT_COLUMNS = [
+	// MIxS core
+	'samp_name', 'collection_date', 'env_medium', 'samp_taxon_id', 'project_name',
+	// Extension-specific location
+	'depth', 'elev',
+	// Host-associated
+	'host_taxid', 'specific_host',
+	// Measurements
+	'temp', 'salinity', 'ph', 'diss_oxygen', 'pressure', 'turbidity', 'chlorophyll', 'nitrate', 'phosphate',
+	// Sampling
+	'samp_collect_device', 'samp_collect_method', 'samp_mat_process', 'samp_size',
+	'samp_vol_we_dna_ext', 'size_frac', 'source_mat_id',
+	// Storage
+	'samp_store_sol', 'samp_store_temp', 'samp_store_dur', 'samp_store_loc',
+	// Protocol references
+	'nucl_acid_ext', 'nucl_acid_amp',
+	// MIGS/MIMAG context
+	'ref_biomaterial', 'isol_growth_condt', 'tax_ident'
+] as const;
+
+/** Site columns that are MIxS slots. */
+const SITE_SLOT_COLUMNS = [
+	'lat_lon', 'geo_loc_name', 'env_broad_scale', 'env_local_scale'
+] as const;
+
+/** Sample numeric columns — parsed as Number on import. */
+const NUMERIC_COLUMNS = new Set([
+	'temp', 'salinity', 'ph', 'diss_oxygen', 'pressure', 'turbidity', 'chlorophyll',
+	'nitrate', 'phosphate', 'samp_vol_we_dna_ext', 'samp_store_temp',
+	'latitude', 'longitude'
+]);
 
 function escTsv(val: unknown): string {
 	if (val == null || val === '') return 'not collected';
@@ -59,10 +62,15 @@ function escTsv(val: unknown): string {
 	return s;
 }
 
-export function exportMixsTsv(options: { projectId?: string; checklist?: string; envPackage?: string } = {}): string {
+export function exportMixsTsv(options: {
+	projectId?: string;
+	checklist?: string;
+	extension?: string;
+} = {}): string {
 	const db = getDb();
-	let query = `SELECT s.*, st.lat_lon, st.geo_loc_name, st.env_broad_scale, st.env_local_scale,
-		p.project_name
+	// Site fields are joined in and aliased under their MIxS slot names.
+	const siteSelect = SITE_SLOT_COLUMNS.map((c) => `st.${c} AS site_${c}`).join(', ');
+	let query = `SELECT s.*, ${siteSelect}, p.project_name AS proj_project_name
 		FROM samples s
 		JOIN sites st ON st.id = s.site_id
 		JOIN projects p ON p.id = s.project_id
@@ -71,66 +79,79 @@ export function exportMixsTsv(options: { projectId?: string; checklist?: string;
 	if (options.projectId) { query += ' AND s.project_id = ?'; params.push(options.projectId); }
 	if (options.checklist) { query += ' AND s.mixs_checklist = ?'; params.push(options.checklist); }
 	query += ' ORDER BY s.samp_name';
+	const rows = db.prepare(query).all(...params) as Record<string, unknown>[];
 
-	const samples = db.prepare(query).all(...params) as Record<string, unknown>[];
+	// Column order: checklist/extension selectors + core + sample slots + site slots.
+	const columns: { header: string; source: string }[] = [
+		{ header: '*samp_name', source: 'samp_name' },
+		{ header: '*collection_date', source: 'collection_date' },
+		{ header: '*env_medium', source: 'env_medium' },
+		{ header: '*lat_lon', source: 'site_lat_lon' },
+		{ header: '*geo_loc_name', source: 'site_geo_loc_name' },
+		{ header: '*env_broad_scale', source: 'site_env_broad_scale' },
+		{ header: '*env_local_scale', source: 'site_env_local_scale' },
+		{ header: 'project_name', source: '__project_name__' },
+		{ header: 'mixs_checklist', source: 'mixs_checklist' },
+		{ header: 'extension', source: 'extension' }
+	];
+	for (const slot of SAMPLE_SLOT_COLUMNS) {
+		if (['samp_name', 'collection_date', 'env_medium', 'project_name'].includes(slot)) continue;
+		// Prefix `*` if this slot is MIxS-mandatory in general (doesn't check combination class).
+		const isMandatory = getSlot(slot)?.required ?? false;
+		columns.push({ header: (isMandatory ? '*' : '') + slot, source: slot });
+	}
 
-	const envPackage = options.envPackage || 'water';
-
-	// Deduplicate columns (elev/alt both map to elevation — only emit once)
-	const seen = new Set<string>();
-	const columns = EXPORT_COLUMNS.filter(c => {
-		if (c.header === 'alt') return false; // skip alt, keep elev
-		if (c.header === 'sample_title') return false; // skip duplicate of sample_name
-		if (seen.has(c.field)) return false;
-		seen.add(c.field);
-		return true;
+	const headers = columns.map((c) => c.header);
+	const lines = rows.map((row) => {
+		// Prefer sample.project_name if set; else fall back to the joined project record name.
+		const projectName = (row.project_name as string | null) ?? (row.proj_project_name as string | null);
+		return columns
+			.map((c) => {
+				if (c.source === '__project_name__') return escTsv(projectName);
+				return escTsv(row[c.source]);
+			})
+			.join('\t');
 	});
 
-	const headers = columns.map(c => c.header.replace(/^\*/, ''));
-	const rows = samples.map(sample =>
-		columns.map(col => {
-			// env_package is a parameter, not stored in DB
-			if (col.field === '_env_package_') return envPackage;
-			const val = sample[col.field];
-			if ((val == null || val === '') && col.default) return col.default;
-			return escTsv(val);
-		}).join('\t')
-	);
-
-	return [headers.join('\t'), ...rows].join('\n');
+	return [headers.join('\t'), ...lines].join('\n');
 }
 
-/** Parse xlsx file buffer into TSV string */
+/** Parse xlsx file buffer into TSV string. */
 export function xlsxToTsv(buffer: Buffer): string {
 	const wb = XLSX.read(buffer, { type: 'buffer' });
 	const ws = wb.Sheets[wb.SheetNames[0]];
 	const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
-	// Convert to TSV, preserving all rows (comment rows will be filtered by parser)
-	return rows.map((row: unknown[]) => row.map(cell => cell ?? '').join('\t')).join('\n');
+	return rows.map((row: unknown[]) => row.map((cell) => cell ?? '').join('\t')).join('\n');
 }
 
 /**
- * Build the auto-detection map from lowercase file header → internal field name.
- * Exported so the column-mapper UI can call it directly.
+ * Build the header→field map used by the column-mapper UI. Matches on:
+ *   1. Exact MIxS slot name (lowercase)
+ *   2. MIxS slot aliases (lowercase) — from the active schema's slot metadata
+ *   3. A handful of sample/site column aliases specific to SampleTown
+ * Returns '_skip_' for columns we recognize as MIxS-structural but don't store
+ * (project_name goes to its own column, custom fields handled separately).
  */
 export function buildHeaderToFieldMap(): Record<string, string> {
-	const headerToField: Record<string, string> = {};
-	for (const col of EXPORT_COLUMNS) {
-		const field = col.field === '_env_package_' ? '_skip_' : col.field;
-		headerToField[col.header.toLowerCase().replace(/^\*/, '')] = field;
+	const map: Record<string, string> = {};
+
+	// Known SampleTown sample columns
+	for (const col of SAMPLE_SLOT_COLUMNS) map[col.toLowerCase()] = col;
+	// Known site columns
+	for (const col of SITE_SLOT_COLUMNS) map[col.toLowerCase()] = col;
+
+	// MIxS slot aliases from the schema index
+	for (const slotName of allSlotNames()) {
+		const slot = getSlot(slotName);
+		if (!slot?.aliases) continue;
+		for (const alias of slot.aliases) {
+			const k = alias.toLowerCase();
+			if (!map[k] && isKnownColumn(slotName)) map[k] = slotName;
+		}
 	}
-	const allFields = [
-		...CORE_FIELDS,
-		...Object.values(PACKAGE_FIELDS).flat(),
-		...MEASUREMENT_FIELDS,
-		...LOGISTICS_FIELDS
-	];
-	for (const f of allFields) {
-		headerToField[f.name.toLowerCase()] = f.name;
-		if (f.sra_column) headerToField[f.sra_column.toLowerCase()] = f.name;
-	}
-	// Common aliases and NCBI BioSample column names (same as before).
-	const aliases: Record<string, string> = {
+
+	// SampleTown-specific aliases
+	const local: Record<string, string> = {
 		site_name: 'site_name',
 		station: 'site_name',
 		station_name: 'site_name',
@@ -139,71 +160,34 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		latitude: 'latitude',
 		longitude: 'longitude',
 		organism: 'samp_taxon_id',
-		host: 'host_taxon_id',
-		elev: 'elevation',
-		alt: 'elevation',
-		diss_oxygen: 'dissolved_oxygen',
-		description: 'notes',
-		assembly_software: 'assembly_software',
-		specific_host: 'host_taxon_id',
-		number_contig: 'number_of_contigs'
+		host: 'host_taxid',
+		alt: 'elev',
+		description: 'notes'
 	};
-	for (const [k, v] of Object.entries(aliases)) headerToField[k] = v;
+	for (const [k, v] of Object.entries(local)) map[k] = v;
 
-	// NCBI-only columns we deliberately skip.
-	const skip = [
-		'bioproject_accession', 'strain', 'isolate', 'cultivar', 'ecotype',
-		'isol_growth_condt', 'biotic_relationship', 'collection_method',
-		'isolation_source', 'neg_cont_type', 'pos_cont_type', 'rel_to_oxygen',
-		'samp_collect_device', 'samp_mat_process', 'samp_size',
-		'source_material_id', 'subspecf_gen_lin', 'trophic_level',
-		'extrachrom_elements', 'omics_observ_id', 'target_gene',
-		'target_subfragment', 'pcr_primers', 'pcr_cond', 'nucl_acid_ext',
-		'nucl_acid_amp', 'lib_layout', 'lib_size', 'lib_vector', 'seq_meth',
-		'chimera_check', 'samp_collec_device', 'samp_collec_method',
-		'size_frac', 'host_disease_stat', 'host_spec_range', 'pathogenicity',
-		'propagation', 'encoded_traits', 'estimated_size', 'ref_biomaterial',
-		'source_mat_id', 'num_replicons', 'ploidy', 'experimental_factor',
-		'assembly_qual', 'assembly_name', 'annot', 'feat_pred', 'ref_db',
-		'sim_search_meth', 'tax_class', 'associated resource', 'sop',
-		'lib_reads_seqd', 'lib_screen', 'mid', 'adapters', 'seq_quality_check',
-		'project_name', 'env_package'
-	];
-	for (const s of skip) headerToField[s] = '_skip_';
-
-	return headerToField;
+	return map;
 }
 
-/**
- * Return the list of internal field names that can be targeted by an import
- * column mapping, with table prefix (e.g. "site: lat_lon", "sample: nitrate").
- */
+function isKnownColumn(slot: string): boolean {
+	return (SAMPLE_SLOT_COLUMNS as readonly string[]).includes(slot) ||
+		(SITE_SLOT_COLUMNS as readonly string[]).includes(slot);
+}
+
+/** Fields available as column-mapper targets, labeled with their table. */
 export function getImportableFields(): { value: string; label: string }[] {
-	const fields = new Set<string>();
-	for (const col of EXPORT_COLUMNS) {
-		if (col.field !== '_env_package_') fields.add(col.field);
-	}
-	const allFields = [
-		...CORE_FIELDS,
-		...Object.values(PACKAGE_FIELDS).flat(),
-		...MEASUREMENT_FIELDS,
-		...LOGISTICS_FIELDS
-	];
-	for (const f of allFields) fields.add(f.name);
-	// Ensure all SITE_FIELDS are included (site_name etc. aren't in MIxS defs)
-	for (const sf of SITE_FIELDS) fields.add(sf);
-	fields.delete('_skip_');
-	fields.delete('project_name');
-
-	return Array.from(fields).sort().map(f => ({
-		value: f,
-		label: SITE_FIELDS.has(f) ? `site: ${f}` : `sample: ${f}`
-	}));
+	const out: { value: string; label: string }[] = [];
+	for (const f of SITE_SLOT_COLUMNS) out.push({ value: f, label: `site: ${f}` });
+	out.push({ value: 'site_name', label: 'site: site_name' });
+	for (const f of SAMPLE_SLOT_COLUMNS) out.push({ value: f, label: `sample: ${f}` });
+	out.push({ value: 'mixs_checklist', label: 'sample: mixs_checklist' });
+	out.push({ value: 'extension', label: 'sample: extension' });
+	out.push({ value: 'notes', label: 'sample: notes' });
+	return out.sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** Parse a MIxS TSV string into sample objects ready for insertion.
- *  Handles NCBI BioSample xlsx format: skips # comment rows, strips * from required field headers.
- *  Optional `overrideMap` lets the column-mapper UI force specific header→field mappings. */
+/** Parse a MIxS TSV into per-row sample objects ready for insertion.
+ *  `overrideMap` lets the column-mapper UI force specific header→field mappings. */
 export function parseMixsTsv(
 	tsv: string,
 	overrideMap?: Record<string, string>
@@ -213,28 +197,22 @@ export function parseMixsTsv(
 	headers: string[];
 	column_map: Record<string, string>;
 } {
-	let lines = tsv.trim().split('\n');
+	const rawLines = tsv.trim().split('\n');
+	const dataLines = rawLines.filter((l) => !l.startsWith('#'));
+	if (dataLines.length < 2) {
+		return { samples: [], errors: ['File must have a header row and at least one data row'], headers: [], column_map: {} };
+	}
 
-	// Skip NCBI comment rows (start with #)
-	const dataLines = lines.filter(l => !l.startsWith('#'));
-	if (dataLines.length < 2) return { samples: [], errors: ['File must have a header row and at least one data row'], headers: [] };
-
-	// Strip leading * from required field markers (NCBI convention)
 	const headers = dataLines[0].split('\t').map((h) => h.trim().replace(/^\*/, '').toLowerCase());
-	lines = dataLines;
 	const errors: string[] = [];
 	const samples: Record<string, unknown>[] = [];
-
 	const autoMap = buildHeaderToFieldMap();
 
-	// Resolve each header → field using the override first, then auto-detection.
-	// column_map is returned so the UI knows what was detected / applied.
 	const column_map: Record<string, string> = {};
 	const colMap: { index: number; field: string }[] = [];
 	const unmapped: string[] = [];
 	headers.forEach((h, i) => {
 		const override = overrideMap?.[h];
-		// Override can explicitly force _skip_ to drop a column the auto-map would pick up.
 		const field = override !== undefined ? override : autoMap[h];
 		if (field && field !== '_skip_') {
 			colMap.push({ index: i, field });
@@ -251,8 +229,8 @@ export function parseMixsTsv(
 		errors.push(`Unmapped columns (ignored): ${unmapped.join(', ')}`);
 	}
 
-	for (let i = 1; i < lines.length; i++) {
-		const line = lines[i].trim();
+	for (let i = 1; i < dataLines.length; i++) {
+		const line = dataLines[i].trim();
 		if (!line) continue;
 
 		const values = parseTsvLine(line);
@@ -264,9 +242,6 @@ export function parseMixsTsv(
 			if (val === '' || val === 'not collected' || val === 'not applicable' || val === 'missing') {
 				val = null;
 			}
-			// Special prefix "custom:<key>" routes the value into a custom_fields
-			// JSON blob on the sample row instead of a named column. Used by
-			// the column mapper UI's "add as custom field" option.
 			if (field.startsWith('custom:')) {
 				const key = field.slice('custom:'.length);
 				if (key) customFields[key] = val;
@@ -279,9 +254,8 @@ export function parseMixsTsv(
 			sample.custom_fields = JSON.stringify(customFields);
 		}
 
-		// Validation
 		if (!sample.samp_name) {
-			errors.push(`Row ${i + 1}: missing sample_name`);
+			errors.push(`Row ${i + 1}: missing samp_name`);
 			continue;
 		}
 
@@ -300,7 +274,7 @@ export function parseMixsTsv(
 			errors.push(`Row ${i + 1} (${sample.samp_name}): missing collection_date`);
 		}
 
-		// Compose lat_lon if we have separate lat/lng but no lat_lon
+		// Compose lat_lon from separate lat/lng if not provided directly.
 		if (!sample.lat_lon && sample.latitude && sample.longitude) {
 			const lat = Number(sample.latitude);
 			const lng = Number(sample.longitude);
@@ -311,11 +285,9 @@ export function parseMixsTsv(
 			}
 		}
 
-		// Default checklist
-		if (!sample.mixs_checklist) sample.mixs_checklist = 'MIMARKS-SU';
+		if (!sample.mixs_checklist) sample.mixs_checklist = 'MimarksS';
 
-		// Parse numeric fields
-		for (const numField of ['temp', 'salinity', 'ph', 'dissolved_oxygen', 'pressure', 'turbidity', 'chlorophyll', 'nitrate', 'phosphate', 'volume_filtered_ml', 'latitude', 'longitude']) {
+		for (const numField of NUMERIC_COLUMNS) {
 			if (sample[numField] != null) {
 				const n = Number(sample[numField]);
 				sample[numField] = isNaN(n) ? null : n;

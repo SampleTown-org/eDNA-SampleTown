@@ -24,7 +24,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	`).all();
 	const picklists = getConstrainedValues(
 		'geo_loc_name', 'env_broad_scale', 'env_local_scale', 'env_medium',
-		'filter_type', 'preservation_method', 'storage_conditions',
+		'filter_type', 'samp_store_sol', 'samp_collect_device',
 		'person_role'
 	);
 	const personnel = getActivePersonnel();

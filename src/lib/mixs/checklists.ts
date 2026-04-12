@@ -1,150 +1,80 @@
-import type { MixsChecklist } from '$lib/types';
+/**
+ * Checklist view helpers backed by the MIxS 6.3 schema index.
+ *
+ * Pre-6.3 this file hand-curated required/recommended field lists per
+ * checklist. Those are now derived directly from the LinkML-materialized
+ * combination classes in schema-index.ts, so any MIxS release bump
+ * automatically updates the UI without code changes here.
+ */
+import {
+	checklistOptions,
+	extensionOptions,
+	getClass,
+	getCombinationClass,
+	requiredSlotsFor,
+	recommendedSlotsFor,
+	allSlotsFor,
+	type MixsClass
+} from './schema-index';
 
 export interface ChecklistInfo {
-	id: MixsChecklist;
+	id: string;
 	name: string;
 	description: string;
-	/** Additional required fields beyond the core MIxS set */
-	requiredFields: string[];
-	/** Recommended fields for this checklist */
-	recommendedFields: string[];
 }
 
-export const CHECKLISTS: Record<MixsChecklist, ChecklistInfo> = {
-	'MIMARKS-SU': {
-		id: 'MIMARKS-SU',
-		name: 'MIMARKS Survey',
-		description: 'Marker gene sequences obtained directly from the environment',
-		requiredFields: ['target_gene', 'pcr_primers', 'seq_meth'],
-		recommendedFields: ['target_subfragment', 'pcr_conditions', 'nucl_acid_amp']
-	},
-	'MIMARKS-SP': {
-		id: 'MIMARKS-SP',
-		name: 'MIMARKS Specimen',
-		description: 'Marker gene sequences from cultured or voucher-identifiable specimens',
-		requiredFields: ['target_gene', 'pcr_primers', 'seq_meth', 'isol_growth_condt'],
-		recommendedFields: ['target_subfragment', 'biotic_relationship', 'host_taxon_id']
-	},
-	'MIMS': {
-		id: 'MIMS',
-		name: 'MIMS',
-		description: 'Metagenome/environmental sequences',
-		requiredFields: ['seq_meth', 'assembly_software'],
-		recommendedFields: ['number_of_contigs', 'genome_coverage']
-	},
-	'MIMAG': {
-		id: 'MIMAG',
-		name: 'MIMAG',
-		description: 'Metagenome-assembled genome sequences',
-		requiredFields: [
-			'seq_meth',
-			'assembly_software',
-			'number_of_contigs',
-			'genome_coverage',
-			'compl_score',
-			'contam_score',
-			'bin_param',
-			'bin_software'
-		],
-		recommendedFields: ['reassembly_bin', 'tax_ident']
-	},
-	'MISAG': {
-		id: 'MISAG',
-		name: 'MISAG',
-		description: 'Single amplified genome sequences',
-		requiredFields: [
-			'seq_meth',
-			'assembly_software',
-			'number_of_contigs',
-			'genome_coverage',
-			'compl_score',
-			'contam_score',
-			'single_cell_lysis',
-			'wga_amp'
-		],
-		recommendedFields: ['tax_ident', 'sort_tech']
-	},
-	'MIGS-EU': {
-		id: 'MIGS-EU',
-		name: 'MIGS Eukaryote',
-		description: 'Eukaryotic genome sequences',
-		requiredFields: [
-			'seq_meth',
-			'assembly_software',
-			'number_of_contigs',
-			'genome_coverage',
-			'annotation_source'
-		],
-		recommendedFields: ['reference_genome', 'ploidy']
-	},
-	'MIGS-BA': {
-		id: 'MIGS-BA',
-		name: 'MIGS Bacteria/Archaea',
-		description: 'Bacterial and archaeal genome sequences',
-		requiredFields: [
-			'seq_meth',
-			'assembly_software',
-			'number_of_contigs',
-			'genome_coverage',
-			'isol_growth_condt'
-		],
-		recommendedFields: ['reference_genome', 'num_replicons', 'annotation_source']
-	},
-	'MIGS-PL': {
-		id: 'MIGS-PL',
-		name: 'MIGS Plasmid',
-		description: 'Plasmid sequences',
-		requiredFields: [
-			'seq_meth',
-			'assembly_software',
-			'number_of_contigs',
-			'propagation'
-		],
-		recommendedFields: ['genome_coverage', 'annotation_source']
-	},
-	'MIGS-VI': {
-		id: 'MIGS-VI',
-		name: 'MIGS Virus',
-		description: 'Viral genome sequences',
-		requiredFields: [
-			'seq_meth',
-			'assembly_software',
-			'number_of_contigs',
-			'propagation'
-		],
-		recommendedFields: ['genome_coverage', 'host_taxon_id']
-	},
-	'MIGS-ORG': {
-		id: 'MIGS-ORG',
-		name: 'MIGS Organelle',
-		description: 'Organelle sequences',
-		requiredFields: [
-			'seq_meth',
-			'assembly_software',
-			'number_of_contigs',
-			'genome_coverage'
-		],
-		recommendedFields: ['annotation_source']
-	},
-	'MIUViG': {
-		id: 'MIUViG',
-		name: 'MIUViG',
-		description: 'Uncultivated virus genomes',
-		requiredFields: [
-			'seq_meth',
-			'assembly_software',
-			'vir_ident_software',
-			'pred_genome_type',
-			'pred_genome_struc',
-			'detec_type',
-			'source_uvig'
-		],
-		recommendedFields: ['number_of_contigs', 'host_pred_approach']
-	}
-};
+/** Dropdown options for the top-level checklist picker. */
+export const CHECKLIST_OPTIONS = checklistOptions();
 
-export const CHECKLIST_OPTIONS = Object.values(CHECKLISTS).map((c) => ({
-	value: c.id,
-	label: c.name,
-	description: c.description
-}));
+/** Dropdown options for the extension (formerly env_package) picker. */
+export const EXTENSION_OPTIONS = extensionOptions();
+
+/** Metadata bundle for a checklist — title/description suitable for display. */
+export function checklistInfo(checklist: string): ChecklistInfo | null {
+	const c = getClass(checklist);
+	if (!c || c.category !== 'checklist') return null;
+	return { id: c.name, name: c.title, description: c.description ?? '' };
+}
+
+/** Metadata bundle for an extension. */
+export function extensionInfo(extension: string): ChecklistInfo | null {
+	const c = getClass(extension);
+	if (!c || c.category !== 'extension') return null;
+	return { id: c.name, name: c.title, description: c.description ?? '' };
+}
+
+/**
+ * Required slots for a (checklist, extension) pair as a Set. Falls back to the
+ * checklist-only required set if extension is null/absent.
+ */
+export function requiredSlotSet(checklist: string, extension: string | null): Set<string> {
+	if (extension) return new Set(requiredSlotsFor(checklist, extension));
+	const c = getClass(checklist);
+	return new Set(c?.required ?? []);
+}
+
+/** Recommended slots (not required) for the same pair. */
+export function recommendedSlotSet(checklist: string, extension: string | null): Set<string> {
+	if (extension) return recommendedSlotsFor(checklist, extension);
+	// With no extension we can still pull recommendeds from the checklist mixin.
+	const result = new Set<string>();
+	const c = getClass(checklist);
+	if (c?.slot_usage) {
+		for (const [slot, usage] of Object.entries(c.slot_usage)) {
+			if (usage.recommended) result.add(slot);
+		}
+	}
+	return result;
+}
+
+/** All slots (required + optional) applicable to a (checklist, extension). */
+export function allSlotsSet(checklist: string, extension: string | null): Set<string> {
+	if (extension) return new Set(allSlotsFor(checklist, extension));
+	const c = getClass(checklist);
+	return new Set(c?.properties ?? []);
+}
+
+/** Lookup the materialized combination class (for import/export to MIxS templates). */
+export function combinationClass(checklist: string, extension: string): MixsClass | undefined {
+	return getCombinationClass(checklist, extension);
+}

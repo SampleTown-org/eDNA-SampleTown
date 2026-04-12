@@ -10,8 +10,8 @@
 		env_local_scale: 'Local Environment',
 		env_medium: 'Environmental Medium',
 		filter_type: 'Filter Types',
-		preservation_method: 'Preservation Methods',
-		storage_conditions: 'Storage Conditions',
+		samp_store_sol: 'Sample Storage Solution',
+		samp_collect_device: 'Sample Collection Devices',
 		storage_room: 'Storage Rooms/Freezers',
 		storage_box: 'Storage Boxes',
 		extraction_method: 'Extraction Methods / Kits',
@@ -56,7 +56,7 @@
 		{
 			label: 'MIxS',
 			description: 'Minimum Information about any (x) Sequence — standardized environment descriptors',
-			categories: ['geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale', 'env_medium']
+			categories: ['geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale', 'env_medium', 'samp_store_sol', 'samp_collect_device']
 		},
 		{
 			label: 'SRA / ENA',
@@ -66,7 +66,7 @@
 		{
 			label: 'Custom',
 			description: 'Lab-specific vocabulary — storage, kits, roles',
-			categories: ['pipeline', 'filter_type', 'preservation_method', 'storage_conditions', 'storage_room', 'storage_box', 'extraction_method', 'library_prep_kit', 'barcode', 'person_role']
+			categories: ['pipeline', 'filter_type', 'storage_room', 'storage_box', 'extraction_method', 'library_prep_kit', 'barcode', 'person_role']
 		}
 	];
 

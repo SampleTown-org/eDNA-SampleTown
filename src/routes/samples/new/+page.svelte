@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { CHECKLIST_OPTIONS } from '$lib/mixs/checklists';
-	import { ENV_PACKAGES } from '$lib/mixs/controlled-vocab';
-	import { CORE_FIELDS, PACKAGE_FIELDS, MEASUREMENT_FIELDS, LOGISTICS_FIELDS } from '$lib/mixs/fields';
+	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
+	import { CORE_FIELDS, EXTENSION_FIELDS, MEASUREMENT_FIELDS, LOGISTICS_FIELDS } from '$lib/mixs/fields';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
-	import type { EnvPackage, MixsChecklist } from '$lib/types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -12,14 +10,12 @@
 	let form = $state<Record<string, unknown>>({
 		project_id: data.preselectedProjectId as string,
 		site_id: data.preselectedSiteId as string,
-		mixs_checklist: 'MIMARKS-SU',
+		mixs_checklist: 'MimarksS',
+		extension: 'Water',
 		samp_name: '',
 		collection_date: '',
 		env_medium: ''
 	});
-
-	/** env_package is a UI-only filter for showing package-specific fields — not saved to DB. */
-	let envPackage = $state<EnvPackage>('water');
 
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
@@ -39,7 +35,7 @@
 	let saving = $state(false);
 	let errorMsg = $state('');
 
-	let packageFields = $derived(PACKAGE_FIELDS[envPackage] || []);
+	let extensionFields = $derived(EXTENSION_FIELDS[form.extension as string] || []);
 
 	async function submit() {
 		if (!form.project_id) {
@@ -158,16 +154,22 @@
 					{#each data.picklists.env_medium as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
+
+			<div>
+				<label for="project_name" class="block text-sm font-medium text-slate-300 mb-1">Project Name (MIxS)</label>
+				<input id="project_name" type="text" bind:value={form.project_name}
+					class="{inputCls} border-slate-700" placeholder="Free-text project label for MIxS export" />
+			</div>
 		</fieldset>
 
-		<!-- Add MIxS metadata (collapsed): checklist + env package picker.
-		     Package selection drives the package-specific fields section below. -->
+		<!-- Add MIxS metadata (collapsed): checklist + extension picker.
+		     Extension selection drives the extension-specific fields section below. -->
 		<details class="group rounded-lg border border-slate-800 bg-slate-900/40">
 			<summary class="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white cursor-pointer flex items-center gap-2">
 				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
 				Add MIxS metadata
 				<span class="text-xs text-slate-500 font-normal">
-					(checklist, package, package-specific fields)
+					(checklist, extension, extension-specific fields)
 				</span>
 			</summary>
 			<div class="p-4 space-y-4 border-t border-slate-800">
@@ -182,25 +184,26 @@
 						<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find(o => o.value === form.mixs_checklist)?.description}</p>
 					</div>
 					<div>
-						<label for="env_package" class="block text-sm font-medium text-slate-300 mb-1">Env Package <span class="text-xs text-slate-500 font-normal">(field filter only)</span></label>
-						<select id="env_package" bind:value={envPackage} class={selectCls}>
-							{#each ENV_PACKAGES as pkg}
-								<option value={pkg.value}>{pkg.label}</option>
+						<label for="extension" class="block text-sm font-medium text-slate-300 mb-1">MIxS Extension</label>
+						<select id="extension" bind:value={form.extension} class={selectCls}>
+							{#each EXTENSION_OPTIONS as opt}
+								<option value={opt.value}>{opt.label}</option>
 							{/each}
 						</select>
+						<p class="text-xs text-slate-500 mt-1">{EXTENSION_OPTIONS.find(o => o.value === form.extension)?.description}</p>
 					</div>
 				</div>
 			</div>
 		</details>
 
-		<!-- Package-specific fields -->
-		{#if packageFields.length > 0}
+		<!-- Extension-specific fields -->
+		{#if extensionFields.length > 0}
 			<fieldset class="space-y-4">
-				<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">{envPackage} Package Fields</legend>
-				{#each packageFields as field}
+				<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">{form.extension} Extension Fields</legend>
+				{#each extensionFields as field}
 					<div>
 						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">
-							{field.label} {field.unit ? `(${field.unit})` : ''}
+							{field.label ?? field.name} {field.unit ? `(${field.unit})` : ''}
 						</label>
 						<input id={field.name} type="text" bind:value={form[field.name]}
 							class="{inputCls} border-slate-700" placeholder={field.placeholder} />
@@ -227,12 +230,46 @@
 				{#each MEASUREMENT_FIELDS as field}
 					<div>
 						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">
-							{field.label} {field.unit ? `(${field.unit})` : ''}
+							{field.label ?? field.name} {field.unit ? `(${field.unit})` : ''}
 						</label>
 						<input id={field.name} type="number" step="any" bind:value={form[field.name]}
 							class="{inputCls} border-slate-700" />
 					</div>
 				{/each}
+			</div>
+		</details>
+
+		<!-- Sampling (new MIxS 6.3 fields) -->
+		<details class="group">
+			<summary class="text-sm font-semibold text-slate-300 uppercase tracking-wider cursor-pointer flex items-center gap-2">
+				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
+				Sampling
+			</summary>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+				<div>
+					<label for="samp_collect_device" class="block text-sm font-medium text-slate-300 mb-1">Collection Device</label>
+					<input id="samp_collect_device" type="text" bind:value={form.samp_collect_device} class="{inputCls} border-slate-700" placeholder="e.g., Niskin bottle, sterile swab" />
+				</div>
+				<div>
+					<label for="samp_collect_method" class="block text-sm font-medium text-slate-300 mb-1">Collection Method</label>
+					<input id="samp_collect_method" type="text" bind:value={form.samp_collect_method} class="{inputCls} border-slate-700" />
+				</div>
+				<div class="sm:col-span-2">
+					<label for="samp_mat_process" class="block text-sm font-medium text-slate-300 mb-1">Material Processing</label>
+					<input id="samp_mat_process" type="text" bind:value={form.samp_mat_process} class="{inputCls} border-slate-700" placeholder="e.g., filtration on 0.22 µm" />
+				</div>
+				<div>
+					<label for="samp_size" class="block text-sm font-medium text-slate-300 mb-1">Sample Size</label>
+					<input id="samp_size" type="text" bind:value={form.samp_size} class="{inputCls} border-slate-700" placeholder="e.g., 2 L" />
+				</div>
+				<div>
+					<label for="size_frac" class="block text-sm font-medium text-slate-300 mb-1">Size Fraction</label>
+					<input id="size_frac" type="text" bind:value={form.size_frac} class="{inputCls} border-slate-700" placeholder="e.g., 0.22-3 µm" />
+				</div>
+				<div class="sm:col-span-2">
+					<label for="source_mat_id" class="block text-sm font-medium text-slate-300 mb-1">Source Material ID</label>
+					<input id="source_mat_id" type="text" bind:value={form.source_mat_id} class="{inputCls} border-slate-700" />
+				</div>
 			</div>
 		</details>
 
@@ -245,18 +282,11 @@
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
 				{#each LOGISTICS_FIELDS as field}
 					<div>
-						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">{field.label}</label>
+						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">{field.label ?? field.name}</label>
 						{#if field.constrainedCategory && data.picklists[field.constrainedCategory]}
 							<select id={field.name} bind:value={form[field.name]} class={selectCls}>
 								<option value="">Select...</option>
 								{#each data.picklists[field.constrainedCategory] as opt}
-									<option value={opt.value}>{opt.label}</option>
-								{/each}
-							</select>
-						{:else if field.type === 'select' && field.options}
-							<select id={field.name} bind:value={form[field.name]} class={selectCls}>
-								<option value="">Select...</option>
-								{#each field.options as opt}
 									<option value={opt.value}>{opt.label}</option>
 								{/each}
 							</select>
@@ -269,6 +299,58 @@
 						{/if}
 					</div>
 				{/each}
+				<div>
+					<label for="samp_store_dur" class="block text-sm font-medium text-slate-300 mb-1">Storage Duration</label>
+					<input id="samp_store_dur" type="text" bind:value={form.samp_store_dur} class="{inputCls} border-slate-700" placeholder="e.g., P30D" />
+				</div>
+				<div>
+					<label for="samp_store_loc" class="block text-sm font-medium text-slate-300 mb-1">Storage Location</label>
+					<input id="samp_store_loc" type="text" bind:value={form.samp_store_loc} class="{inputCls} border-slate-700" placeholder="e.g., -80 freezer, Rack 3" />
+				</div>
+			</div>
+		</details>
+
+		<!-- Protocols -->
+		<details class="group">
+			<summary class="text-sm font-semibold text-slate-300 uppercase tracking-wider cursor-pointer flex items-center gap-2">
+				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
+				Protocols
+			</summary>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+				<div>
+					<label for="nucl_acid_ext" class="block text-sm font-medium text-slate-300 mb-1">Nucleic Acid Extraction</label>
+					<input id="nucl_acid_ext" type="text" bind:value={form.nucl_acid_ext} class="{inputCls} border-slate-700" placeholder="DOI or protocol URL" />
+				</div>
+				<div>
+					<label for="nucl_acid_amp" class="block text-sm font-medium text-slate-300 mb-1">Nucleic Acid Amplification</label>
+					<input id="nucl_acid_amp" type="text" bind:value={form.nucl_acid_amp} class="{inputCls} border-slate-700" placeholder="DOI or protocol URL" />
+				</div>
+			</div>
+		</details>
+
+		<!-- Taxonomy / reference -->
+		<details class="group">
+			<summary class="text-sm font-semibold text-slate-300 uppercase tracking-wider cursor-pointer flex items-center gap-2">
+				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
+				Taxonomy / Reference
+			</summary>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+				<div>
+					<label for="specific_host" class="block text-sm font-medium text-slate-300 mb-1">Specific Host</label>
+					<input id="specific_host" type="text" bind:value={form.specific_host} class="{inputCls} border-slate-700" placeholder="e.g., Mus musculus C57BL/6J" />
+				</div>
+				<div>
+					<label for="tax_ident" class="block text-sm font-medium text-slate-300 mb-1">Taxonomic Identification</label>
+					<input id="tax_ident" type="text" bind:value={form.tax_ident} class="{inputCls} border-slate-700" placeholder="e.g., 16S rRNA, other (other single locus)" />
+				</div>
+				<div class="sm:col-span-2">
+					<label for="ref_biomaterial" class="block text-sm font-medium text-slate-300 mb-1">Reference Biomaterial</label>
+					<input id="ref_biomaterial" type="text" bind:value={form.ref_biomaterial} class="{inputCls} border-slate-700" placeholder="DOI / accession of published reference" />
+				</div>
+				<div class="sm:col-span-2">
+					<label for="isol_growth_condt" class="block text-sm font-medium text-slate-300 mb-1">Isolation &amp; Growth Conditions</label>
+					<input id="isol_growth_condt" type="text" bind:value={form.isol_growth_condt} class="{inputCls} border-slate-700" placeholder="DOI or protocol URL" />
+				</div>
 			</div>
 		</details>
 

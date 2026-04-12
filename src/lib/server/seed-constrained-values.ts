@@ -73,14 +73,19 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'Whatman GF/C', 'Whatman GF/F', 'Nylon 0.22 µm', 'PVDF 0.22 µm',
 		'Cellulose nitrate 0.22 µm', 'Glass fiber', 'None (grab sample)'
 	],
-	preservation_method: [
+	samp_store_sol: [
 		'Ethanol (95%)', 'Ethanol (70%)', 'RNAlater', 'Longmire buffer',
 		'CTAB buffer', 'Flash frozen (LN₂)', 'Frozen (-20°C)', 'Frozen (-80°C)',
 		'Silica desiccant', 'DMSO-EDTA salt', 'Formaldehyde', 'Lugol\'s iodine',
 		'None (processed immediately)'
 	],
-	storage_conditions: [
-		'-80°C', '-20°C', '-196°C (LN₂)', '4°C', 'Room temperature', 'Desiccated'
+	// samp_store_temp is numeric (°C) in MIxS 6.3 — so no picklist needed;
+	// removed the old `storage_conditions` enum.
+	samp_collect_device: [
+		'Niskin bottle', 'Go-Flo bottle', 'CTD rosette',
+		'grab sampler', 'push core', 'box core', 'gravity core',
+		'peristaltic pump', 'bucket', 'syringe', 'Van Dorn bottle',
+		'sterile swab', 'scoop', 'tweezers', 'other'
 	],
 	// Extraction methods + kits merged into one picklist (was previously
 	// split into extraction_method + extraction_kit — redundant).

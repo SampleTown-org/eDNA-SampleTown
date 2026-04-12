@@ -29,13 +29,13 @@
 	const ADDITIONAL_COLUMNS: ColumnDef[] = [
 		{ key: 'env_medium', label: 'Env medium', width: 'w-40' },
 		{ key: 'depth', label: 'Depth (m)', width: 'w-24' },
-		{ key: 'elevation', label: 'Elevation (m)', width: 'w-24' },
+		{ key: 'elev', label: 'Elevation (m)', width: 'w-24' },
 		{ key: 'temp', label: 'Temp (°C)', width: 'w-24' },
 		{ key: 'salinity', label: 'Salinity', width: 'w-24' },
 		{ key: 'ph', label: 'pH', width: 'w-20' },
-		{ key: 'volume_filtered_ml', label: 'Vol filtered (mL)', width: 'w-28' },
+		{ key: 'samp_vol_we_dna_ext', label: 'Vol filtered (mL)', width: 'w-28' },
 		{ key: 'filter_type', label: 'Filter type', width: 'w-32' },
-		{ key: 'preservation_method', label: 'Preservation', width: 'w-32' }
+		{ key: 'samp_store_sol', label: 'Preservation', width: 'w-32' }
 	];
 
 	let extraColumnKeys = $state<string[]>([]);

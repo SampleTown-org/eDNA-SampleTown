@@ -1,303 +1,124 @@
-import type { EnvPackage } from '$lib/types';
+/**
+ * UI field configuration for the sample new/edit forms.
+ *
+ * This file is a thin "view layer" over the authoritative MIxS 6.3 slot
+ * definitions in `schema-index.ts`. It picks which slots SampleTown surfaces
+ * in its default form, how to group them, and app-specific UI hints (units,
+ * picklist bindings). Authoritative metadata (title, description, examples,
+ * pattern) lives in the generated schema index.
+ */
+import { getSlot } from './schema-index';
 
 export type FieldType = 'text' | 'number' | 'date' | 'select' | 'coordinates' | 'textarea';
 
-export interface MixsField {
+export interface MixsFieldUi {
+	/** MIxS slot name — must exist in the active schema index. */
 	name: string;
-	label: string;
+	/** Override UI label; falls back to slot.title. */
+	label?: string;
 	type: FieldType;
-	required: boolean;
-	description: string;
-	sra_column: string;
-	pattern?: RegExp;
-	options?: { value: string; label: string }[];
-	placeholder?: string;
+	/** App-level required flag for the form; MIxS-level required is resolved
+	 *  at runtime from (mixs_checklist, extension). */
+	required?: boolean;
+	/** Display-only unit hint. MIxS puts units inside the value string. */
 	unit?: string;
+	/** Name of a constrained_values picklist for select-type fields. */
 	constrainedCategory?: string;
+	/** Placeholder override; falls back to slot.examples[0]. */
+	placeholder?: string;
 }
 
-/** Core fields required for ALL MIxS checklists */
-export const CORE_FIELDS: MixsField[] = [
-	{
-		name: 'samp_name',
-		label: 'Sample Name',
-		type: 'text',
-		required: true,
-		description: 'Unique local identifier for the sample',
-		sra_column: 'sample_name',
-		placeholder: 'e.g., eDNA_River_2026_001'
-	},
-	{
-		name: 'collection_date',
-		label: 'Collection Date',
-		type: 'date',
-		required: true,
-		description: 'Date of sampling in ISO 8601 format',
-		sra_column: 'collection_date',
-		pattern: /^\d{4}(-\d{2}(-\d{2}(T\d{2}:\d{2}(:\d{2})?)?)?)?$/
-	},
-	{
-		name: 'lat_lon',
-		label: 'Latitude/Longitude',
-		type: 'coordinates',
-		required: true,
-		description: 'Geographical coordinates as "dd.dddd N|S dd.dddd W|E"',
-		sra_column: 'lat_lon',
-		pattern: /^\d+(\.\d+)?\s[NS]\s\d+(\.\d+)?\s[WE]$/,
-		placeholder: 'e.g., 45.5231 N 122.6765 W'
-	},
-	{
-		name: 'geo_loc_name',
-		label: 'Geographic Location',
-		type: 'text',
-		required: true,
-		description: 'Geographical origin using INSDC country list: "Country: Region"',
-		sra_column: 'geo_loc_name',
-		placeholder: 'e.g., Canada: British Columbia'
-	},
-	{
-		name: 'env_broad_scale',
-		label: 'Broad-scale Environment',
-		type: 'text',
-		required: true,
-		description: 'Broad ecological context using ENVO biome terms',
-		sra_column: 'env_broad_scale',
-		placeholder: 'e.g., marine biome [ENVO:00000447]'
-	},
-	{
-		name: 'env_local_scale',
-		label: 'Local Environment',
-		type: 'text',
-		required: true,
-		description: 'Local environmental context using ENVO feature terms',
-		sra_column: 'env_local_scale',
-		placeholder: 'e.g., coastal water [ENVO:00002150]'
-	},
-	{
-		name: 'env_medium',
-		label: 'Environmental Medium',
-		type: 'text',
-		required: true,
-		description: 'Environmental material using ENVO material terms',
-		sra_column: 'env_medium',
-		placeholder: 'e.g., sea water [ENVO:00002149]'
-	}
+export interface MixsField extends MixsFieldUi {
+	label: string;
+	description: string;
+	required: boolean;
+	examples: string[];
+	pattern?: string;
+	slot_uri?: string;
+}
+
+/** Resolve a UI config entry to a fully-populated MixsField by merging with the schema index. */
+export function resolveField(ui: MixsFieldUi): MixsField {
+	const slot = getSlot(ui.name);
+	return {
+		...ui,
+		label: ui.label ?? slot?.title ?? ui.name,
+		description: slot?.description ?? '',
+		required: ui.required ?? slot?.required ?? false,
+		examples: slot?.examples ?? [],
+		pattern: slot?.structured_pattern ?? slot?.pattern,
+		slot_uri: slot?.slot_uri,
+		placeholder: ui.placeholder ?? slot?.examples?.[0]
+	};
+}
+
+/** Core MIxS slots surfaced on every sample form. */
+export const CORE_FIELDS: MixsFieldUi[] = [
+	{ name: 'samp_name', type: 'text', required: true, label: 'Sample Name' },
+	{ name: 'collection_date', type: 'date', required: true },
+	{ name: 'env_medium', type: 'text', required: true, constrainedCategory: 'env_medium' },
+	{ name: 'env_broad_scale', type: 'text', required: true, constrainedCategory: 'env_broad_scale' },
+	{ name: 'env_local_scale', type: 'text', required: true, constrainedCategory: 'env_local_scale' },
+	{ name: 'samp_taxon_id', type: 'text', required: false },
+	{ name: 'project_name', type: 'text', required: false }
 ];
 
-/** Environmental package-specific required fields */
-export const PACKAGE_FIELDS: Record<EnvPackage, MixsField[]> = {
-	water: [
-		{
-			name: 'depth',
-			label: 'Depth',
-			type: 'text',
-			required: true,
-			description: 'Depth of sample collection',
-			sra_column: 'depth',
-			placeholder: 'e.g., 10 m',
-			unit: 'm'
-		}
+/** Extension-specific slots (MIxS 6.3 "Extension" = pre-6.3 "env_package"). */
+export const EXTENSION_FIELDS: Record<string, MixsFieldUi[]> = {
+	Water: [{ name: 'depth', type: 'text', required: true, unit: 'm' }],
+	Sediment: [{ name: 'depth', type: 'text', required: true, unit: 'm' }],
+	Soil: [{ name: 'elev', type: 'text', required: true, unit: 'm' }],
+	Air: [{ name: 'elev', type: 'text', required: true, unit: 'm' }],
+	HostAssociated: [
+		{ name: 'host_taxid', type: 'text', required: true },
+		{ name: 'specific_host', type: 'text', required: false }
 	],
-	sediment: [
-		{
-			name: 'depth',
-			label: 'Depth',
-			type: 'text',
-			required: true,
-			description: 'Depth of sample collection',
-			sra_column: 'depth',
-			placeholder: 'e.g., 0.5 m',
-			unit: 'm'
-		}
+	PlantAssociated: [
+		{ name: 'host_taxid', type: 'text', required: true },
+		{ name: 'specific_host', type: 'text', required: false }
 	],
-	soil: [
-		{
-			name: 'elevation',
-			label: 'Elevation',
-			type: 'text',
-			required: true,
-			description: 'Elevation of sampling site',
-			sra_column: 'elev',
-			placeholder: 'e.g., 100 m',
-			unit: 'm'
-		}
-	],
-	air: [
-		{
-			name: 'elevation',
-			label: 'Elevation/Altitude',
-			type: 'text',
-			required: true,
-			description: 'Altitude of sampling site',
-			sra_column: 'alt',
-			placeholder: 'e.g., 500 m',
-			unit: 'm'
-		}
-	],
-	'host-associated': [
-		{
-			name: 'host_taxon_id',
-			label: 'Host Organism',
-			type: 'text',
-			required: true,
-			description: 'NCBI taxonomy ID or name of the host organism',
-			sra_column: 'host',
-			placeholder: 'e.g., Oncorhynchus mykiss'
-		}
-	],
-	built: [],
-	'plant-associated': [
-		{
-			name: 'host_taxon_id',
-			label: 'Host Plant',
-			type: 'text',
-			required: true,
-			description: 'NCBI taxonomy ID or name of the host plant',
-			sra_column: 'host',
-			placeholder: 'e.g., Picea sitchensis'
-		}
-	],
-	agriculture: []
+	HumanAssociated: [{ name: 'host_taxid', type: 'text', required: true }],
+	BuiltEnvironment: [],
+	Agriculture: []
 };
 
-/** Optional measurement fields available for all samples */
-export const MEASUREMENT_FIELDS: MixsField[] = [
-	{
-		name: 'temp',
-		label: 'Temperature',
-		type: 'number',
-		required: false,
-		description: 'Temperature at sampling site',
-		sra_column: 'temp',
-		unit: '°C'
-	},
-	{
-		name: 'salinity',
-		label: 'Salinity',
-		type: 'number',
-		required: false,
-		description: 'Salinity of sample',
-		sra_column: 'salinity',
-		unit: 'PSU'
-	},
-	{
-		name: 'ph',
-		label: 'pH',
-		type: 'number',
-		required: false,
-		description: 'pH of sample',
-		sra_column: 'ph'
-	},
-	{
-		name: 'dissolved_oxygen',
-		label: 'Dissolved Oxygen',
-		type: 'number',
-		required: false,
-		description: 'Dissolved oxygen concentration',
-		sra_column: 'diss_oxygen',
-		unit: 'mg/L'
-	},
-	{
-		name: 'pressure',
-		label: 'Pressure',
-		type: 'number',
-		required: false,
-		description: 'Pressure at sampling depth',
-		sra_column: 'pressure',
-		unit: 'atm'
-	},
-	{
-		name: 'turbidity',
-		label: 'Turbidity',
-		type: 'number',
-		required: false,
-		description: 'Turbidity of sample',
-		sra_column: 'turbidity',
-		unit: 'NTU'
-	},
-	{
-		name: 'chlorophyll',
-		label: 'Chlorophyll',
-		type: 'number',
-		required: false,
-		description: 'Chlorophyll concentration',
-		sra_column: 'chlorophyll',
-		unit: 'µg/L'
-	},
-	{
-		name: 'nitrate',
-		label: 'Nitrate',
-		type: 'number',
-		required: false,
-		description: 'Nitrate concentration',
-		sra_column: 'nitrate',
-		unit: 'µmol/L'
-	},
-	{
-		name: 'phosphate',
-		label: 'Phosphate',
-		type: 'number',
-		required: false,
-		description: 'Phosphate concentration',
-		sra_column: 'phosphate',
-		unit: 'µmol/L'
-	}
+/** Physicochemical measurements (all optional — relevant per-extension). */
+export const MEASUREMENT_FIELDS: MixsFieldUi[] = [
+	{ name: 'temp', type: 'number', unit: '°C' },
+	{ name: 'salinity', type: 'number', unit: 'PSU' },
+	{ name: 'ph', type: 'number' },
+	{ name: 'diss_oxygen', type: 'number', unit: 'mg/L' },
+	{ name: 'pressure', type: 'number', unit: 'atm' },
+	{ name: 'turbidity', type: 'number', unit: 'NTU' },
+	{ name: 'chlorophyll', type: 'number', unit: 'µg/L' },
+	{ name: 'nitrate', type: 'number', unit: 'µmol/L' },
+	{ name: 'phosphate', type: 'number', unit: 'µmol/L' }
 ];
 
-/** Sample logistics fields */
-export const LOGISTICS_FIELDS: MixsField[] = [
-	{
-		name: 'volume_filtered_ml',
-		label: 'Volume Filtered',
-		type: 'number',
-		required: false,
-		description: 'Volume of water filtered',
-		sra_column: 'samp_vol_we_dna_ext',
-		unit: 'mL'
-	},
-	{
-		name: 'filter_type',
-		label: 'Filter Type',
-		type: 'select',
-		required: false,
-		description: 'Type and pore size of filter used',
-		sra_column: 'filter_type',
-		constrainedCategory: 'filter_type'
-	},
-	{
-		name: 'preservation_method',
-		label: 'Preservation Method',
-		type: 'select',
-		required: false,
-		description: 'Method used to preserve the sample',
-		sra_column: 'samp_store_sol',
-		constrainedCategory: 'preservation_method'
-	},
-	{
-		name: 'storage_conditions',
-		label: 'Storage Conditions',
-		type: 'select',
-		required: false,
-		description: 'Temperature and conditions of storage',
-		sra_column: 'samp_store_temp',
-		constrainedCategory: 'storage_conditions'
-	},
-	// collector_name removed — personnel attribution is handled by the
-	// PeoplePicker on the form (entity_personnel with role from the
-	// person_role picklist). The schema column still exists for legacy data.
+/** Sampling + storage logistics. */
+export const LOGISTICS_FIELDS: MixsFieldUi[] = [
+	{ name: 'samp_vol_we_dna_ext', type: 'number', unit: 'mL' },
+	{ name: 'filter_type', type: 'select', constrainedCategory: 'filter_type' },
+	{ name: 'samp_collect_device', type: 'text', constrainedCategory: 'samp_collect_device' },
+	{ name: 'samp_mat_process', type: 'textarea' },
+	{ name: 'samp_store_sol', type: 'select', constrainedCategory: 'samp_store_sol' },
+	{ name: 'samp_store_temp', type: 'number', unit: '°C' },
+	{ name: 'samp_store_dur', type: 'text' },
+	{ name: 'samp_store_loc', type: 'text' }
 ];
 
-/** Get all required fields for a given env_package */
-export function getRequiredFields(envPackage: EnvPackage): MixsField[] {
-	return [...CORE_FIELDS, ...(PACKAGE_FIELDS[envPackage] || [])];
+/** Get all required fields for a given MIxS extension. */
+export function getRequiredFields(extension: string | null): MixsField[] {
+	const ext = extension && EXTENSION_FIELDS[extension] ? EXTENSION_FIELDS[extension] : [];
+	return [...CORE_FIELDS, ...ext].map(resolveField);
 }
 
-/** Get all fields organized by section */
-export function getAllFieldSections(envPackage: EnvPackage) {
+/** Get all fields organized by section, for form rendering. */
+export function getAllFieldSections(extension: string | null) {
 	return {
-		core: CORE_FIELDS,
-		package: PACKAGE_FIELDS[envPackage] || [],
-		measurements: MEASUREMENT_FIELDS,
-		logistics: LOGISTICS_FIELDS
+		core: CORE_FIELDS.map(resolveField),
+		extension: (extension && EXTENSION_FIELDS[extension] ? EXTENSION_FIELDS[extension] : []).map(resolveField),
+		measurements: MEASUREMENT_FIELDS.map(resolveField),
+		logistics: LOGISTICS_FIELDS.map(resolveField)
 	};
 }

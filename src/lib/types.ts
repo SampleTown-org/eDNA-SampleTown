@@ -41,7 +41,6 @@ export interface Site {
 	locality: string | null;
 	env_broad_scale: string | null;
 	env_local_scale: string | null;
-	habitat_type: string | null;
 	access_notes: string | null;
 	notes: string | null;
 	custom_fields: string | null;
@@ -52,69 +51,75 @@ export interface Site {
 	updated_at: string;
 }
 
-export type MixsChecklist =
-	| 'MIMARKS-SU'
-	| 'MIMARKS-SP'
-	| 'MIMS'
-	| 'MIMAG'
-	| 'MISAG'
-	| 'MIGS-EU'
-	| 'MIGS-BA'
-	| 'MIGS-PL'
-	| 'MIGS-VI'
-	| 'MIGS-ORG'
-	| 'MIUViG';
+/**
+ * MIxS checklist class name (LinkML class in mixs.yaml).
+ * The valid set is defined by the active MIxS schema version; enumerating it
+ * here as a string type avoids shipping a redundant enum literal.
+ */
+export type MixsChecklist = string;
 
-export type EnvPackage =
-	| 'water'
-	| 'soil'
-	| 'sediment'
-	| 'host-associated'
-	| 'air'
-	| 'built'
-	| 'plant-associated'
-	| 'agriculture';
+/** MIxS Extension class name (formerly env_package). Same sourcing rationale as MixsChecklist. */
+export type MixsExtension = string;
 
 export interface Sample {
 	id: string;
 	project_id: string;
 	site_id: string;
 	mixs_checklist: MixsChecklist;
+	extension: MixsExtension | null;
 
 	// MIxS core
 	samp_name: string;
 	collection_date: string;
 	env_medium: string;
 	samp_taxon_id: string | null;
+	project_name: string | null;
 
-	// Package-specific fields
+	// Extension-specific location context
 	depth: string | null;
-	elevation: string | null;
-	host_taxon_id: string | null;
+	elev: string | null;
 
-	// MIGS/MIMS/MISAG/MIMAG-specific
-	assembly_software: string | null;
-	number_of_contigs: number | null;
-	genome_coverage: string | null;
-	reference_genome: string | null;
-	annotation_source: string | null;
+	// Host-associated
+	host_taxid: string | null;
+	specific_host: string | null;
 
 	// Environmental measurements
 	temp: number | null;
 	salinity: number | null;
 	ph: number | null;
-	dissolved_oxygen: number | null;
+	diss_oxygen: number | null;
 	pressure: number | null;
 	turbidity: number | null;
 	chlorophyll: number | null;
 	nitrate: number | null;
 	phosphate: number | null;
 
-	// Logistics
-	volume_filtered_ml: number | null;
+	// Sampling
+	samp_collect_device: string | null;
+	samp_collect_method: string | null;
+	samp_mat_process: string | null;
+	samp_size: string | null;
+	samp_vol_we_dna_ext: number | null;
+	size_frac: string | null;
+	source_mat_id: string | null;
+
+	// Storage
+	samp_store_sol: string | null;
+	samp_store_temp: number | null;
+	samp_store_dur: string | null;
+	samp_store_loc: string | null;
+
+	// Extraction / amplification protocol references
+	nucl_acid_ext: string | null;
+	nucl_acid_amp: string | null;
+
+	// MIGS/MIMAG/MISAG context
+	ref_biomaterial: string | null;
+	isol_growth_condt: string | null;
+	tax_ident: string | null;
+
+	// SampleTown-local extras
 	filter_type: string | null;
-	preservation_method: string | null;
-	storage_conditions: string | null;
 	collector_name: string | null;
 
 	notes: string | null;

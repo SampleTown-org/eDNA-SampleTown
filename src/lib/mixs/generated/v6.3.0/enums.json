@@ -1,0 +1,3408 @@
+{
+  "_version": "6.3.0",
+  "_source": "GSC MIxS LinkML",
+  "_generated_at": "2026-04-12T21:03:33.941Z",
+  "enums": {
+    "SeasonEnum": {
+      "name": "SeasonEnum",
+      "values": [
+        {
+          "value": "autumn [NCIT:C94733]",
+          "meaning": "NCIT:C94733"
+        },
+        {
+          "value": "spring [NCIT:C94731]",
+          "meaning": "NCIT:C94731"
+        },
+        {
+          "value": "summer [NCIT:C94732]",
+          "meaning": "NCIT:C94732"
+        },
+        {
+          "value": "winter [NCIT:C94730]",
+          "meaning": "NCIT:C94730"
+        }
+      ]
+    },
+    "InsdcMissingValueEnum": {
+      "name": "InsdcMissingValueEnum",
+      "description": "Permissible values recommended by INSDC for reporting missing metadata values.",
+      "comments": [
+        "The International Nucleotide Database Collaboration (INSDC) have a standardised missing/null value reporting language to be used where a value of an expected format for sample metadata reporting can not be provided.",
+        "The controlled vocabulary takes into account different type of constraints. Submitters are strongly encouraged to always provide true values. However, if missing/null value reporting is required, submitters are asked to use a term with the finest granularity for their situation. See the table below for accepted missing value reporting terms.",
+        "Please use the above standardised missing value vocabulary only if a true value of an expected format for a mandatory field is missing. If a true value is missing for a recommended or an optional field, then these fields should not be used for reporting at all. When reporting a missing mandatory field, the eight granular 'reporting level' terms need to be preceded with the term \"missing:\" to declare both the absence of a true value as well as the reason."
+      ],
+      "values": [
+        {
+          "value": "not applicable",
+          "description": "Information is inappropriate to report, can indicate that the standard itself fails to model or represent the information appropriately",
+          "aliases": [
+            "n/a",
+            "na"
+          ]
+        },
+        {
+          "value": "missing",
+          "aliases": [
+            "no data",
+            "not available",
+            "unavailable",
+            "unknown",
+            "unspecified"
+          ]
+        },
+        {
+          "value": "not collected",
+          "description": "Information of an expected format was not given because it has not been collected",
+          "aliases": [
+            "not determined",
+            "not recorded"
+          ]
+        },
+        {
+          "value": "not provided",
+          "description": "Information of an expected format was not given, a value may be given at the later stage",
+          "aliases": [
+            "not reported"
+          ]
+        },
+        {
+          "value": "restricted access",
+          "description": "Information exists but can not be released openly because of privacy concerns",
+          "aliases": [
+            "restricted"
+          ]
+        },
+        {
+          "value": "missing: control sample",
+          "description": "Information is not applicable as the sample represents a negative control sample collected in a lab."
+        },
+        {
+          "value": "missing: sample group",
+          "description": "Information is not applicable as the sample represents a group of samples that do not have a single origin. E.g. for co-assembly or transcriptome assembly."
+        },
+        {
+          "value": "missing: synthetic construct",
+          "description": "Information does not exist as the sample represents an ab-initio synthetic construct."
+        },
+        {
+          "value": "missing: lab stock",
+          "description": "Information was not collected as the sample represents a cultured cell line or model organism under long-term lab control."
+        },
+        {
+          "value": "missing: third party data",
+          "description": "Information does not exist as the metadata was not collected or reported in records predating the 2023 agreement. For use in Third PArty data submissions."
+        },
+        {
+          "value": "missing: data agreement established pre-2023",
+          "description": "Data agreements were established before the 2023 INSDC standard and metadata can not be provided. A value may be given at a later stage."
+        },
+        {
+          "value": "missing: endangered species",
+          "description": "Information can not be reported as the target organism is endangered e.g. on the IUCN red-list."
+        },
+        {
+          "value": "missing: human-identifiable",
+          "description": "Information can not be reported as the metadata would make the sample human-identifiable."
+        }
+      ]
+    },
+    "BiolStatEnum": {
+      "name": "BiolStatEnum",
+      "values": [
+        {
+          "value": "breeder's line"
+        },
+        {
+          "value": "clonal selection"
+        },
+        {
+          "value": "hybrid"
+        },
+        {
+          "value": "inbred line"
+        },
+        {
+          "value": "mutant"
+        },
+        {
+          "value": "natural"
+        },
+        {
+          "value": "semi-natural"
+        },
+        {
+          "value": "wild"
+        }
+      ]
+    },
+    "AssemblyQualEnum": {
+      "name": "AssemblyQualEnum",
+      "values": [
+        {
+          "value": "Finished genome"
+        },
+        {
+          "value": "High-quality draft genome"
+        },
+        {
+          "value": "Medium-quality draft genome"
+        },
+        {
+          "value": "Low-quality draft genome"
+        },
+        {
+          "value": "Genome fragment(s)"
+        }
+      ]
+    },
+    "AeroStrucEnum": {
+      "name": "AeroStrucEnum",
+      "values": [
+        {
+          "value": "glider"
+        },
+        {
+          "value": "plane"
+        }
+      ]
+    },
+    "AnimalBodyCondEnum": {
+      "name": "AnimalBodyCondEnum",
+      "values": [
+        {
+          "value": "normal"
+        },
+        {
+          "value": "over conditioned"
+        },
+        {
+          "value": "under conditioned"
+        }
+      ]
+    },
+    "AnimalSexEnum": {
+      "name": "AnimalSexEnum",
+      "values": [
+        {
+          "value": "castrated female"
+        },
+        {
+          "value": "castrated male"
+        },
+        {
+          "value": "intact female"
+        },
+        {
+          "value": "intact male"
+        }
+      ]
+    },
+    "ArchStrucEnum": {
+      "name": "ArchStrucEnum",
+      "values": [
+        {
+          "value": "building"
+        },
+        {
+          "value": "home"
+        },
+        {
+          "value": "shed"
+        }
+      ]
+    },
+    "BinParamEnum": {
+      "name": "BinParamEnum",
+      "values": [
+        {
+          "value": "codon usage"
+        },
+        {
+          "value": "combination"
+        },
+        {
+          "value": "coverage"
+        },
+        {
+          "value": "homology search"
+        },
+        {
+          "value": "kmer"
+        }
+      ]
+    },
+    "BioticRelationshipEnum": {
+      "name": "BioticRelationshipEnum",
+      "values": [
+        {
+          "value": "commensalism"
+        },
+        {
+          "value": "free living"
+        },
+        {
+          "value": "mutualism"
+        },
+        {
+          "value": "parasitism"
+        },
+        {
+          "value": "symbiotic"
+        }
+      ]
+    },
+    "BuildingSettingEnum": {
+      "name": "BuildingSettingEnum",
+      "values": [
+        {
+          "value": "exurban"
+        },
+        {
+          "value": "rural"
+        },
+        {
+          "value": "suburban"
+        },
+        {
+          "value": "urban"
+        }
+      ]
+    },
+    "BuildDocsEnum": {
+      "name": "BuildDocsEnum",
+      "values": [
+        {
+          "value": "building information model"
+        },
+        {
+          "value": "commissioning report"
+        },
+        {
+          "value": "complaint logs"
+        },
+        {
+          "value": "contract administration"
+        },
+        {
+          "value": "cost estimate"
+        },
+        {
+          "value": "janitorial schedules or logs"
+        },
+        {
+          "value": "maintenance plans"
+        },
+        {
+          "value": "schedule"
+        },
+        {
+          "value": "sections"
+        },
+        {
+          "value": "shop drawings"
+        },
+        {
+          "value": "submittals"
+        },
+        {
+          "value": "ventilation system"
+        },
+        {
+          "value": "windows"
+        }
+      ]
+    },
+    "BuildOccupTypeEnum": {
+      "name": "BuildOccupTypeEnum",
+      "values": [
+        {
+          "value": "airport"
+        },
+        {
+          "value": "commercial"
+        },
+        {
+          "value": "health care"
+        },
+        {
+          "value": "high rise"
+        },
+        {
+          "value": "low rise"
+        },
+        {
+          "value": "market"
+        },
+        {
+          "value": "office"
+        },
+        {
+          "value": "residence"
+        },
+        {
+          "value": "residential"
+        },
+        {
+          "value": "restaurant"
+        },
+        {
+          "value": "school"
+        },
+        {
+          "value": "sports complex"
+        },
+        {
+          "value": "wood framed"
+        }
+      ]
+    },
+    "BuiltStrucSetEnum": {
+      "name": "BuiltStrucSetEnum",
+      "values": [
+        {
+          "value": "rural"
+        },
+        {
+          "value": "urban"
+        }
+      ]
+    },
+    "CeilFinishMatEnum": {
+      "name": "CeilFinishMatEnum",
+      "values": [
+        {
+          "value": "PVC"
+        },
+        {
+          "value": "drywall"
+        },
+        {
+          "value": "fiberglass"
+        },
+        {
+          "value": "metal"
+        },
+        {
+          "value": "mineral fibre"
+        },
+        {
+          "value": "mineral wool/calcium silicate"
+        },
+        {
+          "value": "plasterboard"
+        },
+        {
+          "value": "stucco"
+        },
+        {
+          "value": "tiles"
+        },
+        {
+          "value": "wood"
+        }
+      ]
+    },
+    "CeilStrucEnum": {
+      "name": "CeilStrucEnum",
+      "values": [
+        {
+          "value": "concrete"
+        },
+        {
+          "value": "wood frame"
+        }
+      ]
+    },
+    "CeilTypeEnum": {
+      "name": "CeilTypeEnum",
+      "values": [
+        {
+          "value": "barrel-shaped"
+        },
+        {
+          "value": "cathedral"
+        },
+        {
+          "value": "coffered"
+        },
+        {
+          "value": "concave"
+        },
+        {
+          "value": "cove"
+        },
+        {
+          "value": "dropped"
+        },
+        {
+          "value": "stretched"
+        }
+      ]
+    },
+    "ComplApprEnum": {
+      "name": "ComplApprEnum",
+      "values": [
+        {
+          "value": "marker gene"
+        },
+        {
+          "value": "other"
+        },
+        {
+          "value": "reference based"
+        }
+      ]
+    },
+    "ContamScreenInputEnum": {
+      "name": "ContamScreenInputEnum",
+      "values": [
+        {
+          "value": "contigs"
+        },
+        {
+          "value": "reads"
+        }
+      ]
+    },
+    "CultResultEnum": {
+      "name": "CultResultEnum",
+      "values": [
+        {
+          "value": "absent"
+        },
+        {
+          "value": "active"
+        },
+        {
+          "value": "inactive"
+        },
+        {
+          "value": "negative"
+        },
+        {
+          "value": "no"
+        },
+        {
+          "value": "positive"
+        },
+        {
+          "value": "present"
+        },
+        {
+          "value": "yes"
+        }
+      ]
+    },
+    "DeposEnvEnum": {
+      "name": "DeposEnvEnum",
+      "values": [
+        {
+          "value": "Continental - Aeolian"
+        },
+        {
+          "value": "Continental - Alluvial"
+        },
+        {
+          "value": "Continental - Fluvial"
+        },
+        {
+          "value": "Continental - Lacustrine"
+        },
+        {
+          "value": "Marine - Deep"
+        },
+        {
+          "value": "Marine - Reef"
+        },
+        {
+          "value": "Marine - Shallow"
+        },
+        {
+          "value": "Other - Evaporite"
+        },
+        {
+          "value": "Other - Glacial"
+        },
+        {
+          "value": "Other - Volcanic"
+        },
+        {
+          "value": "Transitional - Beach"
+        },
+        {
+          "value": "Transitional - Deltaic"
+        },
+        {
+          "value": "Transitional - Lagoonal"
+        },
+        {
+          "value": "Transitional - Lake"
+        },
+        {
+          "value": "Transitional - Tidal"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "DominantHandEnum": {
+      "name": "DominantHandEnum",
+      "values": [
+        {
+          "value": "ambidextrous"
+        },
+        {
+          "value": "left"
+        },
+        {
+          "value": "right"
+        }
+      ]
+    },
+    "DoorCompTypeEnum": {
+      "name": "DoorCompTypeEnum",
+      "values": [
+        {
+          "value": "metal covered"
+        },
+        {
+          "value": "revolving"
+        },
+        {
+          "value": "sliding"
+        },
+        {
+          "value": "telescopic"
+        }
+      ]
+    },
+    "DoorDirectEnum": {
+      "name": "DoorDirectEnum",
+      "values": [
+        {
+          "value": "inward"
+        },
+        {
+          "value": "outward"
+        },
+        {
+          "value": "sideways"
+        }
+      ]
+    },
+    "DoorMatEnum": {
+      "name": "DoorMatEnum",
+      "values": [
+        {
+          "value": "aluminum"
+        },
+        {
+          "value": "cellular PVC"
+        },
+        {
+          "value": "engineered plastic"
+        },
+        {
+          "value": "fiberboard"
+        },
+        {
+          "value": "fiberglass"
+        },
+        {
+          "value": "metal"
+        },
+        {
+          "value": "thermoplastic alloy"
+        },
+        {
+          "value": "vinyl"
+        },
+        {
+          "value": "wood"
+        },
+        {
+          "value": "wood/plastic composite"
+        }
+      ]
+    },
+    "DoorMoveEnum": {
+      "name": "DoorMoveEnum",
+      "values": [
+        {
+          "value": "collapsible"
+        },
+        {
+          "value": "folding"
+        },
+        {
+          "value": "revolving"
+        },
+        {
+          "value": "rolling shutter"
+        },
+        {
+          "value": "sliding"
+        },
+        {
+          "value": "swinging"
+        }
+      ]
+    },
+    "DoorTypeEnum": {
+      "name": "DoorTypeEnum",
+      "values": [
+        {
+          "value": "composite"
+        },
+        {
+          "value": "metal"
+        },
+        {
+          "value": "wooden"
+        }
+      ]
+    },
+    "DoorTypeMetalEnum": {
+      "name": "DoorTypeMetalEnum",
+      "values": [
+        {
+          "value": "collapsible"
+        },
+        {
+          "value": "corrugated steel"
+        },
+        {
+          "value": "hollow"
+        },
+        {
+          "value": "rolling shutters"
+        },
+        {
+          "value": "steel plate"
+        }
+      ]
+    },
+    "DrainageClassEnum": {
+      "name": "DrainageClassEnum",
+      "values": [
+        {
+          "value": "excessively drained"
+        },
+        {
+          "value": "moderately well"
+        },
+        {
+          "value": "poorly"
+        },
+        {
+          "value": "somewhat poorly"
+        },
+        {
+          "value": "very poorly"
+        },
+        {
+          "value": "well"
+        }
+      ]
+    },
+    "DrawingsEnum": {
+      "name": "DrawingsEnum",
+      "values": [
+        {
+          "value": "as built"
+        },
+        {
+          "value": "bid"
+        },
+        {
+          "value": "building navigation map"
+        },
+        {
+          "value": "construction"
+        },
+        {
+          "value": "design"
+        },
+        {
+          "value": "diagram"
+        },
+        {
+          "value": "operation"
+        },
+        {
+          "value": "sketch"
+        }
+      ]
+    },
+    "ExtrWeatherEventEnum": {
+      "name": "ExtrWeatherEventEnum",
+      "values": [
+        {
+          "value": "drought"
+        },
+        {
+          "value": "dust storm"
+        },
+        {
+          "value": "extreme cold"
+        },
+        {
+          "value": "extreme heat"
+        },
+        {
+          "value": "flood"
+        },
+        {
+          "value": "frost"
+        },
+        {
+          "value": "hail"
+        },
+        {
+          "value": "high precipitation"
+        },
+        {
+          "value": "high winds"
+        }
+      ]
+    },
+    "FacilityTypeEnum": {
+      "name": "FacilityTypeEnum",
+      "values": [
+        {
+          "value": "ambient storage"
+        },
+        {
+          "value": "caterer-catering point"
+        },
+        {
+          "value": "distribution"
+        },
+        {
+          "value": "frozen storage"
+        },
+        {
+          "value": "importer-broker"
+        },
+        {
+          "value": "interstate conveyance"
+        },
+        {
+          "value": "labeler-relabeler"
+        },
+        {
+          "value": "manufacturing-processing"
+        },
+        {
+          "value": "packaging"
+        },
+        {
+          "value": "refrigerated storage"
+        },
+        {
+          "value": "storage"
+        }
+      ]
+    },
+    "FaoClassEnum": {
+      "name": "FaoClassEnum",
+      "values": [
+        {
+          "value": "Acrisols"
+        },
+        {
+          "value": "Alisols"
+        },
+        {
+          "value": "Andosols"
+        },
+        {
+          "value": "Anthrosols"
+        },
+        {
+          "value": "Arenosols"
+        },
+        {
+          "value": "Calcisols"
+        },
+        {
+          "value": "Cambisols"
+        },
+        {
+          "value": "Chernozems"
+        },
+        {
+          "value": "Cryosols"
+        },
+        {
+          "value": "Durisols"
+        },
+        {
+          "value": "Ferralsols"
+        },
+        {
+          "value": "Fluvisols"
+        },
+        {
+          "value": "Gleysols"
+        },
+        {
+          "value": "Greyzems"
+        },
+        {
+          "value": "Gypsisols"
+        },
+        {
+          "value": "Histosols"
+        },
+        {
+          "value": "Kastanozems"
+        },
+        {
+          "value": "Lithosols"
+        },
+        {
+          "value": "Leptosols"
+        },
+        {
+          "value": "Lixisols"
+        },
+        {
+          "value": "Luvisols"
+        },
+        {
+          "value": "Nitosols"
+        },
+        {
+          "value": "Phaeozems"
+        },
+        {
+          "value": "Planosols"
+        },
+        {
+          "value": "Plinthosols"
+        },
+        {
+          "value": "Podzols"
+        },
+        {
+          "value": "Podzoluvisols"
+        },
+        {
+          "value": "Rankers"
+        },
+        {
+          "value": "Regosols"
+        },
+        {
+          "value": "Rendzinas"
+        },
+        {
+          "value": "Solonchaks"
+        },
+        {
+          "value": "Solonetz"
+        },
+        {
+          "value": "Stagnosols"
+        },
+        {
+          "value": "Technosols"
+        },
+        {
+          "value": "Umbrisols"
+        },
+        {
+          "value": "Vertisols"
+        },
+        {
+          "value": "Yermosols"
+        }
+      ]
+    },
+    "FarmWaterSourceEnum": {
+      "name": "FarmWaterSourceEnum",
+      "values": [
+        {
+          "value": "brackish"
+        },
+        {
+          "value": "canal"
+        },
+        {
+          "value": "collected rainwater"
+        },
+        {
+          "value": "ditch"
+        },
+        {
+          "value": "estuary"
+        },
+        {
+          "value": "freshwater"
+        },
+        {
+          "value": "lake"
+        },
+        {
+          "value": "manmade"
+        },
+        {
+          "value": "melt pond"
+        },
+        {
+          "value": "municipal"
+        },
+        {
+          "value": "natural"
+        },
+        {
+          "value": "pond"
+        },
+        {
+          "value": "reservior"
+        },
+        {
+          "value": "river"
+        },
+        {
+          "value": "saline"
+        },
+        {
+          "value": "storage tank"
+        },
+        {
+          "value": "stream"
+        },
+        {
+          "value": "well"
+        }
+      ]
+    },
+    "FilterTypeEnum": {
+      "name": "FilterTypeEnum",
+      "values": [
+        {
+          "value": "HEPA"
+        },
+        {
+          "value": "chemical air filter"
+        },
+        {
+          "value": "electrostatic"
+        },
+        {
+          "value": "gas-phase or ultraviolet air treatments"
+        },
+        {
+          "value": "low-MERV pleated media"
+        },
+        {
+          "value": "particulate air filter"
+        }
+      ]
+    },
+    "FireplaceTypeEnum": {
+      "name": "FireplaceTypeEnum",
+      "values": [
+        {
+          "value": "gas burning"
+        },
+        {
+          "value": "wood burning"
+        }
+      ]
+    },
+    "FloorStrucEnum": {
+      "name": "FloorStrucEnum",
+      "values": [
+        {
+          "value": "balcony"
+        },
+        {
+          "value": "concrete"
+        },
+        {
+          "value": "floating floor"
+        },
+        {
+          "value": "glass floor"
+        },
+        {
+          "value": "raised floor"
+        },
+        {
+          "value": "sprung floor"
+        },
+        {
+          "value": "wood-framed"
+        }
+      ]
+    },
+    "FloorWaterMoldEnum": {
+      "name": "FloorWaterMoldEnum",
+      "values": [
+        {
+          "value": "bulging walls"
+        },
+        {
+          "value": "ceiling discoloration"
+        },
+        {
+          "value": "condensation"
+        },
+        {
+          "value": "floor discoloration"
+        },
+        {
+          "value": "mold odor"
+        },
+        {
+          "value": "peeling paint or wallpaper"
+        },
+        {
+          "value": "wall discoloration"
+        },
+        {
+          "value": "water stains"
+        },
+        {
+          "value": "wet floor"
+        }
+      ]
+    },
+    "FoodCleanProcEnum": {
+      "name": "FoodCleanProcEnum",
+      "values": [
+        {
+          "value": "drum and drain"
+        },
+        {
+          "value": "manual spinner"
+        },
+        {
+          "value": "rinsed with sanitizer solution"
+        },
+        {
+          "value": "rinsed with water"
+        },
+        {
+          "value": "scrubbed with brush"
+        },
+        {
+          "value": "scrubbed with hand"
+        },
+        {
+          "value": "soaking"
+        }
+      ]
+    },
+    "FoodTraceListEnum": {
+      "name": "FoodTraceListEnum",
+      "values": [
+        {
+          "value": "cheeses-other than hard cheeses"
+        },
+        {
+          "value": "crustaceans"
+        },
+        {
+          "value": "cucumbers"
+        },
+        {
+          "value": "finfish-including smoked finfish"
+        },
+        {
+          "value": "fruits and vegetables-fresh cut"
+        },
+        {
+          "value": "herbs-fresh"
+        },
+        {
+          "value": "leafy greens-including fresh cut leafy greens"
+        },
+        {
+          "value": "melons"
+        },
+        {
+          "value": "mollusks-bivalves"
+        },
+        {
+          "value": "nut butter"
+        },
+        {
+          "value": "peppers"
+        },
+        {
+          "value": "ready to eat deli salads"
+        },
+        {
+          "value": "shell eggs"
+        },
+        {
+          "value": "sprouts"
+        },
+        {
+          "value": "tomatoes"
+        },
+        {
+          "value": "tropical tree fruits"
+        }
+      ]
+    },
+    "FreqCleanEnum": {
+      "name": "FreqCleanEnum",
+      "values": [
+        {
+          "value": "Annually"
+        },
+        {
+          "value": "Daily"
+        },
+        {
+          "value": "Monthly"
+        },
+        {
+          "value": "Quarterly"
+        },
+        {
+          "value": "Weekly"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "FurnitureEnum": {
+      "name": "FurnitureEnum",
+      "values": [
+        {
+          "value": "cabinet"
+        },
+        {
+          "value": "chair"
+        },
+        {
+          "value": "desks"
+        }
+      ]
+    },
+    "GenderRestroomEnum": {
+      "name": "GenderRestroomEnum",
+      "values": [
+        {
+          "value": "all gender"
+        },
+        {
+          "value": "female"
+        },
+        {
+          "value": "gender neutral"
+        },
+        {
+          "value": "male"
+        },
+        {
+          "value": "male and female"
+        },
+        {
+          "value": "unisex"
+        }
+      ]
+    },
+    "ViralGenomeTypeEnum": {
+      "name": "ViralGenomeTypeEnum",
+      "description": "Types of viral genomes based on Baltimore classification",
+      "values": [
+        {
+          "value": "DNA",
+          "meaning": "SO:0000352"
+        },
+        {
+          "value": "dsDNA",
+          "meaning": "SO:0001198"
+        },
+        {
+          "value": "ssDNA"
+        },
+        {
+          "value": "RNA",
+          "meaning": "SO:0000356"
+        },
+        {
+          "value": "dsRNA",
+          "meaning": "SO:0001169"
+        },
+        {
+          "value": "ssRNA",
+          "meaning": "SO:0001199"
+        },
+        {
+          "value": "ssRNA (+)",
+          "meaning": "SO:0001201"
+        },
+        {
+          "value": "ssRNA (-)",
+          "meaning": "SO:0001200"
+        },
+        {
+          "value": "mixed"
+        },
+        {
+          "value": "uncharacterized"
+        }
+      ]
+    },
+    "GrowthHabitEnum": {
+      "name": "GrowthHabitEnum",
+      "values": [
+        {
+          "value": "erect"
+        },
+        {
+          "value": "prostrate"
+        },
+        {
+          "value": "semi-erect"
+        },
+        {
+          "value": "spreading"
+        }
+      ]
+    },
+    "HandidnessEnum": {
+      "name": "HandidnessEnum",
+      "values": [
+        {
+          "value": "ambidexterity"
+        },
+        {
+          "value": "left handedness"
+        },
+        {
+          "value": "mixed-handedness"
+        },
+        {
+          "value": "right handedness"
+        }
+      ]
+    },
+    "HcrEnum": {
+      "name": "HcrEnum",
+      "values": [
+        {
+          "value": "Coalbed"
+        },
+        {
+          "value": "Gas Reservoir"
+        },
+        {
+          "value": "Oil Reservoir"
+        },
+        {
+          "value": "Oil Sand"
+        },
+        {
+          "value": "Shale"
+        },
+        {
+          "value": "Tight Gas Reservoir"
+        },
+        {
+          "value": "Tight Oil Reservoir"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "HcProducedEnum": {
+      "name": "HcProducedEnum",
+      "values": [
+        {
+          "value": "Bitumen"
+        },
+        {
+          "value": "Coalbed Methane"
+        },
+        {
+          "value": "Gas"
+        },
+        {
+          "value": "Gas-Condensate"
+        },
+        {
+          "value": "Oil"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "HeatCoolTypeEnum": {
+      "name": "HeatCoolTypeEnum",
+      "values": [
+        {
+          "value": "forced air system"
+        },
+        {
+          "value": "heat pump"
+        },
+        {
+          "value": "radiant system"
+        },
+        {
+          "value": "steam forced heat"
+        },
+        {
+          "value": "wood stove"
+        }
+      ]
+    },
+    "HeatSysDelivMethEnum": {
+      "name": "HeatSysDelivMethEnum",
+      "values": [
+        {
+          "value": "conductive"
+        },
+        {
+          "value": "radiant"
+        }
+      ]
+    },
+    "HostCellularLocEnum": {
+      "name": "HostCellularLocEnum",
+      "values": [
+        {
+          "value": "extracellular"
+        },
+        {
+          "value": "intracellular"
+        },
+        {
+          "value": "not determined"
+        }
+      ]
+    },
+    "HostDependenceEnum": {
+      "name": "HostDependenceEnum",
+      "values": [
+        {
+          "value": "facultative"
+        },
+        {
+          "value": "obligate"
+        }
+      ]
+    },
+    "HostPredApprEnum": {
+      "name": "HostPredApprEnum",
+      "values": [
+        {
+          "value": "CRISPR spacer match"
+        },
+        {
+          "value": "co-occurrence"
+        },
+        {
+          "value": "combination"
+        },
+        {
+          "value": "host sequence similarity"
+        },
+        {
+          "value": "kmer similarity"
+        },
+        {
+          "value": "other"
+        },
+        {
+          "value": "provirus"
+        }
+      ]
+    },
+    "HostSpecificityEnum": {
+      "name": "HostSpecificityEnum",
+      "values": [
+        {
+          "value": "family-specific"
+        },
+        {
+          "value": "generalist"
+        },
+        {
+          "value": "genus-specific"
+        },
+        {
+          "value": "species-specific"
+        }
+      ]
+    },
+    "IndoorSpaceEnum": {
+      "name": "IndoorSpaceEnum",
+      "values": [
+        {
+          "value": "bathroom"
+        },
+        {
+          "value": "bedroom"
+        },
+        {
+          "value": "elevator"
+        },
+        {
+          "value": "foyer"
+        },
+        {
+          "value": "hallway"
+        },
+        {
+          "value": "kitchen"
+        },
+        {
+          "value": "locker room"
+        },
+        {
+          "value": "office"
+        }
+      ]
+    },
+    "IndoorSurfEnum": {
+      "name": "IndoorSurfEnum",
+      "values": [
+        {
+          "value": "cabinet"
+        },
+        {
+          "value": "ceiling"
+        },
+        {
+          "value": "counter top"
+        },
+        {
+          "value": "door"
+        },
+        {
+          "value": "shelving"
+        },
+        {
+          "value": "vent cover"
+        },
+        {
+          "value": "wall"
+        },
+        {
+          "value": "window"
+        }
+      ]
+    },
+    "LibLayoutEnum": {
+      "name": "LibLayoutEnum",
+      "values": [
+        {
+          "value": "other"
+        },
+        {
+          "value": "paired"
+        },
+        {
+          "value": "single"
+        },
+        {
+          "value": "vector"
+        }
+      ]
+    },
+    "LightTypeEnum": {
+      "name": "LightTypeEnum",
+      "values": [
+        {
+          "value": "desk lamp"
+        },
+        {
+          "value": "electric light"
+        },
+        {
+          "value": "fluorescent lights"
+        },
+        {
+          "value": "natural light"
+        },
+        {
+          "value": "none"
+        }
+      ]
+    },
+    "LithologyEnum": {
+      "name": "LithologyEnum",
+      "values": [
+        {
+          "value": "Basement"
+        },
+        {
+          "value": "Chalk"
+        },
+        {
+          "value": "Chert"
+        },
+        {
+          "value": "Coal"
+        },
+        {
+          "value": "Conglomerate"
+        },
+        {
+          "value": "Diatomite"
+        },
+        {
+          "value": "Dolomite"
+        },
+        {
+          "value": "Limestone"
+        },
+        {
+          "value": "Sandstone"
+        },
+        {
+          "value": "Shale"
+        },
+        {
+          "value": "Siltstone"
+        },
+        {
+          "value": "Volcanic"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "MagCovSoftwareEnum": {
+      "name": "MagCovSoftwareEnum",
+      "values": [
+        {
+          "value": "bbmap"
+        },
+        {
+          "value": "bowtie"
+        },
+        {
+          "value": "bwa"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "MechStrucEnum": {
+      "name": "MechStrucEnum",
+      "values": [
+        {
+          "value": "boat"
+        },
+        {
+          "value": "bus"
+        },
+        {
+          "value": "car"
+        },
+        {
+          "value": "carriage"
+        },
+        {
+          "value": "coach"
+        },
+        {
+          "value": "elevator"
+        },
+        {
+          "value": "escalator"
+        },
+        {
+          "value": "subway"
+        },
+        {
+          "value": "train"
+        }
+      ]
+    },
+    "ModeTransmissionEnum": {
+      "name": "ModeTransmissionEnum",
+      "values": [
+        {
+          "value": "horizontal:castrator"
+        },
+        {
+          "value": "horizontal:directly transmitted"
+        },
+        {
+          "value": "horizontal:micropredator"
+        },
+        {
+          "value": "horizontal:parasitoid"
+        },
+        {
+          "value": "horizontal:trophically transmitted"
+        },
+        {
+          "value": "horizontal:vector transmitted"
+        },
+        {
+          "value": "vertical"
+        }
+      ]
+    },
+    "NegContTypeEnum": {
+      "name": "NegContTypeEnum",
+      "values": [
+        {
+          "value": "DNA-free PCR mix"
+        },
+        {
+          "value": "distilled water"
+        },
+        {
+          "value": "empty collection device"
+        },
+        {
+          "value": "empty collection tube"
+        },
+        {
+          "value": "phosphate buffer"
+        },
+        {
+          "value": "sterile swab"
+        },
+        {
+          "value": "sterile syringe"
+        }
+      ]
+    },
+    "OccupDocumentEnum": {
+      "name": "OccupDocumentEnum",
+      "values": [
+        {
+          "value": "automated count"
+        },
+        {
+          "value": "estimate"
+        },
+        {
+          "value": "manual count"
+        },
+        {
+          "value": "videos"
+        }
+      ]
+    },
+    "OxyStatSampEnum": {
+      "name": "OxyStatSampEnum",
+      "values": [
+        {
+          "value": "aerobic"
+        },
+        {
+          "value": "anaerobic"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "PlantReprodCropEnum": {
+      "name": "PlantReprodCropEnum",
+      "values": [
+        {
+          "value": "plant cutting"
+        },
+        {
+          "value": "pregerminated seed"
+        },
+        {
+          "value": "ratoon"
+        },
+        {
+          "value": "seed"
+        },
+        {
+          "value": "seedling"
+        },
+        {
+          "value": "whole mature plant"
+        }
+      ]
+    },
+    "PlantSexEnum": {
+      "name": "PlantSexEnum",
+      "values": [
+        {
+          "value": "Androdioecious"
+        },
+        {
+          "value": "Androecious"
+        },
+        {
+          "value": "Androgynomonoecious"
+        },
+        {
+          "value": "Androgynous"
+        },
+        {
+          "value": "Andromonoecious"
+        },
+        {
+          "value": "Bisexual"
+        },
+        {
+          "value": "Dichogamous"
+        },
+        {
+          "value": "Diclinous"
+        },
+        {
+          "value": "Dioecious"
+        },
+        {
+          "value": "Gynodioecious"
+        },
+        {
+          "value": "Gynoecious"
+        },
+        {
+          "value": "Gynomonoecious"
+        },
+        {
+          "value": "Hermaphroditic"
+        },
+        {
+          "value": "Imperfect"
+        },
+        {
+          "value": "Monoclinous"
+        },
+        {
+          "value": "Monoecious"
+        },
+        {
+          "value": "Perfect"
+        },
+        {
+          "value": "Polygamodioecious"
+        },
+        {
+          "value": "Polygamomonoecious"
+        },
+        {
+          "value": "Polygamous"
+        },
+        {
+          "value": "Protandrous"
+        },
+        {
+          "value": "Protogynous"
+        },
+        {
+          "value": "Subandroecious"
+        },
+        {
+          "value": "Subdioecious"
+        },
+        {
+          "value": "Subgynoecious"
+        },
+        {
+          "value": "Synoecious"
+        },
+        {
+          "value": "Trimonoecious"
+        },
+        {
+          "value": "Trioecious"
+        },
+        {
+          "value": "Unisexual"
+        }
+      ]
+    },
+    "PredGenomeStrucEnum": {
+      "name": "PredGenomeStrucEnum",
+      "values": [
+        {
+          "value": "non-segmented"
+        },
+        {
+          "value": "segmented"
+        },
+        {
+          "value": "undetermined"
+        }
+      ]
+    },
+    "ProfilePositionEnum": {
+      "name": "ProfilePositionEnum",
+      "values": [
+        {
+          "value": "backslope"
+        },
+        {
+          "value": "footslope"
+        },
+        {
+          "value": "shoulder"
+        },
+        {
+          "value": "summit"
+        },
+        {
+          "value": "toeslope"
+        }
+      ]
+    },
+    "QuadPosEnum": {
+      "name": "QuadPosEnum",
+      "values": [
+        {
+          "value": "East side"
+        },
+        {
+          "value": "North side"
+        },
+        {
+          "value": "South side"
+        },
+        {
+          "value": "West side"
+        }
+      ]
+    },
+    "RelSampLocEnum": {
+      "name": "RelSampLocEnum",
+      "values": [
+        {
+          "value": "center of car"
+        },
+        {
+          "value": "edge of car"
+        },
+        {
+          "value": "under a seat"
+        }
+      ]
+    },
+    "RelToOxygenEnum": {
+      "name": "RelToOxygenEnum",
+      "values": [
+        {
+          "value": "aerobe"
+        },
+        {
+          "value": "anaerobe"
+        },
+        {
+          "value": "facultative"
+        },
+        {
+          "value": "microaerophilic"
+        },
+        {
+          "value": "microanaerobe"
+        },
+        {
+          "value": "obligate aerobe"
+        },
+        {
+          "value": "obligate anaerobe"
+        }
+      ]
+    },
+    "RoomCondtEnum": {
+      "name": "RoomCondtEnum",
+      "values": [
+        {
+          "value": "damaged"
+        },
+        {
+          "value": "needs repair"
+        },
+        {
+          "value": "new"
+        },
+        {
+          "value": "rupture"
+        },
+        {
+          "value": "visible signs of mold/mildew"
+        },
+        {
+          "value": "visible wear"
+        }
+      ]
+    },
+    "RoomConnectedEnum": {
+      "name": "RoomConnectedEnum",
+      "values": [
+        {
+          "value": "attic"
+        },
+        {
+          "value": "bathroom"
+        },
+        {
+          "value": "closet"
+        },
+        {
+          "value": "conference room"
+        },
+        {
+          "value": "elevator"
+        },
+        {
+          "value": "examining room"
+        },
+        {
+          "value": "hallway"
+        },
+        {
+          "value": "kitchen"
+        },
+        {
+          "value": "mail room"
+        },
+        {
+          "value": "office"
+        },
+        {
+          "value": "stairwell"
+        }
+      ]
+    },
+    "RoomLocEnum": {
+      "name": "RoomLocEnum",
+      "values": [
+        {
+          "value": "corner room"
+        },
+        {
+          "value": "exterior wall"
+        },
+        {
+          "value": "interior room"
+        }
+      ]
+    },
+    "RoomSampPosEnum": {
+      "name": "RoomSampPosEnum",
+      "values": [
+        {
+          "value": "center"
+        },
+        {
+          "value": "east corner"
+        },
+        {
+          "value": "north corner"
+        },
+        {
+          "value": "northeast corner"
+        },
+        {
+          "value": "northwest corner"
+        },
+        {
+          "value": "south corner"
+        },
+        {
+          "value": "southeast corner"
+        },
+        {
+          "value": "southwest corner"
+        },
+        {
+          "value": "west corner"
+        }
+      ]
+    },
+    "RouteTransmissionEnum": {
+      "name": "RouteTransmissionEnum",
+      "values": [
+        {
+          "value": "environmental:faecal-oral"
+        },
+        {
+          "value": "transplacental"
+        },
+        {
+          "value": "vector-borne:vector penetration"
+        }
+      ]
+    },
+    "SampCaptStatusEnum": {
+      "name": "SampCaptStatusEnum",
+      "values": [
+        {
+          "value": "active surveillance in response to an outbreak"
+        },
+        {
+          "value": "active surveillance not initiated by an outbreak"
+        },
+        {
+          "value": "farm sample"
+        },
+        {
+          "value": "market sample"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "SampCollectPointEnum": {
+      "name": "SampCollectPointEnum",
+      "values": [
+        {
+          "value": "drilling rig"
+        },
+        {
+          "value": "other"
+        },
+        {
+          "value": "separator"
+        },
+        {
+          "value": "storage tank"
+        },
+        {
+          "value": "test well"
+        },
+        {
+          "value": "well"
+        },
+        {
+          "value": "wellhead"
+        }
+      ]
+    },
+    "SampDisStageEnum": {
+      "name": "SampDisStageEnum",
+      "values": [
+        {
+          "value": "dissemination"
+        },
+        {
+          "value": "growth and reproduction"
+        },
+        {
+          "value": "infection"
+        },
+        {
+          "value": "inoculation"
+        },
+        {
+          "value": "other"
+        },
+        {
+          "value": "penetration"
+        }
+      ]
+    },
+    "SampLocConditionEnum": {
+      "name": "SampLocConditionEnum",
+      "values": [
+        {
+          "value": "damaged"
+        },
+        {
+          "value": "new"
+        },
+        {
+          "value": "rupture"
+        },
+        {
+          "value": "visible signs of mold-mildew"
+        },
+        {
+          "value": "visible weariness repair"
+        }
+      ]
+    },
+    "SampSubtypeEnum": {
+      "name": "SampSubtypeEnum",
+      "values": [
+        {
+          "value": "biofilm"
+        },
+        {
+          "value": "not applicable"
+        },
+        {
+          "value": "oil phase"
+        },
+        {
+          "value": "other"
+        },
+        {
+          "value": "water phase"
+        }
+      ]
+    },
+    "SampSurfMoistureEnum": {
+      "name": "SampSurfMoistureEnum",
+      "values": [
+        {
+          "value": "intermittent moisture"
+        },
+        {
+          "value": "not present"
+        },
+        {
+          "value": "submerged"
+        }
+      ]
+    },
+    "SampTransportContEnum": {
+      "name": "SampTransportContEnum",
+      "values": [
+        {
+          "value": "bottle"
+        },
+        {
+          "value": "cooler"
+        },
+        {
+          "value": "glass vial"
+        },
+        {
+          "value": "plastic vial"
+        },
+        {
+          "value": "vendor supplied container"
+        }
+      ]
+    },
+    "SampWeatherEnum": {
+      "name": "SampWeatherEnum",
+      "values": [
+        {
+          "value": "clear sky"
+        },
+        {
+          "value": "cloudy"
+        },
+        {
+          "value": "foggy"
+        },
+        {
+          "value": "hail"
+        },
+        {
+          "value": "rain"
+        },
+        {
+          "value": "sleet"
+        },
+        {
+          "value": "snow"
+        },
+        {
+          "value": "sunny"
+        },
+        {
+          "value": "windy"
+        }
+      ]
+    },
+    "ScLysisApproachEnum": {
+      "name": "ScLysisApproachEnum",
+      "values": [
+        {
+          "value": "chemical"
+        },
+        {
+          "value": "combination"
+        },
+        {
+          "value": "enzymatic"
+        },
+        {
+          "value": "physical"
+        }
+      ]
+    },
+    "SeasonUseEnum": {
+      "name": "SeasonUseEnum",
+      "values": [
+        {
+          "value": "Fall"
+        },
+        {
+          "value": "Spring"
+        },
+        {
+          "value": "Summer"
+        },
+        {
+          "value": "Winter"
+        }
+      ]
+    },
+    "SedimentTypeEnum": {
+      "name": "SedimentTypeEnum",
+      "values": [
+        {
+          "value": "biogenous"
+        },
+        {
+          "value": "cosmogenous"
+        },
+        {
+          "value": "hydrogenous"
+        },
+        {
+          "value": "lithogenous"
+        }
+      ]
+    },
+    "SeqQualityCheckEnum": {
+      "name": "SeqQualityCheckEnum",
+      "values": [
+        {
+          "value": "manually edited"
+        },
+        {
+          "value": "none"
+        }
+      ]
+    },
+    "ShadingDeviceLocEnum": {
+      "name": "ShadingDeviceLocEnum",
+      "values": [
+        {
+          "value": "exterior"
+        },
+        {
+          "value": "interior"
+        }
+      ]
+    },
+    "ShadingDeviceTypeEnum": {
+      "name": "ShadingDeviceTypeEnum",
+      "values": [
+        {
+          "value": "bahama shutters"
+        },
+        {
+          "value": "exterior roll blind"
+        },
+        {
+          "value": "gambrel awning"
+        },
+        {
+          "value": "hood awning"
+        },
+        {
+          "value": "porchroller awning"
+        },
+        {
+          "value": "sarasota shutters"
+        },
+        {
+          "value": "slatted aluminum"
+        },
+        {
+          "value": "solid aluminum awning"
+        },
+        {
+          "value": "sun screen"
+        },
+        {
+          "value": "tree"
+        },
+        {
+          "value": "trellis"
+        },
+        {
+          "value": "venetian awning"
+        }
+      ]
+    },
+    "CompassDirections8Enum": {
+      "name": "CompassDirections8Enum",
+      "values": [
+        {
+          "value": "east"
+        },
+        {
+          "value": "north"
+        },
+        {
+          "value": "northeast"
+        },
+        {
+          "value": "northwest"
+        },
+        {
+          "value": "south"
+        },
+        {
+          "value": "southeast"
+        },
+        {
+          "value": "southwest"
+        },
+        {
+          "value": "west"
+        }
+      ]
+    },
+    "MoldVisibilityEnum": {
+      "name": "MoldVisibilityEnum",
+      "values": [
+        {
+          "value": "no presence of mold visible"
+        },
+        {
+          "value": "presence of mold visible"
+        }
+      ]
+    },
+    "DamagedRupturedEnum": {
+      "name": "DamagedRupturedEnum",
+      "values": [
+        {
+          "value": "damaged"
+        },
+        {
+          "value": "needs repair"
+        },
+        {
+          "value": "new"
+        },
+        {
+          "value": "rupture"
+        },
+        {
+          "value": "visible wear"
+        }
+      ]
+    },
+    "DamagedEnum": {
+      "name": "DamagedEnum",
+      "values": [
+        {
+          "value": "damaged"
+        },
+        {
+          "value": "needs repair"
+        },
+        {
+          "value": "new"
+        },
+        {
+          "value": "rupture"
+        },
+        {
+          "value": "visible wear"
+        }
+      ]
+    },
+    "CeilingWallTextureEnum": {
+      "name": "CeilingWallTextureEnum",
+      "values": [
+        {
+          "value": "Santa-Fe texture"
+        },
+        {
+          "value": "crows feet"
+        },
+        {
+          "value": "crows-foot stomp"
+        },
+        {
+          "value": "double skip"
+        },
+        {
+          "value": "hawk and trowel"
+        },
+        {
+          "value": "knockdown"
+        },
+        {
+          "value": "orange peel"
+        },
+        {
+          "value": "popcorn"
+        },
+        {
+          "value": "rosebud stomp"
+        },
+        {
+          "value": "skip trowel"
+        },
+        {
+          "value": "smooth"
+        },
+        {
+          "value": "stomp knockdown"
+        },
+        {
+          "value": "swirl"
+        }
+      ]
+    },
+    "GeolAgeEnum": {
+      "name": "GeolAgeEnum",
+      "values": [
+        {
+          "value": "Archean"
+        },
+        {
+          "value": "Cambrian"
+        },
+        {
+          "value": "Carboniferous"
+        },
+        {
+          "value": "Cenozoic"
+        },
+        {
+          "value": "Cretaceous"
+        },
+        {
+          "value": "Devonian"
+        },
+        {
+          "value": "Jurassic"
+        },
+        {
+          "value": "Mesozoic"
+        },
+        {
+          "value": "Neogene"
+        },
+        {
+          "value": "Ordovician"
+        },
+        {
+          "value": "Paleogene"
+        },
+        {
+          "value": "Paleozoic"
+        },
+        {
+          "value": "Permian"
+        },
+        {
+          "value": "Precambrian"
+        },
+        {
+          "value": "Proterozoic"
+        },
+        {
+          "value": "Silurian"
+        },
+        {
+          "value": "Triassic"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "SoilHorizonEnum": {
+      "name": "SoilHorizonEnum",
+      "values": [
+        {
+          "value": "A horizon",
+          "description": "The surface horizon, also called topsoil. It has a defined soil structure, and is mostly made up of humus (decayed organic matter)."
+        },
+        {
+          "value": "B horizon",
+          "description": "Also known as the subsoil. It is greatly composed of material illuviated (washed in from) layers above it. It is typically denser than the A horizon and has a clayey texture."
+        },
+        {
+          "value": "C horizon",
+          "description": "Also known as the substratum is unconsolidated material deepest in the pit and closest to the bedrock."
+        },
+        {
+          "value": "E horizon",
+          "description": "Used to refer to subsurface horizons that have undergone a significant loss of minerals, also known as Eluviation (or leaching)."
+        },
+        {
+          "value": "O horizon",
+          "meaning": "http://purl.obolibrary.org/obo/ENVO_03600018",
+          "description": "The organic horizon. Typically at the top of the soil structure and is made up of mostly organic matter."
+        },
+        {
+          "value": "Permafrost",
+          "description": "Soil that continuously remains below 0 °C (32 °F) for two years or more."
+        },
+        {
+          "value": "R layer",
+          "description": "Hard bedrock, which is usually the lowest layer. It is characterized by tightly bound and unbreakable materials.",
+          "aliases": [
+            "R horizon"
+          ]
+        }
+      ]
+    },
+    "SoilTextureClassEnum": {
+      "name": "SoilTextureClassEnum",
+      "values": [
+        {
+          "value": "clay"
+        },
+        {
+          "value": "clay loam"
+        },
+        {
+          "value": "loam"
+        },
+        {
+          "value": "loamy sand"
+        },
+        {
+          "value": "sand"
+        },
+        {
+          "value": "sandy clay"
+        },
+        {
+          "value": "sandy clay loam"
+        },
+        {
+          "value": "sandy loam"
+        },
+        {
+          "value": "silt"
+        },
+        {
+          "value": "silt loam"
+        },
+        {
+          "value": "silty clay"
+        },
+        {
+          "value": "silty clay loam"
+        }
+      ]
+    },
+    "SortTechEnum": {
+      "name": "SortTechEnum",
+      "values": [
+        {
+          "value": "flow cytometric cell sorting"
+        },
+        {
+          "value": "lazer-tweezing"
+        },
+        {
+          "value": "microfluidics"
+        },
+        {
+          "value": "micromanipulation"
+        },
+        {
+          "value": "optical manipulation"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "SpaceTypStateEnum": {
+      "name": "SpaceTypStateEnum",
+      "values": [
+        {
+          "value": "typically occupied"
+        },
+        {
+          "value": "typically unoccupied"
+        }
+      ]
+    },
+    "SpecificEnum": {
+      "name": "SpecificEnum",
+      "values": [
+        {
+          "value": "as built"
+        },
+        {
+          "value": "bid"
+        },
+        {
+          "value": "construction"
+        },
+        {
+          "value": "design"
+        },
+        {
+          "value": "operation"
+        },
+        {
+          "value": "photos"
+        }
+      ]
+    },
+    "SrDepEnvEnum": {
+      "name": "SrDepEnvEnum",
+      "values": [
+        {
+          "value": "Fluvioldeltaic"
+        },
+        {
+          "value": "Fluviomarine"
+        },
+        {
+          "value": "Lacustine"
+        },
+        {
+          "value": "Marine"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "SrKerogTypeEnum": {
+      "name": "SrKerogTypeEnum",
+      "values": [
+        {
+          "value": "Type I"
+        },
+        {
+          "value": "Type II"
+        },
+        {
+          "value": "Type III"
+        },
+        {
+          "value": "Type IV"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "SrLithologyEnum": {
+      "name": "SrLithologyEnum",
+      "values": [
+        {
+          "value": "Biosilicieous"
+        },
+        {
+          "value": "Carbonate"
+        },
+        {
+          "value": "Clastic"
+        },
+        {
+          "value": "Coal"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "SubstructureTypeEnum": {
+      "name": "SubstructureTypeEnum",
+      "values": [
+        {
+          "value": "basement"
+        },
+        {
+          "value": "crawlspace"
+        },
+        {
+          "value": "slab on grade"
+        }
+      ]
+    },
+    "SurfAirContEnum": {
+      "name": "SurfAirContEnum",
+      "values": [
+        {
+          "value": "biocides"
+        },
+        {
+          "value": "biological contaminants"
+        },
+        {
+          "value": "dust"
+        },
+        {
+          "value": "nutrients"
+        },
+        {
+          "value": "organic matter"
+        },
+        {
+          "value": "particulate matter"
+        },
+        {
+          "value": "radon"
+        },
+        {
+          "value": "volatile organic compounds"
+        }
+      ]
+    },
+    "SurfMaterialEnum": {
+      "name": "SurfMaterialEnum",
+      "values": [
+        {
+          "value": "adobe"
+        },
+        {
+          "value": "carpet"
+        },
+        {
+          "value": "cinder blocks"
+        },
+        {
+          "value": "concrete"
+        },
+        {
+          "value": "glass"
+        },
+        {
+          "value": "hay bales"
+        },
+        {
+          "value": "metal"
+        },
+        {
+          "value": "paint"
+        },
+        {
+          "value": "plastic"
+        },
+        {
+          "value": "stainless steel"
+        },
+        {
+          "value": "stone"
+        },
+        {
+          "value": "stucco"
+        },
+        {
+          "value": "tile"
+        },
+        {
+          "value": "vinyl"
+        },
+        {
+          "value": "wood"
+        }
+      ]
+    },
+    "SymbiontHostRoleEnum": {
+      "name": "SymbiontHostRoleEnum",
+      "values": [
+        {
+          "value": "accidental"
+        },
+        {
+          "value": "dead-end"
+        },
+        {
+          "value": "definitive"
+        },
+        {
+          "value": "intermediate"
+        },
+        {
+          "value": "paratenic"
+        },
+        {
+          "value": "reservoir"
+        },
+        {
+          "value": "single host"
+        }
+      ]
+    },
+    "SymLifeCycleTypeEnum": {
+      "name": "SymLifeCycleTypeEnum",
+      "values": [
+        {
+          "value": "complex life cycle"
+        },
+        {
+          "value": "simple life cycle"
+        }
+      ]
+    },
+    "TaxIdentEnum": {
+      "name": "TaxIdentEnum",
+      "values": [
+        {
+          "value": "16S rRNA gene"
+        },
+        {
+          "value": "multi-marker approach"
+        },
+        {
+          "value": "other"
+        }
+      ]
+    },
+    "TidalStageEnum": {
+      "name": "TidalStageEnum",
+      "values": [
+        {
+          "value": "ebb tide"
+        },
+        {
+          "value": "flood tide"
+        },
+        {
+          "value": "high tide"
+        },
+        {
+          "value": "low tide"
+        }
+      ]
+    },
+    "TillageEnum": {
+      "name": "TillageEnum",
+      "values": [
+        {
+          "value": "chisel"
+        },
+        {
+          "value": "cutting disc"
+        },
+        {
+          "value": "disc plough"
+        },
+        {
+          "value": "drill"
+        },
+        {
+          "value": "mouldboard"
+        },
+        {
+          "value": "ridge till"
+        },
+        {
+          "value": "strip tillage"
+        },
+        {
+          "value": "tined"
+        },
+        {
+          "value": "zonal tillage"
+        }
+      ]
+    },
+    "TrainLineEnum": {
+      "name": "TrainLineEnum",
+      "values": [
+        {
+          "value": "green"
+        },
+        {
+          "value": "orange"
+        },
+        {
+          "value": "red"
+        }
+      ]
+    },
+    "TrainStatLocEnum": {
+      "name": "TrainStatLocEnum",
+      "values": [
+        {
+          "value": "forest hills"
+        },
+        {
+          "value": "riverside"
+        },
+        {
+          "value": "south station above ground"
+        },
+        {
+          "value": "south station amtrak"
+        },
+        {
+          "value": "south station underground"
+        }
+      ]
+    },
+    "TrainStopLocEnum": {
+      "name": "TrainStopLocEnum",
+      "values": [
+        {
+          "value": "downtown"
+        },
+        {
+          "value": "end"
+        },
+        {
+          "value": "mid"
+        }
+      ]
+    },
+    "TrophicLevelEnum": {
+      "name": "TrophicLevelEnum",
+      "values": [
+        {
+          "value": "autotroph"
+        },
+        {
+          "value": "carboxydotroph"
+        },
+        {
+          "value": "chemoautolithotroph"
+        },
+        {
+          "value": "chemoautotroph"
+        },
+        {
+          "value": "chemoheterotroph"
+        },
+        {
+          "value": "chemolithoautotroph"
+        },
+        {
+          "value": "chemolithotroph"
+        },
+        {
+          "value": "chemoorganoheterotroph"
+        },
+        {
+          "value": "chemoorganotroph"
+        },
+        {
+          "value": "chemosynthetic"
+        },
+        {
+          "value": "chemotroph"
+        },
+        {
+          "value": "copiotroph"
+        },
+        {
+          "value": "diazotroph"
+        },
+        {
+          "value": "facultative"
+        },
+        {
+          "value": "heterotroph"
+        },
+        {
+          "value": "lithoautotroph"
+        },
+        {
+          "value": "lithoheterotroph"
+        },
+        {
+          "value": "lithotroph"
+        },
+        {
+          "value": "methanotroph"
+        },
+        {
+          "value": "methylotroph"
+        },
+        {
+          "value": "mixotroph"
+        },
+        {
+          "value": "obligate"
+        },
+        {
+          "value": "oligotroph"
+        },
+        {
+          "value": "organoheterotroph"
+        },
+        {
+          "value": "organotroph"
+        },
+        {
+          "value": "photoautotroph"
+        },
+        {
+          "value": "photoheterotroph"
+        },
+        {
+          "value": "photolithoautotroph"
+        },
+        {
+          "value": "photolithotroph"
+        },
+        {
+          "value": "photosynthetic"
+        },
+        {
+          "value": "phototroph"
+        }
+      ]
+    },
+    "TypeOfSymbiosisEnum": {
+      "name": "TypeOfSymbiosisEnum",
+      "values": [
+        {
+          "value": "commensalistic"
+        },
+        {
+          "value": "mutualistic"
+        },
+        {
+          "value": "parasitic"
+        }
+      ]
+    },
+    "UrineCollectMethEnum": {
+      "name": "UrineCollectMethEnum",
+      "values": [
+        {
+          "value": "catheter"
+        },
+        {
+          "value": "clean catch"
+        }
+      ]
+    },
+    "UrobiomSexEnum": {
+      "name": "UrobiomSexEnum",
+      "values": [
+        {
+          "value": "female"
+        },
+        {
+          "value": "hermaphrodite"
+        },
+        {
+          "value": "male"
+        },
+        {
+          "value": "neuter"
+        }
+      ]
+    },
+    "VirusEnrichApprEnum": {
+      "name": "VirusEnrichApprEnum",
+      "values": [
+        {
+          "value": "CsCl density gradient"
+        },
+        {
+          "value": "DNAse"
+        },
+        {
+          "value": "FeCl Precipitation"
+        },
+        {
+          "value": "PEG Precipitation"
+        },
+        {
+          "value": "RNAse"
+        },
+        {
+          "value": "centrifugation"
+        },
+        {
+          "value": "filtration"
+        },
+        {
+          "value": "none"
+        },
+        {
+          "value": "other"
+        },
+        {
+          "value": "targeted sequence capture"
+        },
+        {
+          "value": "ultracentrifugation"
+        },
+        {
+          "value": "ultrafiltration"
+        }
+      ]
+    },
+    "WallConstTypeEnum": {
+      "name": "WallConstTypeEnum",
+      "values": [
+        {
+          "value": "fire resistive"
+        },
+        {
+          "value": "frame construction"
+        },
+        {
+          "value": "joisted masonry"
+        },
+        {
+          "value": "light noncombustible"
+        },
+        {
+          "value": "masonry noncombustible"
+        },
+        {
+          "value": "modified fire resistive"
+        }
+      ]
+    },
+    "WallFinishMatEnum": {
+      "name": "WallFinishMatEnum",
+      "values": [
+        {
+          "value": "acoustical treatment"
+        },
+        {
+          "value": "gypsum board"
+        },
+        {
+          "value": "gypsum plaster"
+        },
+        {
+          "value": "masonry"
+        },
+        {
+          "value": "metal"
+        },
+        {
+          "value": "plaster"
+        },
+        {
+          "value": "stone facing"
+        },
+        {
+          "value": "terrazzo"
+        },
+        {
+          "value": "tile"
+        },
+        {
+          "value": "veneer plaster"
+        },
+        {
+          "value": "wood"
+        }
+      ]
+    },
+    "WallSurfTreatmentEnum": {
+      "name": "WallSurfTreatmentEnum",
+      "values": [
+        {
+          "value": "fabric"
+        },
+        {
+          "value": "no treatment"
+        },
+        {
+          "value": "painted"
+        },
+        {
+          "value": "paneling"
+        },
+        {
+          "value": "stucco"
+        },
+        {
+          "value": "wall paper"
+        }
+      ]
+    },
+    "WaterFeatTypeEnum": {
+      "name": "WaterFeatTypeEnum",
+      "values": [
+        {
+          "value": "fountain"
+        },
+        {
+          "value": "pool"
+        },
+        {
+          "value": "standing feature"
+        },
+        {
+          "value": "stream"
+        },
+        {
+          "value": "waterfall"
+        }
+      ]
+    },
+    "WeekdayEnum": {
+      "name": "WeekdayEnum",
+      "values": [
+        {
+          "value": "Friday"
+        },
+        {
+          "value": "Monday"
+        },
+        {
+          "value": "Saturday"
+        },
+        {
+          "value": "Sunday"
+        },
+        {
+          "value": "Thursday"
+        },
+        {
+          "value": "Tuesday"
+        },
+        {
+          "value": "Wednesday"
+        }
+      ]
+    },
+    "WgaAmpApprEnum": {
+      "name": "WgaAmpApprEnum",
+      "values": [
+        {
+          "value": "mda based"
+        },
+        {
+          "value": "pcr based"
+        }
+      ]
+    },
+    "WindowCoverEnum": {
+      "name": "WindowCoverEnum",
+      "values": [
+        {
+          "value": "blinds"
+        },
+        {
+          "value": "curtains"
+        },
+        {
+          "value": "none"
+        }
+      ]
+    },
+    "WindowHorizPosEnum": {
+      "name": "WindowHorizPosEnum",
+      "values": [
+        {
+          "value": "left"
+        },
+        {
+          "value": "middle"
+        },
+        {
+          "value": "right"
+        }
+      ]
+    },
+    "WindowMatEnum": {
+      "name": "WindowMatEnum",
+      "values": [
+        {
+          "value": "clad"
+        },
+        {
+          "value": "fiberglass"
+        },
+        {
+          "value": "metal"
+        },
+        {
+          "value": "vinyl"
+        },
+        {
+          "value": "wood"
+        }
+      ]
+    },
+    "WindowStatusEnum": {
+      "name": "WindowStatusEnum",
+      "values": [
+        {
+          "value": "closed"
+        },
+        {
+          "value": "open"
+        }
+      ]
+    },
+    "WindowTypeEnum": {
+      "name": "WindowTypeEnum",
+      "values": [
+        {
+          "value": "fixed window"
+        },
+        {
+          "value": "horizontal sash window"
+        },
+        {
+          "value": "single-hung sash window"
+        }
+      ]
+    },
+    "WindowVertPosEnum": {
+      "name": "WindowVertPosEnum",
+      "values": [
+        {
+          "value": "bottom"
+        },
+        {
+          "value": "high"
+        },
+        {
+          "value": "low"
+        },
+        {
+          "value": "middle"
+        },
+        {
+          "value": "top"
+        }
+      ]
+    },
+    "IsotopeEnum": {
+      "name": "IsotopeEnum",
+      "values": [
+        {
+          "value": "13C",
+          "description": "Carbon with 13C isotope"
+        },
+        {
+          "value": "15N",
+          "description": "Nitrogen with 15N isotope"
+        },
+        {
+          "value": "2H",
+          "description": "Hydrogen with 2H isotope"
+        },
+        {
+          "value": "18O",
+          "description": "Oxygen with 18O isotope"
+        }
+      ]
+    },
+    "IsotopologLabelEnum": {
+      "name": "IsotopologLabelEnum",
+      "values": [
+        {
+          "value": "isotopically labeled"
+        },
+        {
+          "value": "natural abundance"
+        }
+      ]
+    },
+    "IsotopologApproachEnum": {
+      "name": "IsotopologApproachEnum",
+      "values": [
+        {
+          "value": "single"
+        },
+        {
+          "value": "multiple"
+        }
+      ]
+    }
+  }
+}
