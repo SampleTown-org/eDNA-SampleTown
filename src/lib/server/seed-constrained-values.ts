@@ -153,6 +153,43 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'Ion semiconductor sequencing', 'Amplicon sequencing', 'Shotgun metagenomics',
 		'RNA-seq', 'Whole genome sequencing'
 	],
+	// SRA controlled vocabulary — exact values from NCBI SRA_metadata.xlsx
+	library_strategy: [
+		{ value: 'AMPLICON', label: 'Amplicon' },
+		{ value: 'WGS', label: 'Whole Genome Sequencing' },
+		{ value: 'WGA', label: 'Whole Genome Amplification' },
+		{ value: 'RNA-Seq', label: 'RNA-Seq' },
+		{ value: 'miRNA-Seq', label: 'miRNA-Seq' },
+		{ value: 'WXS', label: 'Whole Exome' },
+		{ value: 'Targeted-Capture', label: 'Targeted Capture' },
+		{ value: 'Bisulfite-Seq', label: 'Bisulfite-Seq' },
+		{ value: 'RAD-Seq', label: 'RAD-Seq' },
+		{ value: 'OTHER', label: 'Other' }
+	],
+	library_source: [
+		{ value: 'GENOMIC', label: 'Genomic DNA' },
+		{ value: 'TRANSCRIPTOMIC', label: 'Transcriptomic' },
+		{ value: 'METAGENOMIC', label: 'Metagenomic' },
+		{ value: 'METATRANSCRIPTOMIC', label: 'Metatranscriptomic' },
+		{ value: 'SYNTHETIC', label: 'Synthetic' },
+		{ value: 'VIRAL RNA', label: 'Viral RNA' },
+		{ value: 'GENOMIC SINGLE CELL', label: 'Genomic Single Cell' },
+		{ value: 'TRANSCRIPTOMIC SINGLE CELL', label: 'Transcriptomic Single Cell' },
+		{ value: 'OTHER', label: 'Other' }
+	],
+	library_selection: [
+		{ value: 'RANDOM', label: 'Random (shearing)' },
+		{ value: 'PCR', label: 'PCR' },
+		{ value: 'RANDOM PCR', label: 'Random PCR' },
+		{ value: 'RT-PCR', label: 'RT-PCR' },
+		{ value: 'cDNA', label: 'cDNA' },
+		{ value: 'Hybrid Selection', label: 'Hybrid Selection' },
+		{ value: 'size fractionation', label: 'Size Fractionation' },
+		{ value: 'Inverse rRNA', label: 'Inverse rRNA (depletion)' },
+		{ value: 'PolyA', label: 'PolyA' },
+		{ value: 'other', label: 'Other' },
+		{ value: 'unspecified', label: 'Unspecified' }
+	],
 	// library_type no longer has a schema CHECK constraint — operator-managed
 	// vocabulary. Keep {value, label} form for historical consistency since
 	// existing rows in library_plates/library_preps use the canonical

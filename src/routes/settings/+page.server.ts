@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
 import { requireUser } from '$lib/server/guards';
+import { getSraVocabularySync } from '$lib/server/sra-vocabulary';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	// Any signed-in user can reach the Settings page. The User Accounts
@@ -47,5 +48,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				.all()
 		: [];
 
-	return { categories, primerSets, pcrProtocols, naming, feedback, personnel, users, isAdmin };
+	const sraVocabulary = getSraVocabularySync();
+
+	return { categories, primerSets, pcrProtocols, naming, feedback, personnel, users, isAdmin, sraVocabulary };
 };

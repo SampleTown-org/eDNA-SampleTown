@@ -20,6 +20,9 @@
 		extraction_kit: 'Extraction Kits',
 		library_prep_kit: 'Library Prep Kits',
 		library_type: 'Library Types',
+		library_strategy: 'Strategy',
+		library_source: 'Source',
+		library_selection: 'Selection',
 		seq_platform: 'Platforms',
 		seq_instrument: 'Instruments',
 		seq_method: 'Seq Methods',
@@ -31,6 +34,31 @@
 		pipeline: 'Pipelines'
 	};
 
+	/** Map picklist categories to their SRA vocabulary section for validation. */
+	const SRA_CATEGORY_MAP: Record<string, 'strategies' | 'sources' | 'selections' | 'platforms' | 'instruments'> = {
+		library_strategy: 'strategies',
+		library_source: 'sources',
+		library_selection: 'selections',
+		seq_platform: 'platforms',
+		seq_instrument: 'instruments'
+	};
+
+	// Build SRA valid-value sets for quick lookup
+	const sraVocab = data.sraVocabulary;
+	const sraValidSets: Record<string, Set<string>> = {
+		strategies: new Set((sraVocab?.strategies ?? []).map((s: any) => s.value)),
+		sources: new Set((sraVocab?.sources ?? []).map((s: any) => s.value)),
+		selections: new Set((sraVocab?.selections ?? []).map((s: any) => s.value)),
+		platforms: new Set(Object.keys(sraVocab?.platforms ?? {})),
+		instruments: new Set(Object.values(sraVocab?.platforms ?? {}).flat() as string[])
+	};
+
+	function isSraValid(category: string, value: string): boolean | null {
+		const section = SRA_CATEGORY_MAP[category];
+		if (!section) return null; // not an SRA-validated category
+		return sraValidSets[section]?.has(value) ?? false;
+	}
+
 	/** Picklist categories grouped by vocabulary authority. */
 	const VOCAB_GROUPS = [
 		{
@@ -41,7 +69,7 @@
 		{
 			label: 'SRA / ENA',
 			description: 'Sequence Read Archive & European Nucleotide Archive — sequencing metadata',
-			categories: ['sample_type', 'library_type', 'target_gene', 'pipeline', 'seq_platform', 'seq_instrument', 'seq_method']
+			categories: ['library_strategy', 'library_source', 'library_selection', 'seq_platform', 'seq_instrument', 'sample_type', 'library_type', 'target_gene', 'pipeline', 'seq_method']
 		},
 		{
 			label: 'Custom',
@@ -354,6 +382,23 @@
 	let errorMsg = $state('');
 	let editingId = $state('');
 	let editValue = $state('');
+	let sraRefreshing = $state(false);
+
+	async function refreshSra() {
+		sraRefreshing = true;
+		try {
+			const res = await fetch('/api/settings/sra-vocabulary', { method: 'POST' });
+			if (res.ok) {
+				// Reload to pick up new vocabulary
+				window.location.reload();
+			} else {
+				errorMsg = 'Failed to refresh SRA vocabulary';
+			}
+		} catch {
+			errorMsg = 'Failed to refresh SRA vocabulary';
+		}
+		sraRefreshing = false;
+	}
 
 	function clearMsg() { errorMsg = ''; }
 
@@ -560,16 +605,43 @@
 		{/each}
 	</div>
 
+	{#if activeVocabGroup === 'SRA / ENA'}
+	<div class="p-3 rounded-lg border border-slate-800 bg-slate-900/50 flex items-center justify-between text-xs text-slate-400">
+		<span>
+			SRA controlled vocabulary &middot;
+			{sraVocab?.strategies?.length ?? 0} strategies,
+			{sraVocab?.sources?.length ?? 0} sources,
+			{sraVocab?.selections?.length ?? 0} selections,
+			{Object.keys(sraVocab?.platforms ?? {}).length} platforms
+			{#if sraVocab?.fetchedAt}
+				&middot; fetched {new Date(sraVocab.fetchedAt).toLocaleDateString()}
+			{/if}
+		</span>
+		<div class="flex gap-2">
+			<a href="/api/settings/sra-vocabulary/download" class="text-ocean-400 hover:text-ocean-300">Download xlsx</a>
+			<button onclick={refreshSra} disabled={sraRefreshing} class="text-ocean-400 hover:text-ocean-300 disabled:opacity-50">
+				{sraRefreshing ? 'Refreshing...' : 'Refresh from NCBI'}
+			</button>
+		</div>
+	</div>
+	{/if}
+
 	<div class="space-y-2">
 		<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">{CATEGORY_LABELS[activeCategory]}</h2>
 		<div class="space-y-1 max-h-96 overflow-y-auto">
 			{#each filteredCategoryItems as item}
+			{@const sraStatus = isSraValid(activeCategory, item.value)}
 			<div class="flex items-center gap-2 p-2 rounded-lg {item.is_active ? 'bg-slate-800/50' : 'bg-slate-900/50 opacity-50'}">
 				{#if editingId === item.id}
 					<input type="text" bind:value={editValue} class="flex-1 {inputCls} text-sm" onkeydown={(e) => { if (e.key === 'Enter') saveEdit(item); if (e.key === 'Escape') { editingId = ''; } }} />
 					<button onclick={() => saveEdit(item)} class="text-xs text-green-400 hover:text-green-300">Save</button>
 					<button onclick={() => { editingId = ''; }} class="text-xs text-slate-500 hover:text-slate-300">Cancel</button>
 				{:else}
+					{#if sraStatus === true}
+						<span class="w-2 h-2 rounded-full bg-green-500 shrink-0" title="Valid SRA term"></span>
+					{:else if sraStatus === false}
+						<span class="w-2 h-2 rounded-full bg-yellow-500 shrink-0" title="Custom (not in SRA vocabulary)"></span>
+					{/if}
 					<span class="flex-1 text-sm text-white">{item.value}</span>
 					<button onclick={() => startEdit(item)} class="text-xs text-slate-500 hover:text-ocean-400">Edit</button>
 					<button onclick={() => toggleActive(item)} class="text-xs {item.is_active ? 'text-slate-500 hover:text-yellow-400' : 'text-yellow-600 hover:text-green-400'}">

@@ -1,0 +1,458 @@
+{
+  "strategies": [
+    {
+      "value": "WGA",
+      "description": "Random sequencing of the whole genome following non-pcr amplification"
+    },
+    {
+      "value": "WGS",
+      "description": "Random sequencing of the whole genome"
+    },
+    {
+      "value": "WXS",
+      "description": "Random sequencing of exonic regions selected from the genome"
+    },
+    {
+      "value": "RNA-Seq",
+      "description": "Random sequencing of whole transcriptome"
+    },
+    {
+      "value": "miRNA-Seq",
+      "description": "Random sequencing of small miRNAs"
+    },
+    {
+      "value": "WCS",
+      "description": "Random sequencing of a whole chromosome or other replicon isolated from a genome"
+    },
+    {
+      "value": "CLONE",
+      "description": "Genomic clone based (hierarchical) sequencing"
+    },
+    {
+      "value": "POOLCLONE",
+      "description": "Shotgun of pooled clones (usually BACs and Fosmids)"
+    },
+    {
+      "value": "AMPLICON",
+      "description": "Sequencing of overlapping or distinct PCR or RT-PCR products"
+    },
+    {
+      "value": "CLONEEND",
+      "description": "Clone end (5', 3', or both) sequencing"
+    },
+    {
+      "value": "FINISHING",
+      "description": "Sequencing intended to finish (close) gaps in existing coverage"
+    },
+    {
+      "value": "ChIP-Seq",
+      "description": "Direct sequencing of chromatin immunoprecipitates"
+    },
+    {
+      "value": "MNase-Seq",
+      "description": "Direct sequencing following MNase digestion"
+    },
+    {
+      "value": "DNase-Hypersensitivity",
+      "description": "Sequencing of hypersensitive sites, or segments of open chromatin that are more readily cleaved by DNaseI"
+    },
+    {
+      "value": "Bisulfite-Seq",
+      "description": "Sequencing following treatment of DNA with bisulfite to convert cytosine residues to uracil depending on methylation status"
+    },
+    {
+      "value": "Tn-Seq",
+      "description": "Sequencing from transposon insertion sites"
+    },
+    {
+      "value": "EST",
+      "description": "Single pass sequencing of cDNA templates"
+    },
+    {
+      "value": "FL-cDNA",
+      "description": "Full-length sequencing of cDNA templates"
+    },
+    {
+      "value": "CTS",
+      "description": "Concatenated Tag Sequencing"
+    },
+    {
+      "value": "MRE-Seq",
+      "description": "Methylation-Sensitive Restriction Enzyme Sequencing strategy"
+    },
+    {
+      "value": "MeDIP-Seq",
+      "description": "Methylated DNA Immunoprecipitation Sequencing strategy"
+    },
+    {
+      "value": "MBD-Seq",
+      "description": "Direct sequencing of methylated fractions sequencing strategy"
+    },
+    {
+      "value": "Synthetic-Long-Read",
+      "description": ""
+    },
+    {
+      "value": "ATAC-seq",
+      "description": "Assay for Transposase-Accessible Chromatin (ATAC) strategy is used to study genome-wide chromatin accessibility. alternative method to DNase-seq that uses an engineered Tn5 transposase to cleave DNA and to integrate primer DNA sequences into the cleaved genomic DNA"
+    },
+    {
+      "value": "ChIA-PET",
+      "description": "Direct sequencing of proximity-ligated chromatin immunoprecipitates."
+    },
+    {
+      "value": "FAIRE-seq",
+      "description": "Formaldehyde Assisted Isolation of Regulatory Elements. reveals regions of open chromatin"
+    },
+    {
+      "value": "Hi-C",
+      "description": "Chromosome Conformation Capture technique where a biotin-labeled nucleotide is incorporated at the ligation junction, enabling selective purification of chimeric DNA ligation junctions followed by deep sequencing"
+    },
+    {
+      "value": "ncRNA-Seq",
+      "description": "Capture of other non-coding RNA types, including post-translation modification types such as snRNA (small nuclear RNA) or snoRNA (small nucleolar RNA), or expression regulation types such as siRNA (small interfering RNA) or piRNA/piwi/RNA (piwi-interacting RNA)."
+    },
+    {
+      "value": "RAD-Seq",
+      "description": ""
+    },
+    {
+      "value": "RIP-Seq",
+      "description": "Direct sequencing of RNA immunoprecipitates (includes CLIP-Seq, HITS-CLIP and PAR-CLIP)."
+    },
+    {
+      "value": "SELEX",
+      "description": "Systematic Evolution of Ligands by EXponential enrichment"
+    },
+    {
+      "value": "ssRNA-seq",
+      "description": "strand-specific RNA sequencing"
+    },
+    {
+      "value": "Targeted-Capture",
+      "description": ""
+    },
+    {
+      "value": "Tethered Chromatin Conformation Capture",
+      "description": ""
+    },
+    {
+      "value": "DIP-Seq",
+      "description": "DNA immunoprecipitation sequencing (DIP-Seq)"
+    },
+    {
+      "value": "GBS",
+      "description": ""
+    },
+    {
+      "value": "Inverse rRNA",
+      "description": "depletion of ribosomal RNA by oligo hybridization"
+    },
+    {
+      "value": "NOMe-Seq",
+      "description": ""
+    },
+    {
+      "value": "Ribo-seq",
+      "description": ""
+    },
+    {
+      "value": "VALIDATION",
+      "description": "CGHub special request: Independent experiment to re-evaluate putative variants"
+    },
+    {
+      "value": "OTHER",
+      "description": "Library strategy not listed (please include additional info in the “design description”)"
+    }
+  ],
+  "sources": [
+    {
+      "value": "GENOMIC",
+      "description": "Genomic DNA (includes PCR products from genomic DNA)"
+    },
+    {
+      "value": "TRANSCRIPTOMIC",
+      "description": "Transcription products or non genomic DNA (EST, cDNA, RT-PCR, screened libraries)"
+    },
+    {
+      "value": "METAGENOMIC",
+      "description": "Mixed material from metagenome"
+    },
+    {
+      "value": "METATRANSCRIPTOMIC",
+      "description": "Transcription products from community targets"
+    },
+    {
+      "value": "SYNTHETIC",
+      "description": "Synthetic DNA"
+    },
+    {
+      "value": "VIRAL RNA",
+      "description": "Viral RNA"
+    },
+    {
+      "value": "GENOMIC SINGLE CELL",
+      "description": ""
+    },
+    {
+      "value": "TRANSCRIPTOMIC SINGLE CELL",
+      "description": ""
+    },
+    {
+      "value": "OTHER",
+      "description": "Other, unspecified, or unknown library source material (please include additional info in the “design description”)"
+    }
+  ],
+  "selections": [
+    {
+      "value": "RANDOM",
+      "description": "Random selection by shearing or other method"
+    },
+    {
+      "value": "PCR",
+      "description": "Source material was selected by designed primers"
+    },
+    {
+      "value": "RANDOM PCR",
+      "description": "Source material was selected by randomly generated primers"
+    },
+    {
+      "value": "RT-PCR",
+      "description": "Source material was selected by reverse transcription PCR"
+    },
+    {
+      "value": "HMPR",
+      "description": "Hypo-methylated partial restriction digest"
+    },
+    {
+      "value": "MF",
+      "description": "Methyl Filtrated"
+    },
+    {
+      "value": "CF-S",
+      "description": "Cot-filtered single/low-copy genomic DNA"
+    },
+    {
+      "value": "CF-M",
+      "description": "Cot-filtered moderately repetitive genomic DNA"
+    },
+    {
+      "value": "CF-H",
+      "description": "Cot-filtered highly repetitive genomic DNA"
+    },
+    {
+      "value": "CF-T",
+      "description": "Cot-filtered theoretical single-copy genomic DNA"
+    },
+    {
+      "value": "MDA",
+      "description": "Multiple displacement amplification"
+    },
+    {
+      "value": "MSLL",
+      "description": "Methylation Spanning Linking Library"
+    },
+    {
+      "value": "cDNA",
+      "description": "complementary DNA"
+    },
+    {
+      "value": "ChIP",
+      "description": "Chromatin immunoprecipitation"
+    },
+    {
+      "value": "MNase",
+      "description": "Micrococcal Nuclease (MNase) digestion"
+    },
+    {
+      "value": "DNAse",
+      "description": "Deoxyribonuclease (MNase) digestion"
+    },
+    {
+      "value": "Hybrid Selection",
+      "description": "Selection by hybridization in array or solution"
+    },
+    {
+      "value": "Reduced Representation",
+      "description": "Reproducible genomic subsets, often generated by restriction fragment size selection, containing a manageable number of loci to facilitate re-sampling"
+    },
+    {
+      "value": "Restriction Digest",
+      "description": "DNA fractionation using restriction enzymes"
+    },
+    {
+      "value": "5-methylcytidine antibody",
+      "description": "Selection of methylated DNA fragments using an antibody raised against 5-methylcytosine or 5-methylcytidine (m5C)"
+    },
+    {
+      "value": "MBD2 protein methyl-CpG binding domain",
+      "description": "Enrichment by methyl-CpG binding domain"
+    },
+    {
+      "value": "CAGE",
+      "description": "Cap-analysis gene expression"
+    },
+    {
+      "value": "RACE",
+      "description": "Rapid Amplification of cDNA Ends"
+    },
+    {
+      "value": "size fractionation",
+      "description": "Physical selection of size appropriate targets"
+    },
+    {
+      "value": "Padlock probes capture method",
+      "description": "Circularized oligonucleotide probes"
+    },
+    {
+      "value": "other",
+      "description": "Other library enrichment, screening, or selection process (please include additional info in the “design description”)"
+    },
+    {
+      "value": "unspecified",
+      "description": "Library enrichment, screening, or selection is not specified (please include additional info in the “design description”)"
+    },
+    {
+      "value": "cDNA_oligo_dT",
+      "description": ""
+    },
+    {
+      "value": "cDNA_randomPriming",
+      "description": ""
+    },
+    {
+      "value": "Inverse rRNA",
+      "description": "depletion of ribosomal RNA by oligo hybridization."
+    },
+    {
+      "value": "Oligo-dT",
+      "description": "enrichment of messenger RNA (mRNA) by hybridization to Oligo-dT."
+    },
+    {
+      "value": "PolyA",
+      "description": "PolyA selection or enrichment for messenger RNA (mRNA); should replace cDNA enumeration."
+    },
+    {
+      "value": "repeat fractionation",
+      "description": "Selection for less repetitive (and more gene rich) sequence through Cot filtration (CF) or other fractionation techniques based on DNA kinetics."
+    }
+  ],
+  "platforms": {
+    "LS454": [
+      "454 GS",
+      "454 GS 20",
+      "454 GS FLX",
+      "454 GS FLX+",
+      "454 GS FLX Titanium",
+      "454 GS Junior"
+    ],
+    "ILLUMINA": [
+      "HiSeq X Five",
+      "HiSeq X Ten",
+      "Illumina Genome Analyzer",
+      "Illumina Genome Analyzer II",
+      "Illumina Genome Analyzer IIx",
+      "Illumina HiScanSQ",
+      "Illumina HiSeq 1000",
+      "Illumina HiSeq 1500",
+      "Illumina HiSeq 2000",
+      "Illumina HiSeq 2500",
+      "Illumina HiSeq 3000",
+      "Illumina HiSeq 4000",
+      "Illumina HiSeq X",
+      "Illumina MiSeq",
+      "Illumina MiSeq i100",
+      "Illumina MiniSeq",
+      "Illumina NovaSeq 6000",
+      "Illumina NovaSeq X",
+      "Illumina NovaSeq X Plus",
+      "Illumina iSeq 100",
+      "NextSeq 1000",
+      "NextSeq 2000",
+      "NextSeq 500",
+      "NextSeq 550"
+    ],
+    "HELICOS": [
+      "Helicos HeliScope"
+    ],
+    "ABI_SOLID": [
+      "AB 5500 Genetic Analyzer",
+      "AB 5500xl Genetic Analyzer",
+      "AB 5500x-Wl Genetic Analyzer",
+      "AB SOLiD 3 Plus System",
+      "AB SOLiD 4 System",
+      "AB SOLiD 4hq System",
+      "AB SOLiD PI System",
+      "AB SOLiD System",
+      "AB SOLiD System 2.0",
+      "AB SOLiD System 3.0"
+    ],
+    "COMPLETE_GENOMICS": [
+      "Complete Genomics"
+    ],
+    "PACBIO_SMRT": [
+      "PacBio RS",
+      "PacBio RS II",
+      "Revio",
+      "Sequel",
+      "Sequel II",
+      "Sequel IIe",
+      "Onso"
+    ],
+    "ION_TORRENT": [
+      "Ion Torrent PGM",
+      "Ion Torrent Proton",
+      "Ion Torrent S5 XL",
+      "Ion Torrent S5",
+      "Ion Torrent Genexus",
+      "Ion GeneStudio S5",
+      "Ion GeneStudio S5 Plus",
+      "Ion GeneStudio S5 Prime"
+    ],
+    "CAPILLARY": [
+      "AB 310 Genetic Analyzer",
+      "AB 3130 Genetic Analyzer",
+      "AB 3130xL Genetic Analyzer",
+      "AB 3500 Genetic Analyzer",
+      "AB 3500xL Genetic Analyzer",
+      "AB 3730 Genetic Analyzer",
+      "AB 3730xL Genetic Analyzer"
+    ],
+    "OXFORD_NANOPORE": [
+      "GridION",
+      "MinION",
+      "PromethION"
+    ],
+    "BGISEQ": [
+      "BGISEQ-50",
+      "BGISEQ-500",
+      "MGISEQ-2000RS"
+    ],
+    "DNBSEQ": [
+      "DNBSEQ-G400",
+      "DNBSEQ-G50",
+      "DNBSEQ-T7",
+      "DNBSEQ-G400 FAST"
+    ],
+    "ELEMENT": [
+      "Element AVITI"
+    ],
+    "GENAPSYS": [
+      "GS111"
+    ],
+    "GENEMIND": [
+      "FASTASeq 300",
+      "GenoCare 1600",
+      "GenoLab M"
+    ],
+    "TAPESTRI": [
+      "Tapestri"
+    ],
+    "ULTIMA": [
+      "UG 100"
+    ],
+    "VELA_DIAGNOSTICS": [
+      "Sentosa SQ301"
+    ]
+  }
+}
