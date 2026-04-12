@@ -68,13 +68,13 @@
 		},
 		{
 			label: 'SRA / ENA',
-			description: 'Sequence Read Archive & European Nucleotide Archive — sequencing metadata',
-			categories: ['library_strategy', 'library_source', 'library_selection', 'seq_platform', 'seq_instrument', 'sample_type', 'library_type', 'target_gene', 'pipeline', 'seq_method']
+			description: 'Sequence Read Archive & European Nucleotide Archive — validated against NCBI controlled vocabulary',
+			categories: ['library_strategy', 'library_source', 'library_selection', 'seq_platform', 'seq_instrument']
 		},
 		{
 			label: 'Custom',
-			description: 'Lab-specific vocabulary — equipment, storage, indices, roles',
-			categories: ['locality', 'filter_type', 'preservation_method', 'storage_conditions', 'storage_room', 'storage_box', 'extraction_method', 'extraction_kit', 'library_prep_kit', 'index_i7', 'index_i5', 'barcode', 'person_role']
+			description: 'Lab-specific vocabulary — sequencing methods, storage, indices, roles',
+			categories: ['library_type', 'sample_type', 'target_gene', 'pipeline', 'seq_method', 'locality', 'filter_type', 'preservation_method', 'storage_conditions', 'storage_room', 'storage_box', 'extraction_method', 'extraction_kit', 'library_prep_kit', 'index_i7', 'index_i5', 'barcode', 'person_role']
 		}
 	];
 
