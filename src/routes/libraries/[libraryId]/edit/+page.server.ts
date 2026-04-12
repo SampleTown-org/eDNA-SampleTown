@@ -30,5 +30,6 @@ export const load: PageServerLoad = async ({ params }) => {
 		.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0')
 		.get(params.libraryId);
 	if (!library) throw error(404, 'Library plate or library not found');
-	return { type: 'library' as const, library };
+	const picklists = getConstrainedValues('index_i7', 'index_i5', 'barcode');
+	return { type: 'library' as const, library, picklists };
 };

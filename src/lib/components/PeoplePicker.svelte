@@ -125,17 +125,16 @@
 				</select>
 			</div>
 			<div class="flex-1 min-w-36">
-				<label class="block text-xs text-slate-500 mb-1">Role</label>
-				<input
-					type="text"
+				<label class="block text-xs text-slate-500 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Role</a>
+				</label>
+				<select
 					bind:value={pickerRole}
-					list="person-role-options"
-					placeholder={defaultRole || 'e.g., collector'}
 					class="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
-				/>
-				<datalist id="person-role-options">
+				>
+					<option value="">No role</option>
 					{#each roleOptions as r}<option value={r.value}>{r.label ?? r.value}</option>{/each}
-				</datalist>
+				</select>
 			</div>
 			<div class="flex gap-2">
 				<button

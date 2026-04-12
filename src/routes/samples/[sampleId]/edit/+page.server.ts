@@ -18,11 +18,15 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	const projects = db.prepare('SELECT id, project_name FROM projects ORDER BY project_name').all();
 	const sites = db.prepare(`
-		SELECT id, site_name, project_id, latitude, longitude, geo_loc_name,
-			env_broad_scale, env_local_scale, env_medium, env_package, depth, elevation
-		FROM sites WHERE is_deleted = 0 ORDER BY site_name
+		SELECT s.id, s.site_name, s.project_id, s.lat_lon, s.latitude, s.longitude, s.geo_loc_name,
+			s.env_broad_scale, s.env_local_scale, s.env_medium, s.env_package, s.depth, s.elevation
+		FROM sites s WHERE s.is_deleted = 0 ORDER BY s.site_name
 	`).all();
-	const picklists = getConstrainedValues('person_role');
+	const picklists = getConstrainedValues(
+		'geo_loc_name', 'env_broad_scale', 'env_local_scale', 'env_medium',
+		'sample_type', 'filter_type', 'preservation_method', 'storage_conditions',
+		'person_role'
+	);
 	const personnel = getActivePersonnel();
 	const people = getEntityPersonnel('sample', params.sampleId).map((p) => ({
 		personnel_id: p.personnel_id,

@@ -16,7 +16,8 @@
 		a260_280: data.extract.a260_280 ?? '',
 		a260_230: data.extract.a260_230 ?? '',
 		quantification_method: data.extract.quantification_method || '',
-		storage_location: data.extract.storage_location || '',
+		storage_room: data.extract.storage_room || '',
+		storage_box: data.extract.storage_box || '',
 		notes: data.extract.notes || ''
 	});
 
@@ -24,6 +25,10 @@
 	let errorMsg = $state('');
 
 	async function submit() {
+		if (!form.extract_name.trim()) {
+			errorMsg = 'Extract name is required';
+			return;
+		}
 		saving = true;
 		errorMsg = '';
 
@@ -43,7 +48,12 @@
 		if (res.ok) {
 			goto(`/extracts/${data.extract.id}`);
 		} else {
-			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update extract';
+			const err = await res.json().catch(() => null);
+			if (err?.issues?.length) {
+				errorMsg = err.issues.map((i: { path: string; message: string }) => `${i.path}: ${i.message}`).join('; ');
+			} else {
+				errorMsg = err?.error || 'Failed to update extract';
+			}
 			saving = false;
 		}
 	}
@@ -54,18 +64,18 @@
 
 <div class="max-w-3xl space-y-6">
 	<div>
-		<a href="/extracts" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Extracts</a>
-		<h1 class="text-2xl font-bold text-white mt-1">Edit {data.extract.extract_name}</h1>
+		<a href="/extracts/{data.extract.id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.extract.extract_name}</a>
+		<h1 class="text-2xl font-bold text-white mt-1">Edit Extract</h1>
 	</div>
 
 	{#if errorMsg}
 		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>
 	{/if}
 
-	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-6">
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-4">
+		<div class="grid grid-cols-2 gap-4">
 			<div>
-				<label for="extract_name" class="block text-sm font-medium text-slate-300 mb-1">Extract Name</label>
+				<label for="extract_name" class="block text-sm font-medium text-slate-300 mb-1">Extract Name *</label>
 				<input id="extract_name" type="text" bind:value={form.extract_name} class={inputCls} />
 			</div>
 			<div>
@@ -73,52 +83,7 @@
 				<input id="extraction_date" type="date" bind:value={form.extraction_date} class={inputCls} />
 			</div>
 		</div>
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-			<div>
-				<label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1">Extraction Method</label>
-				<input id="extraction_method" type="text" bind:value={form.extraction_method} class={inputCls} />
-			</div>
-			<div>
-				<label for="extraction_kit" class="block text-sm font-medium text-slate-300 mb-1">Extraction Kit</label>
-				<input id="extraction_kit" type="text" bind:value={form.extraction_kit} class={inputCls} />
-			</div>
-		</div>
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-			<div>
-				<label for="concentration_ng_ul" class="block text-sm font-medium text-slate-300 mb-1">Concentration (ng/uL)</label>
-				<input id="concentration_ng_ul" type="number" step="any" bind:value={form.concentration_ng_ul} class={inputCls} />
-			</div>
-			<div>
-				<label for="total_volume_ul" class="block text-sm font-medium text-slate-300 mb-1">Total Volume (uL)</label>
-				<input id="total_volume_ul" type="number" step="any" bind:value={form.total_volume_ul} class={inputCls} />
-			</div>
-		</div>
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-			<div>
-				<label for="a260_280" class="block text-sm font-medium text-slate-300 mb-1">A260/280</label>
-				<input id="a260_280" type="number" step="any" bind:value={form.a260_280} class={inputCls} />
-			</div>
-			<div>
-				<label for="a260_230" class="block text-sm font-medium text-slate-300 mb-1">A260/230</label>
-				<input id="a260_230" type="number" step="any" bind:value={form.a260_230} class={inputCls} />
-			</div>
-		</div>
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-			<div>
-				<label for="quantification_method" class="block text-sm font-medium text-slate-300 mb-1">Quantification Method</label>
-				<select id="quantification_method" bind:value={form.quantification_method} class={selectCls}>
-					<option value="">Select...</option>
-					<option value="Qubit">Qubit</option>
-					<option value="NanoDrop">NanoDrop</option>
-					<option value="Bioanalyzer">Bioanalyzer</option>
-					<option value="Other">Other</option>
-				</select>
-			</div>
-			<div>
-				<label for="storage_location" class="block text-sm font-medium text-slate-300 mb-1">Storage Location</label>
-				<input id="storage_location" type="text" bind:value={form.storage_location} class={inputCls} />
-			</div>
-		</div>
+
 		<PeoplePicker
 			bind:people
 			personnel={data.personnel}
@@ -126,6 +91,77 @@
 			defaultRole="extractor"
 			label="People"
 		/>
+
+		<div class="grid grid-cols-2 gap-4">
+			<div>
+				<label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Method</a>
+				</label>
+				<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
+			</div>
+			<div>
+				<label for="extraction_kit" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Kit</a>
+				</label>
+				<select id="extraction_kit" bind:value={form.extraction_kit} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.extraction_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
+			</div>
+		</div>
+
+		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+			<div>
+				<label for="concentration_ng_ul" class="block text-sm font-medium text-slate-300 mb-1">Conc. (ng/µL)</label>
+				<input id="concentration_ng_ul" type="number" step="any" bind:value={form.concentration_ng_ul} class={inputCls} />
+			</div>
+			<div>
+				<label for="total_volume_ul" class="block text-sm font-medium text-slate-300 mb-1">Volume (µL)</label>
+				<input id="total_volume_ul" type="number" step="any" bind:value={form.total_volume_ul} class={inputCls} />
+			</div>
+			<div>
+				<label for="a260_280" class="block text-sm font-medium text-slate-300 mb-1">260/280</label>
+				<input id="a260_280" type="number" step="any" bind:value={form.a260_280} class={inputCls} />
+			</div>
+			<div>
+				<label for="a260_230" class="block text-sm font-medium text-slate-300 mb-1">260/230</label>
+				<input id="a260_230" type="number" step="any" bind:value={form.a260_230} class={inputCls} />
+			</div>
+		</div>
+
+		<div class="grid grid-cols-3 gap-4">
+			<div>
+				<label for="quantification_method" class="block text-sm font-medium text-slate-300 mb-1">Quantification</label>
+				<select id="quantification_method" bind:value={form.quantification_method} class={selectCls}>
+					<option value="">Select...</option>
+					<option>Qubit</option>
+					<option>NanoDrop</option>
+					<option>Bioanalyzer</option>
+					<option>Other</option>
+				</select>
+			</div>
+			<div>
+				<label for="storage_room" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Room/Freezer</a>
+				</label>
+				<select id="storage_room" bind:value={form.storage_room} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.storage_room as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
+			</div>
+			<div>
+				<label for="storage_box" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Storage Box</a>
+				</label>
+				<select id="storage_box" bind:value={form.storage_box} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.storage_box as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
+			</div>
+		</div>
 
 		<div>
 			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>

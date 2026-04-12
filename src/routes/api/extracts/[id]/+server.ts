@@ -25,7 +25,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			`UPDATE extracts SET
 				extract_name = ?, extraction_date = ?, extraction_method = ?, extraction_kit = ?,
 				concentration_ng_ul = ?, total_volume_ul = ?, a260_280 = ?, a260_230 = ?,
-				quantification_method = ?, storage_location = ?, notes = ?, custom_fields = ?,
+				quantification_method = ?, storage_location = ?, storage_room = ?, storage_box = ?,
+				notes = ?, custom_fields = ?,
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
@@ -39,6 +40,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.a260_230 ?? null,
 			nn(data.quantification_method),
 			nn(data.storage_location),
+			nn(data.storage_room),
+			nn(data.storage_box),
 			nn(data.notes),
 			nn(data.custom_fields),
 			params.id
