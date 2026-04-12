@@ -242,12 +242,11 @@
 			</fieldset>
 		{/if}
 
-		<!-- Personnel attribution -->
+		<!-- People -->
 		<PeoplePicker
 			bind:people
 			personnel={data.personnel}
 			roleOptions={data.picklists.person_role}
-			defaultRole="collector"
 			label="People"
 		/>
 

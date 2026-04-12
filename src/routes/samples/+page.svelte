@@ -87,6 +87,7 @@
 		selectable
 		cartFilterLabel={hasCartFilter ? `showing ${samples.length}/${allSamples.length} samples` : ''}
 		bind:cartFilterActive
+		cartedIds={cart.idsOfType('sample')}
 		editHref={(row) => `/samples/${row.id}/edit`}
 		ondelete={deleteSample}
 		onduplicate={duplicateSample}

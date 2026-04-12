@@ -1,36 +1,31 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	type Row = Record<string, string>;
 
-	/**
-	 * Column definition. `key` is the body field name posted to /api/samples;
-	 * `numericPair` flags lat/lon for the lat_lon assembly logic in submit().
-	 */
 	type ColumnDef = {
 		key: string;
 		label: string;
 		placeholder?: string;
 		width?: string;
+		required?: boolean;
+		/** 'select-project' | 'select-site' for dropdown columns */
+		widget?: string;
 	};
 
 	const CORE_COLUMNS: ColumnDef[] = [
-		{ key: 'samp_name', label: 'Sample name *' },
+		{ key: 'project_id', label: 'Project *', width: 'w-40', required: true, widget: 'select-project' },
+		{ key: 'site_id', label: 'Site', width: 'w-40', widget: 'select-site' },
+		{ key: 'samp_name', label: 'Sample name *', required: true },
 		{ key: 'collection_date', label: 'Collection date', placeholder: 'YYYY-MM-DD', width: 'w-36' },
-		{ key: 'latitude', label: 'Latitude', width: 'w-28' },
-		{ key: 'longitude', label: 'Longitude', width: 'w-28' },
 		{ key: 'notes', label: 'Notes' }
 	];
 
-	/**
-	 * Optional sample fields the operator can opt-in via the "+ Add column"
-	 * picker. Curated to common MIxS-style fields — operators who need
-	 * something exotic can still use the single-sample edit form afterwards.
-	 */
 	const ADDITIONAL_COLUMNS: ColumnDef[] = [
 		{ key: 'env_medium', label: 'Env medium', width: 'w-40' },
 		{ key: 'geo_loc_name', label: 'Geo location', width: 'w-40' },
@@ -43,7 +38,9 @@
 		{ key: 'ph', label: 'pH', width: 'w-20' },
 		{ key: 'volume_filtered_ml', label: 'Vol filtered (mL)', width: 'w-28' },
 		{ key: 'filter_type', label: 'Filter type', width: 'w-32' },
-		{ key: 'preservation_method', label: 'Preservation', width: 'w-32' }
+		{ key: 'preservation_method', label: 'Preservation', width: 'w-32' },
+		{ key: 'latitude', label: 'Latitude', width: 'w-28' },
+		{ key: 'longitude', label: 'Longitude', width: 'w-28' }
 	];
 
 	let extraColumnKeys = $state<string[]>([]);
@@ -61,7 +58,6 @@
 		return Object.fromEntries(columns.map((c) => [c.key, '']));
 	}
 
-	let projectId = $state('');
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 	let rows = $state<Row[]>([emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()]);
 	let saving = $state(false);
@@ -69,9 +65,14 @@
 	let result = $state<{ imported: number; failed: number; errors: string[] } | null>(null);
 	let extraToAdd = $state('');
 
+	// Site filtering by project per row
+	function sitesForProject(projectId: string): any[] {
+		if (!projectId) return data.sites as any[];
+		return (data.sites as any[]).filter((s: any) => s.project_id === projectId);
+	}
+
 	function addRow() { rows = [...rows, emptyRow()]; }
 	function removeRow(i: number) {
-		// Don't let the user remove row 0 (the template).
 		if (i === 0) return;
 		rows = rows.filter((_, idx) => idx !== i);
 	}
@@ -79,8 +80,6 @@
 	function addColumn() {
 		if (!extraToAdd) return;
 		extraColumnKeys = [...extraColumnKeys, extraToAdd];
-		// Initialize the new column to '' across all existing rows so the
-		// reactive table picks it up cleanly.
 		rows = rows.map((r) => ({ ...r, [extraToAdd]: '' }));
 		extraToAdd = '';
 	}
@@ -93,10 +92,6 @@
 		});
 	}
 
-	/**
-	 * Apply the "template" row 0 to every row below it. Only fills empty
-	 * cells in each child row — never overwrites data the user has typed.
-	 */
 	function applyTemplate() {
 		const tpl = rows[0];
 		if (!tpl) return;
@@ -113,7 +108,6 @@
 		});
 	}
 
-	/** Paste handler — TSV/CSV splits across rows + cells. */
 	function handlePaste(e: ClipboardEvent, rowIdx: number, field: string) {
 		const text = e.clipboardData?.getData('text') ?? '';
 		if (!text.includes('\t') && !text.includes('\n')) return;
@@ -142,7 +136,6 @@
 		rows.slice(1).filter((r) => r.samp_name?.trim())
 	);
 
-	/** Enter in template row 0 fills that column down. */
 	function onTemplateKeydown(e: KeyboardEvent, field: string) {
 		if (e.key !== 'Enter') return;
 		e.preventDefault();
@@ -153,8 +146,8 @@
 	async function submit() {
 		errorMsg = '';
 		result = null;
-		if (!projectId) {
-			errorMsg = 'Select a project';
+		if (nonEmptyRows.some((r) => !r.project_id)) {
+			errorMsg = 'Every row needs a project';
 			return;
 		}
 		if (nonEmptyRows.length === 0) {
@@ -168,11 +161,11 @@
 
 		for (const row of nonEmptyRows) {
 			const body: Record<string, unknown> = {
-				project_id: projectId,
+				project_id: row.project_id,
+				site_id: row.site_id || null,
 				samp_name: row.samp_name.trim(),
 				people
 			};
-			// Lat/lon assembly
 			if (row.latitude && row.longitude) {
 				const lat = Number(row.latitude);
 				const lon = Number(row.longitude);
@@ -184,10 +177,8 @@
 					body.longitude = lon;
 				}
 			}
-			// Copy any non-empty value from every other column straight through
-			// (the API + zod will coerce strings → numbers where needed).
 			for (const col of columns) {
-				if (col.key === 'samp_name' || col.key === 'latitude' || col.key === 'longitude') continue;
+				if (['samp_name', 'project_id', 'site_id', 'latitude', 'longitude'].includes(col.key)) continue;
 				const v = row[col.key];
 				if (v && v.toString().trim()) body[col.key] = v;
 			}
@@ -214,6 +205,8 @@
 
 	const inputCls =
 		'w-full px-2 py-1 bg-slate-900 border border-slate-800 rounded text-white text-sm focus:outline-none focus:border-ocean-500';
+	const selectCls =
+		'w-full px-2 py-1 bg-slate-900 border border-slate-800 rounded text-white text-sm focus:outline-none focus:border-ocean-500';
 </script>
 
 <div class="max-w-6xl space-y-6">
@@ -226,12 +219,6 @@
 		<a href="/samples/new" class="px-4 py-1.5 rounded text-sm font-medium text-slate-400 hover:text-white transition-colors">Single</a>
 		<span class="px-4 py-1.5 rounded text-sm font-medium bg-ocean-600 text-white">Batch</span>
 	</div>
-
-	<p class="text-slate-400 text-sm">
-		Paste or type multiple rows at once. Only <span class="text-white">name</span> is required;
-		every other field defaults to the MIxS <code>not collected</code> sentinel and can be filled
-		in later via the single-sample edit form.
-	</p>
 
 	{#if errorMsg}
 		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">
@@ -252,65 +239,76 @@
 		</div>
 	{/if}
 
-	<div class="flex gap-4 items-end flex-wrap">
-		<div>
-			<label class="block text-xs font-medium text-slate-400 mb-1">Project</label>
-			<select
-				bind:value={projectId}
-				class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500"
-			>
-				<option value="">Select project...</option>
-				{#each data.projects as p}<option value={p.id}>{p.project_name}</option>{/each}
-			</select>
-		</div>
-		{#if availableExtras.length > 0}
-		<div>
-			<label class="block text-xs font-medium text-slate-400 mb-1">+ Add column</label>
-			<div class="flex gap-2">
+	<!-- Controls: buttons on top, then add-column + tips -->
+	<div class="flex items-center gap-3 flex-wrap">
+		<button
+			type="button"
+			onclick={addRow}
+			class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm"
+		>
+			+ Row
+		</button>
+		<button
+			type="button"
+			onclick={submit}
+			disabled={saving || nonEmptyRows.length === 0}
+			class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium"
+		>
+			{saving ? 'Creating...' : `Create ${nonEmptyRows.length} sample${nonEmptyRows.length === 1 ? '' : 's'}`}
+		</button>
+		<a
+			href="/samples"
+			class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium"
+		>
+			Cancel
+		</a>
+
+		<div class="ml-auto flex items-center gap-2">
+			{#if availableExtras.length > 0}
 				<select
 					bind:value={extraToAdd}
-					class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500"
+					class="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500"
 				>
-					<option value="">Pick a field…</option>
+					<option value="">+ Add column…</option>
 					{#each availableExtras as col}<option value={col.key}>{col.label}</option>{/each}
 				</select>
 				<button
 					type="button"
 					onclick={addColumn}
 					disabled={!extraToAdd}
-					class="px-3 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 disabled:opacity-40 transition-colors text-sm"
+					class="px-2 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 disabled:opacity-40 transition-colors text-sm"
 				>Add</button>
-			</div>
+			{/if}
 		</div>
-		{/if}
-		<p class="text-xs text-slate-500 pb-2 flex-1 min-w-64">
-			Paste a block of rows from a spreadsheet to auto-fill.
-			Row <span class="text-ocean-400">⭐</span> is a template (never imported) —
-			press <kbd class="text-ocean-400">Enter</kbd> in any of its cells to fill that column down,
-			or
+	</div>
+
+	<div class="flex items-center gap-4 flex-wrap">
+		<PeoplePicker
+			bind:people
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			label="People (applied to all rows)"
+		/>
+		<p class="text-xs text-slate-500 flex-1 min-w-48">
+			Row <span class="text-ocean-400">⭐</span> is a template —
+			<kbd class="text-ocean-400">Enter</kbd> fills column down, or
 			<button type="button" onclick={applyTemplate} class="text-ocean-400 hover:text-ocean-300 underline">
 				apply all to empty cells
 			</button>.
+			Paste from a spreadsheet to auto-fill.
 		</p>
 	</div>
-
-	<PeoplePicker
-		bind:people
-		personnel={data.personnel}
-		roleOptions={data.picklists.person_role}
-		defaultRole="collector"
-		label="People (applied to all rows)"
-	/>
 
 	<div class="overflow-x-auto rounded-lg border border-slate-800">
 		<table class="w-full text-sm">
 			<thead>
 				<tr class="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
+					<th class="w-8 px-1"></th>
 					<th class="px-2 py-2 text-left font-medium w-10">#</th>
 					{#each columns as col}
 						<th class="px-2 py-2 text-left font-medium {col.width ?? ''}">
 							<div class="flex items-center gap-1">
-								<span>{col.label}</span>
+								<span class={col.required ? 'text-red-400' : ''}>{col.label}</span>
 								{#if extraColumnKeys.includes(col.key)}
 									<button
 										type="button"
@@ -322,13 +320,22 @@
 							</div>
 						</th>
 					{/each}
-					<th class="w-8"></th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each rows as row, i}
 					{@const isTpl = i === 0}
 					<tr class="border-b border-slate-800/50 {isTpl ? 'bg-ocean-900/20' : ''}">
+						<td class="px-1 py-1">
+							{#if !isTpl}
+								<button
+									type="button"
+									onclick={() => removeRow(i)}
+									class="text-slate-700 hover:text-red-400 text-xs"
+									title="Remove row"
+								>✕</button>
+							{/if}
+						</td>
 						<td class="px-2 py-1 text-slate-500 text-xs font-mono">
 							{#if isTpl}
 								<span class="text-ocean-400" title="Template — Enter in any cell fills the column">⭐</span>
@@ -338,51 +345,37 @@
 						</td>
 						{#each columns as col}
 							<td class="px-2 py-1">
-								<input
-									type="text"
-									bind:value={rows[i][col.key]}
-									onpaste={(e) => handlePaste(e, i, col.key)}
-									onkeydown={isTpl ? (e) => onTemplateKeydown(e, col.key) : undefined}
-									placeholder={col.placeholder}
-									class={inputCls}
-								/>
+								{#if col.widget === 'select-project'}
+									<select
+										bind:value={rows[i][col.key]}
+										class="{selectCls} {!isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
+									>
+										<option value="">Select...</option>
+										{#each data.projects as p}<option value={p.id}>{p.project_name}</option>{/each}
+									</select>
+								{:else if col.widget === 'select-site'}
+									<select
+										bind:value={rows[i][col.key]}
+										class={selectCls}
+									>
+										<option value="">Select...</option>
+										{#each sitesForProject(rows[i].project_id) as s}<option value={s.id}>{s.site_name}</option>{/each}
+									</select>
+								{:else}
+									<input
+										type="text"
+										bind:value={rows[i][col.key]}
+										onpaste={(e) => handlePaste(e, i, col.key)}
+										onkeydown={isTpl ? (e) => onTemplateKeydown(e, col.key) : undefined}
+										placeholder={col.placeholder}
+										class="{inputCls} {col.required && !isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
+									/>
+								{/if}
 							</td>
 						{/each}
-						<td class="px-2 py-1">
-							<button
-								type="button"
-								onclick={() => removeRow(i)}
-								class="text-slate-600 hover:text-red-400 text-xs"
-								title="Remove row"
-							>✕</button>
-						</td>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
-	</div>
-
-	<div class="flex gap-3 pt-1">
-		<button
-			type="button"
-			onclick={addRow}
-			class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm"
-		>
-			+ Row
-		</button>
-		<button
-			type="button"
-			onclick={submit}
-			disabled={saving || nonEmptyRows.length === 0 || !projectId}
-			class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium"
-		>
-			{saving ? 'Creating...' : `Create ${nonEmptyRows.length} sample${nonEmptyRows.length === 1 ? '' : 's'}`}
-		</button>
-		<a
-			href="/samples"
-			class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium"
-		>
-			Cancel
-		</a>
 	</div>
 </div>

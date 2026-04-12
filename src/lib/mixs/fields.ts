@@ -291,14 +291,9 @@ export const LOGISTICS_FIELDS: MixsField[] = [
 		sra_column: 'samp_store_temp',
 		constrainedCategory: 'storage_conditions'
 	},
-	{
-		name: 'collector_name',
-		label: 'Collector',
-		type: 'text',
-		required: false,
-		description: 'Name of person who collected the sample',
-		sra_column: 'collected_by'
-	}
+	// collector_name removed — personnel attribution is handled by the
+	// PeoplePicker on the form (entity_personnel with role from the
+	// person_role picklist). The schema column still exists for legacy data.
 ];
 
 /** Get all required fields for a given env_package */

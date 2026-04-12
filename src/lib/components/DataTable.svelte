@@ -38,6 +38,8 @@
 		 *  filter icon toggles this. Parents should use this to gate their
 		 *  row-filtering logic. */
 		cartFilterActive?: boolean;
+		/** Set of IDs that are in the cart — rows matching get a subtle marker. */
+		cartedIds?: Set<string>;
 	}
 
 	let {
@@ -55,7 +57,8 @@
 		selectable = false,
 		selectedIds = $bindable(new Set<string>()),
 		cartFilterLabel = '',
-		cartFilterActive = $bindable(true)
+		cartFilterActive = $bindable(true),
+		cartedIds = new Set<string>()
 	}: Props = $props();
 
 	let sortKey = $state('');
@@ -181,7 +184,7 @@
 		{#if cartFilterLabel}
 			<button
 				onclick={() => (cartFilterActive = !cartFilterActive)}
-				class="text-xs flex items-center gap-1 px-2 py-0.5 rounded transition-colors {cartFilterActive ? 'text-ocean-400 hover:text-ocean-300' : 'text-slate-500 line-through hover:text-slate-400'}"
+				class="text-xs flex items-center gap-1 px-2 py-0.5 rounded transition-colors {cartFilterActive ? 'text-ocean-400 hover:text-ocean-300' : 'text-slate-500 hover:text-slate-400'}"
 				title="{cartFilterActive ? 'Click to disable' : 'Click to enable'} cart filter"
 			>
 				<svg class="w-3 h-3" fill={cartFilterActive ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v5l-4 2V12L3 4z"/></svg>
@@ -196,6 +199,11 @@
 			>
 				×&nbsp;color by {columns.find((c) => c.key === colorByKey)?.label ?? colorByKey}
 			</button>
+		{/if}
+		{#if selectable}
+			<span class="text-[10px] text-slate-600 hidden sm:inline">
+				Shift+↑↓ navigate · Space select · Shift+click header to color
+			</span>
 		{/if}
 	</div>
 {/if}
@@ -291,7 +299,9 @@
 					{/if}
 					{#if showId}
 						<td class="px-3 py-3">
-							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>
+							<span class="font-mono text-xs text-slate-600" title={row.id as string}>
+								{#if cartedIds.has(row.id as string)}<span class="text-ocean-400 mr-0.5" title="In cart">&#9679;</span>{/if}{shortId(row)}
+							</span>
 						</td>
 					{/if}
 					{#each columns as col}
