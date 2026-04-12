@@ -82,8 +82,20 @@
 		rows = newRows;
 	}
 
-	/** Rows the user has actually filled in (skips totally-empty rows). */
-	const nonEmptyRows = $derived(rows.filter((r) => r.samp_name.trim()));
+	/** Data rows the user has filled in. Row 0 is the template — never imported,
+	 *  even if it has a samp_name. */
+	const nonEmptyRows = $derived(
+		rows.slice(1).filter((r) => r.samp_name.trim())
+	);
+
+	/** Pressing Enter in any cell of the template row (row 0) copies that
+	 *  column's value down into every data row, overwriting whatever's there. */
+	function onTemplateKeydown(e: KeyboardEvent, field: keyof Row) {
+		if (e.key !== 'Enter') return;
+		e.preventDefault();
+		const value = rows[0][field];
+		rows = rows.map((row, i) => (i === 0 ? row : { ...row, [field]: value }));
+	}
 
 	async function submit() {
 		errorMsg = '';
@@ -137,10 +149,10 @@
 		result = { imported, failed: errors.length, errors };
 		if (errors.length === 0) {
 			// Full success — clear the data rows but preserve the template
-			// row 0 so the operator can keep entering more samples without
-			// retyping the common fields.
-			const tpl = { ...rows[0], samp_name: '' };
-			rows = [tpl, emptyRow(), emptyRow(), emptyRow(), emptyRow()];
+			// (row 0) so the operator can keep entering more samples without
+			// retyping the common fields. The template is never imported, so
+			// no need to clear its samp_name.
+			rows = [{ ...rows[0] }, emptyRow(), emptyRow(), emptyRow(), emptyRow()];
 		}
 	}
 
@@ -197,11 +209,12 @@
 		</div>
 		<p class="text-xs text-slate-500 pb-2">
 			Paste a block of rows from a spreadsheet to auto-fill.
-			Row <span class="text-ocean-400">⭐</span> is a template —
+			Row <span class="text-ocean-400">⭐</span> is a template (never imported) —
+			press <kbd class="text-ocean-400">Enter</kbd> in any of its cells to fill that column down,
+			or
 			<button type="button" onclick={applyTemplate} class="text-ocean-400 hover:text-ocean-300 underline">
-				apply to all
-			</button>
-			fills empty cells below with its values.
+				apply all to empty cells
+			</button>.
 		</p>
 	</div>
 
@@ -220,16 +233,13 @@
 			</thead>
 			<tbody>
 				{#each rows as row, i}
-					<tr
-						class="border-b border-slate-800/50 {i === 0
-							? 'bg-ocean-900/20'
-							: ''}"
-					>
+					{@const isTpl = i === 0}
+					<tr class="border-b border-slate-800/50 {isTpl ? 'bg-ocean-900/20' : ''}">
 						<td class="px-2 py-1 text-slate-500 text-xs font-mono">
-							{#if i === 0}
-								<span class="text-ocean-400" title="Template — fills empty cells in rows below">⭐</span>
+							{#if isTpl}
+								<span class="text-ocean-400" title="Template — Enter in any cell fills the column">⭐</span>
 							{:else}
-								{i + 1}
+								{i}
 							{/if}
 						</td>
 						<td class="px-2 py-1">
@@ -237,6 +247,7 @@
 								type="text"
 								bind:value={row.samp_name}
 								onpaste={(e) => handlePaste(e, i, 'samp_name')}
+								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'samp_name') : undefined}
 								class={inputCls}
 							/>
 						</td>
@@ -245,6 +256,7 @@
 								type="text"
 								bind:value={row.collection_date}
 								onpaste={(e) => handlePaste(e, i, 'collection_date')}
+								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'collection_date') : undefined}
 								placeholder="YYYY-MM-DD"
 								class={inputCls}
 							/>
@@ -254,6 +266,7 @@
 								type="text"
 								bind:value={row.latitude}
 								onpaste={(e) => handlePaste(e, i, 'latitude')}
+								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'latitude') : undefined}
 								class={inputCls}
 							/>
 						</td>
@@ -262,6 +275,7 @@
 								type="text"
 								bind:value={row.longitude}
 								onpaste={(e) => handlePaste(e, i, 'longitude')}
+								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'longitude') : undefined}
 								class={inputCls}
 							/>
 						</td>
@@ -270,6 +284,7 @@
 								type="text"
 								bind:value={row.notes}
 								onpaste={(e) => handlePaste(e, i, 'notes')}
+								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'notes') : undefined}
 								class={inputCls}
 							/>
 						</td>
