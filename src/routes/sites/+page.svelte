@@ -7,8 +7,19 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let sites = $state(data.sites as any[]);
+	let allSites = $state(data.sites as any[]);
 	let selectedIds = $state(new Set<string>());
+
+	// Cart filtering: if the cart has projects, only show sites from those projects
+	const cartProjectIds = $derived(cart.idsOfType('project'));
+	const hasCartFilter = $derived(cartProjectIds.size > 0);
+	let cartFilterActive = $state(true);
+
+	let sites = $derived(
+		hasCartFilter && cartFilterActive
+			? allSites.filter((s: any) => cartProjectIds.has(s.project_id))
+			: allSites
+	);
 
 	function addToCart() {
 		const items = sites
@@ -62,7 +73,7 @@
 	async function deleteSite(row: Record<string, unknown>) {
 		if (!confirm(`Delete site "${row.site_name}"?`)) return;
 		const res = await fetch(`/api/sites/${row.id}`, { method: 'DELETE' });
-		if (res.ok) sites = sites.filter(s => s.id !== row.id);
+		if (res.ok) allSites = allSites.filter(s => s.id !== row.id);
 	}
 
 	async function duplicateSite(row: Record<string, unknown>) {
@@ -88,13 +99,24 @@
 		</div>
 	</div>
 
+	{#if hasCartFilter}
+		<div class="flex items-center gap-2 text-xs text-slate-400">
+			<span class="text-ocean-400">Cart filter:</span>
+			<span>showing {sites.length} of {allSites.length} sites</span>
+			<button
+				onclick={() => (cartFilterActive = !cartFilterActive)}
+				class="px-2 py-0.5 rounded border {cartFilterActive ? 'border-ocean-700 text-ocean-400' : 'border-slate-700 text-slate-500'} hover:text-white"
+			>{cartFilterActive ? 'On' : 'Off'}</button>
+		</div>
+	{/if}
+
 	{#if markers.length > 0}
 		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" />
 	{/if}
 
 	<DataTable
 		{columns}
-		bind:rows={sites}
+		rows={sites}
 		bind:colorByKey
 		bind:selectedIds
 		href={(row) => `/sites/${row.id}`}
