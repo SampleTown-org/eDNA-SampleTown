@@ -5,7 +5,8 @@ import { attachPeopleSummary } from '$lib/server/entity-personnel';
 export const load: PageServerLoad = async () => {
 	const db = getDb();
 	const samples = db.prepare(`
-		SELECT s.*, p.project_name, st.site_name, st.geo_loc_name, st.lat_lon
+		SELECT s.*, p.project_name, st.site_name, st.geo_loc_name, st.lat_lon,
+			st.env_broad_scale, st.env_local_scale
 		FROM samples s
 		JOIN projects p ON p.id = s.project_id
 		JOIN sites st ON st.id = s.site_id

@@ -141,19 +141,19 @@
 				<div>
 					<label for="samp_name" class="block text-sm font-medium text-slate-300 mb-1">Sample Name</label>
 					<input id="samp_name" type="text" bind:value={form.samp_name}
-						class="{inputCls} {bc('samp_name')}" placeholder={data.namingTemplates?.sample_name || 'e.g., eDNA_River_2026_001'} />
+						class="{inputCls} border-slate-700" placeholder={data.namingTemplates?.sample_name || 'e.g., eDNA_River_2026_001'} />
 				</div>
 				<div>
 					<label for="collection_date" class="block text-sm font-medium text-slate-300 mb-1">Collection Date</label>
 					<input id="collection_date" type="date" bind:value={form.collection_date}
-						class="{inputCls} {bc('collection_date')}" />
+						class="{inputCls} border-slate-700" />
 				</div>
 			</div>
 
 			<div>
 				<label for="env_medium" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=env_medium" target="_blank" class="hover:text-ocean-400">Environmental Medium</a></label>
 				<select id="env_medium" bind:value={form.env_medium}
-					class="{selectCls} {bc('env_medium')}">
+					class="{selectCls} border-slate-700">
 					<option value="">Select...</option>
 					{#each data.picklists.env_medium as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>

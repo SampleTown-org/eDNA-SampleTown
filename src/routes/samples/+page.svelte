@@ -47,12 +47,27 @@
 		cart.openSidebar();
 	}
 
+	/** Strip ENVO ontology codes like [ENVO:00000447] from display values. */
+	function stripEnvo(v: unknown): string {
+		if (v == null) return '';
+		return String(v).replace(/\s*\[ENVO:\d+\]\s*/g, '').trim();
+	}
+
+	let displaySamples = $derived(samples.map((s: any) => ({
+		...s,
+		env_broad_scale: stripEnvo(s.env_broad_scale),
+		env_local_scale: stripEnvo(s.env_local_scale),
+		env_medium: stripEnvo(s.env_medium)
+	})));
+
 	const columns = [
 		{ key: 'samp_name', label: 'Sample', sortable: true },
 		{ key: 'project_name', label: 'Project', sortable: true },
 		{ key: 'site_name', label: 'Site', sortable: true },
-		{ key: 'mixs_checklist', label: 'Checklist', sortable: true },
 		{ key: 'geo_loc_name', label: 'Location', sortable: true },
+		{ key: 'env_broad_scale', label: 'Biome', sortable: true },
+		{ key: 'env_local_scale', label: 'Feature', sortable: true },
+		{ key: 'env_medium', label: 'Medium', sortable: true },
 		{ key: 'collection_date', label: 'Collected', sortable: true },
 		{ key: 'people_summary', label: 'People', sortable: true }
 	];
@@ -88,7 +103,7 @@
 
 	<DataTable
 		{columns}
-		rows={samples}
+		rows={displaySamples}
 		bind:selectedIds
 		href={(row) => `/samples/${row.id}`}
 		empty="No samples yet."

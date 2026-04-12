@@ -60,7 +60,7 @@
 
 	// Column mapper state — populated from the dry-run response and editable by the user.
 	let columnMap = $state<Record<string, string>>({});
-	let showMapper = $state(false);
+	let showMapper = $state(true);
 
 	let importFile: File | null = $state(null);
 
@@ -303,9 +303,7 @@
 							<span class="text-slate-500">
 								{Object.values(columnMap).filter((v) => v && v !== '_skip_').length} mapped
 								&middot;
-								{Object.values(columnMap).filter((v) => v === '_skip_').length} skipped
-								&middot;
-								{Object.values(columnMap).filter((v) => !v).length} unmapped
+								{Object.values(columnMap).filter((v) => !v || v === '_skip_').length} skipped
 							</span>
 						</span>
 						<span class="text-xs text-slate-500">{showMapper ? '▾' : '▸'}</span>
@@ -313,8 +311,7 @@
 					{#if showMapper}
 						<div class="p-4 pt-0 space-y-2">
 							<p class="text-xs text-slate-500">
-								Override SampleTown's auto-detection. Unmapped columns are ignored. Use
-								<code>_skip_</code> to deliberately drop a column.
+								Override SampleTown's auto-detection. Skipped columns are ignored on import.
 								Fields prefixed with <code class="text-ocean-400">site:</code> populate the site record;
 								<code class="text-green-400">sample:</code> fields go on the sample.
 							</p>
@@ -335,8 +332,7 @@
 														bind:value={columnMap[header]}
 														class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500"
 													>
-														<option value="">(unmapped — ignored)</option>
-														<option value="_skip_">(skip — drop column)</option>
+														<option value="">(skip)</option>
 														<option value="custom:{header}">(add as custom field)</option>
 														{#each importPreview.available_fields ?? [] as f}
 															<option value={f.value} class="{siteFieldSet.has(f.value) ? 'text-ocean-400' : 'text-green-400'}">{f.label}</option>

@@ -285,6 +285,18 @@ export function parseMixsTsv(
 			errors.push(`Row ${i + 1}: missing sample_name`);
 			continue;
 		}
+
+		// Sanitize names: only a-zA-Z0-9_-. allowed; replace others with .
+		const NAME_RE = /[^a-zA-Z0-9_.\-]/g;
+		for (const nameField of ['samp_name', 'site_name']) {
+			const raw = sample[nameField] as string | null;
+			if (raw && NAME_RE.test(raw)) {
+				const cleaned = raw.replace(NAME_RE, '.');
+				errors.push(`Row ${i + 1}: ${nameField} "${raw}" contains invalid characters, sanitized to "${cleaned}"`);
+				sample[nameField] = cleaned;
+			}
+		}
+
 		if (!sample.collection_date) {
 			errors.push(`Row ${i + 1} (${sample.samp_name}): missing collection_date`);
 		}

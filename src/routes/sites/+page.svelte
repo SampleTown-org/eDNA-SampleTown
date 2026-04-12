@@ -46,10 +46,27 @@
 	/** Mirrored from the DataTable so the map pins can adopt the same tint. */
 	let colorByKey = $state('');
 
+	/** Strip ENVO ontology codes like [ENVO:00000447] from display values. */
+	function stripEnvo(v: unknown): string {
+		if (v == null) return '';
+		return String(v).replace(/\s*\[ENVO:\d+\]\s*/g, '').trim();
+	}
+
+	// Pre-process sites for display: strip ENVO codes
+	let displaySites = $derived(sites.map((s: any) => ({
+		...s,
+		env_broad_scale: stripEnvo(s.env_broad_scale),
+		env_local_scale: stripEnvo(s.env_local_scale)
+	})));
+
 	const columns = [
 		{ key: 'site_name', label: 'Site', sortable: true },
 		{ key: 'project_name', label: 'Project', sortable: true },
+		{ key: 'latitude', label: 'Lat', sortable: true },
+		{ key: 'longitude', label: 'Lon', sortable: true },
 		{ key: 'geo_loc_name', label: 'Location', sortable: true },
+		{ key: 'env_broad_scale', label: 'Biome', sortable: true },
+		{ key: 'env_local_scale', label: 'Feature', sortable: true },
 		{ key: 'habitat_type', label: 'Habitat', sortable: true },
 		{ key: 'sample_count', label: 'Samples', sortable: true }
 	];
@@ -113,7 +130,7 @@
 
 	<DataTable
 		{columns}
-		rows={sites}
+		rows={displaySites}
 		bind:colorByKey
 		bind:selectedIds
 		href={(row) => `/sites/${row.id}`}
