@@ -2,28 +2,24 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
-
-const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
+import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
+import { parseBody } from '$lib/server/validation';
+import { RunUpdateBody } from '$lib/server/schemas/lab';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
 	const row = db.prepare('SELECT * FROM sequencing_runs WHERE id = ? AND is_deleted = 0').get(params.id);
 	if (!row) throw error(404, 'Run not found');
-	return json(row);
+	const people = getEntityPersonnel('sequencing_run', params.id!);
+	return json({ ...(row as Record<string, unknown>), people });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
+	const parsed = parseBody(RunUpdateBody, await request.json().catch(() => null));
+	if (!parsed.ok) return parsed.response;
+	const data = parsed.data;
+
 	try {
-		const data = await request.json();
-		if (!data?.run_name?.trim()) {
-			return json({ error: 'run_name is required' }, { status: 400 });
-		}
-		if (!data?.platform) {
-			return json({ error: 'platform is required' }, { status: 400 });
-		}
-		if (!data?.seq_meth) {
-			return json({ error: 'seq_meth is required' }, { status: 400 });
-		}
 		const db = getDb();
 		db.prepare(
 			`UPDATE sequencing_runs SET
@@ -33,20 +29,25 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
-			data.run_name.trim(),
-			nn(data.run_date),
+			data.run_name,
+			data.run_date ?? null,
 			data.platform,
-			nn(data.instrument_model),
+			data.instrument_model ?? null,
 			data.seq_meth,
-			nn(data.flow_cell_id),
-			nn(data.run_directory),
-			nn(data.fastq_directory),
+			data.flow_cell_id ?? null,
+			data.run_directory ?? null,
+			data.fastq_directory ?? null,
 			data.total_reads ?? null,
 			data.total_bases ?? null,
-			nn(data.notes),
+			data.notes ?? null,
 			params.id
 		);
-		return json(db.prepare('SELECT * FROM sequencing_runs WHERE id = ?').get(params.id));
+		if (data.people !== undefined) {
+			setEntityPersonnel(db, 'sequencing_run', params.id!, normalizePeople(data.people));
+		}
+		const updated = db.prepare('SELECT * FROM sequencing_runs WHERE id = ?').get(params.id) as Record<string, unknown>;
+		const people = getEntityPersonnel('sequencing_run', params.id!);
+		return json({ ...updated, people });
 	} catch (err) {
 		return apiError(err);
 	}

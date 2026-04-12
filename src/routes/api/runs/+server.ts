@@ -1,6 +1,9 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
+import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
+import { parseBody } from '$lib/server/validation';
+import { RunCreateBody } from '$lib/server/schemas/lab';
 
 export const GET: RequestHandler = async () => {
 	const db = getDb();
@@ -8,7 +11,10 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	const data = await request.json();
+	const parsed = parseBody(RunCreateBody, await request.json().catch(() => null));
+	if (!parsed.ok) return parsed.response;
+	const data = parsed.data;
+
 	const db = getDb();
 	const id = generateId();
 	db.prepare(`
@@ -27,6 +33,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			stmt.run(id, libId);
 		}
 	}
+
+	setEntityPersonnel(db, 'sequencing_run', id, normalizePeople(data.people));
 
 	return json(db.prepare('SELECT * FROM sequencing_runs WHERE id = ?').get(id), { status: 201 });
 };

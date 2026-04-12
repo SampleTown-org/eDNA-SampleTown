@@ -1,6 +1,20 @@
 import type Database from 'better-sqlite3';
 
 const SEED_DATA: Record<string, string[]> = {
+	person_role: [
+		'collector',
+		'co-collector',
+		'extractor',
+		'pcr operator',
+		'library prep',
+		'sequencer operator',
+		'supervisor',
+		'observer',
+		'field tech',
+		'lab tech',
+		'student',
+		'analyst'
+	],
 	habitat_type: [
 		'estuary', 'kelp forest', 'intertidal', 'subtidal', 'river', 'lake', 'pond',
 		'open ocean', 'coral reef', 'mangrove', 'salt marsh', 'freshwater wetland',

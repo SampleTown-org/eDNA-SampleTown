@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
 	let form = $state({
 		run_name: '', run_date: '', platform: '', instrument_model: '', seq_meth: '',
@@ -38,7 +41,7 @@
 	async function submit() {
 		if (!form.run_name.trim() || !form.seq_meth) { errorMsg = 'Run name and sequencing method are required'; return; }
 		saving = true; errorMsg = '';
-		const body = { ...form, library_ids: selectedLibraries,
+		const body = { ...form, library_ids: selectedLibraries, people,
 			platform: form.platform || null, instrument_model: form.instrument_model || null,
 			total_reads: form.total_reads ? +form.total_reads : null, total_bases: form.total_bases ? +form.total_bases : null };
 		const res = await fetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -55,17 +58,19 @@
 		<h1 class="text-2xl font-bold text-white mt-1">New Sequencing Run</h1></div>
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-4">
-		<div class="grid grid-cols-3 gap-4">
+		<div class="grid grid-cols-2 gap-4">
 			<div><label for="run_name" class="block text-sm font-medium text-slate-300 mb-1">Run Name</label>
 				<input id="run_name" type="text" bind:value={form.run_name} class={inputCls} placeholder={data.namingTemplates?.run_name || 'e.g., RUN-2026-04-09'} /></div>
 			<div><label for="run_date" class="block text-sm font-medium text-slate-300 mb-1">Run Date</label>
 				<input id="run_date" type="date" bind:value={form.run_date} class={inputCls} /></div>
-			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=people" target="_blank" class="hover:text-ocean-400">Sequenced By</a></label>
-				<select bind:value={form.sequenced_by} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.personnel as p}<option value={p.id}>{p.full_name}</option>{/each}
-				</select></div>
 		</div>
+		<PeoplePicker
+			bind:people
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			defaultRole="sequencer operator"
+			label="People"
+		/>
 		<div class="grid grid-cols-3 gap-4">
 			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=seq_platform" target="_blank" class="hover:text-ocean-400">Platform</a></label>
 				<select bind:value={form.platform} class={selectCls}>

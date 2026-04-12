@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
 import { parseLatLon } from '$lib/mixs/validators';
 import { apiError } from '$lib/server/api-errors';
+import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 
 /** Coerce empty / missing strings to null. */
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
@@ -111,6 +112,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			nn(data.custom_fields),
 			locals.user?.id ?? null
 		);
+
+		setEntityPersonnel(db, 'sample', id, normalizePeople(data.people));
 
 		const sample = db.prepare('SELECT * FROM samples WHERE id = ?').get(id);
 		return json(sample, { status: 201 });

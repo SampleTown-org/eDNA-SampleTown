@@ -2,8 +2,9 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
-
-const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
+import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
+import { parseBody } from '$lib/server/validation';
+import { LibraryPlateUpdateBody } from '$lib/server/schemas/lab';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
@@ -11,18 +12,16 @@ export const GET: RequestHandler = async ({ params }) => {
 		.prepare('SELECT * FROM library_plates WHERE id = ? AND is_deleted = 0')
 		.get(params.id);
 	if (!plate) throw error(404, 'Library plate not found');
-	return json(plate);
+	const people = getEntityPersonnel('library_plate', params.id!);
+	return json({ ...plate, people });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
+	const parsed = parseBody(LibraryPlateUpdateBody, await request.json().catch(() => null));
+	if (!parsed.ok) return parsed.response;
+	const data = parsed.data;
+
 	try {
-		const data = await request.json();
-		if (!data?.plate_name?.trim()) {
-			return json({ error: 'plate_name is required' }, { status: 400 });
-		}
-		if (!data?.library_type) {
-			return json({ error: 'library_type is required' }, { status: 400 });
-		}
 		const db = getDb();
 		db.prepare(
 			`UPDATE library_plates SET
@@ -31,17 +30,22 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				notes = ?, sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
-			data.plate_name.trim(),
-			nn(data.library_prep_date),
+			data.plate_name,
+			data.library_prep_date ?? null,
 			data.library_type,
-			nn(data.library_prep_kit),
-			nn(data.platform),
-			nn(data.instrument_model),
+			data.library_prep_kit ?? null,
+			data.platform ?? null,
+			data.instrument_model ?? null,
 			data.fragment_size_bp ?? null,
-			nn(data.notes),
+			data.notes ?? null,
 			params.id
 		);
-		return json(db.prepare('SELECT * FROM library_plates WHERE id = ?').get(params.id));
+		if (data.people !== undefined) {
+			setEntityPersonnel(db, 'library_plate', params.id!, normalizePeople(data.people));
+		}
+		const updated = db.prepare('SELECT * FROM library_plates WHERE id = ?').get(params.id) as Record<string, unknown>;
+		const people = getEntityPersonnel('library_plate', params.id!);
+		return json({ ...updated, people });
 	} catch (err) {
 		return apiError(err);
 	}

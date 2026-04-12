@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+	let people = $state<{ personnel_id: string; role?: string | null }[]>(data.people ?? []);
 
 	let form = $state({
 		extract_name: data.extract.extract_name || '',
@@ -27,6 +29,7 @@
 
 		const body = {
 			...form,
+			people,
 			concentration_ng_ul: form.concentration_ng_ul === '' ? null : Number(form.concentration_ng_ul),
 			total_volume_ul: form.total_volume_ul === '' ? null : Number(form.total_volume_ul),
 			a260_280: form.a260_280 === '' ? null : Number(form.a260_280),
@@ -116,6 +119,14 @@
 				<input id="storage_location" type="text" bind:value={form.storage_location} class={inputCls} />
 			</div>
 		</div>
+		<PeoplePicker
+			bind:people
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			defaultRole="extractor"
+			label="People"
+		/>
+
 		<div>
 			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>

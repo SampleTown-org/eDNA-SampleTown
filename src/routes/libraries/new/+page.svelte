@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PlateView from '$lib/components/PlateView.svelte';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { PageData } from './$types';
 	import { inferPlatformFromInstrument } from '$lib/platform-infer';
 	let { data }: { data: PageData } = $props();
+
+	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
 	let showPlateView = $state(false);
 	let plateFormat = $state<8 | 96 | 384>(96);
@@ -120,6 +123,7 @@
 
 		const body = {
 			...plate,
+			people,
 			pcr_plate_id: sourceType === 'pcr_plate' ? selectedPcrPlateId : null,
 			libraries: rows.map(r => ({
 				pcr_id: r.source_type === 'pcr' ? r.source_id : null,
@@ -210,17 +214,19 @@
 
 		<!-- Plate fields -->
 		<div class="lg:col-span-2 space-y-4">
-			<div class="grid grid-cols-3 gap-4">
+			<div class="grid grid-cols-2 gap-4">
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Plate Name</label>
 					<input type="text" bind:value={plate.plate_name} class={inputCls} placeholder={data.namingTemplates?.library_plate_name || 'e.g., 16S_LIB_001'} /></div>
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Prep Date</label>
 					<input type="date" bind:value={plate.library_prep_date} class={inputCls} /></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=people" target="_blank" class="hover:text-ocean-400">Prepped By</a></label>
-					<select bind:value={plate.prepped_by} class={selectCls}>
-						<option value="">Select...</option>
-						{#each data.personnel as p}<option value={p.id}>{p.full_name}</option>{/each}
-					</select></div>
 			</div>
+			<PeoplePicker
+				bind:people
+				personnel={data.personnel}
+				roleOptions={data.picklists.person_role}
+				defaultRole="library prep"
+				label="People"
+			/>
 			<div class="grid grid-cols-2 gap-4">
 				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_type" target="_blank" class="hover:text-ocean-400">Library Type</a></label>
 					<select bind:value={plate.library_type} class={selectCls}>

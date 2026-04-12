@@ -9,5 +9,6 @@ export const load: PageServerLoad = async ({ url }) => {
 	const primerSets = db.prepare('SELECT * FROM primer_sets WHERE is_active = 1 ORDER BY sort_order, name').all();
 	const pcrProtocols = db.prepare('SELECT * FROM pcr_protocols WHERE is_active = 1 ORDER BY sort_order, name').all();
 	const personnel = getActivePersonnel();
-	return { extracts, primerSets, pcrProtocols, personnel, preselectedExtractId: url.searchParams.get('extract_id') || '' };
+	const picklists = getConstrainedValues('person_role');
+	return { extracts, primerSets, pcrProtocols, personnel, picklists, preselectedExtractId: url.searchParams.get('extract_id') || '' };
 };

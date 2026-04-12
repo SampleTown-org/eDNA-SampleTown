@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
+import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 
 export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
@@ -22,6 +23,7 @@ function insertExtract(db: ReturnType<typeof getDb>, data: Record<string, unknow
 		data.extraction_kit ?? null, data.concentration_ng_ul ?? null, data.total_volume_ul ?? null,
 		data.a260_280 ?? null, data.a260_230 ?? null, data.quantification_method ?? null,
 		data.storage_location ?? null, data.notes ?? null, data.custom_fields ?? null, userId);
+	setEntityPersonnel(db, 'extract', id, normalizePeople(data.people));
 	return db.prepare('SELECT * FROM extracts WHERE id = ?').get(id);
 }
 

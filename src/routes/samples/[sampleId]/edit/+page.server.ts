@@ -1,6 +1,9 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { getConstrainedValues } from '$lib/server/constrained-values';
+import { getActivePersonnel } from '$lib/server/personnel';
+import { getEntityPersonnel } from '$lib/server/entity-personnel';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
@@ -19,6 +22,12 @@ export const load: PageServerLoad = async ({ params }) => {
 			env_broad_scale, env_local_scale, env_medium, env_package, depth, elevation
 		FROM sites WHERE is_deleted = 0 ORDER BY site_name
 	`).all();
+	const picklists = getConstrainedValues('person_role');
+	const personnel = getActivePersonnel();
+	const people = getEntityPersonnel('sample', params.sampleId).map((p) => ({
+		personnel_id: p.personnel_id,
+		role: p.role
+	}));
 
-	return { sample, projects, sites };
+	return { sample, projects, sites, picklists, personnel, people };
 };

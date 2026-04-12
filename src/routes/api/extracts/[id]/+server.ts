@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
+import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
 
@@ -9,7 +10,8 @@ export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
 	const row = db.prepare('SELECT * FROM extracts WHERE id = ? AND is_deleted = 0').get(params.id);
 	if (!row) throw error(404, 'Extract not found');
-	return json(row);
+	const people = getEntityPersonnel('extract', params.id!);
+	return json({ ...row, people });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
@@ -41,7 +43,12 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			nn(data.custom_fields),
 			params.id
 		);
-		return json(db.prepare('SELECT * FROM extracts WHERE id = ?').get(params.id));
+		if (data.people !== undefined) {
+			setEntityPersonnel(db, 'extract', params.id!, normalizePeople(data.people));
+		}
+		const updated = db.prepare('SELECT * FROM extracts WHERE id = ?').get(params.id) as Record<string, unknown>;
+		const people = getEntityPersonnel('extract', params.id!);
+		return json({ ...updated, people });
 	} catch (err) {
 		return apiError(err);
 	}

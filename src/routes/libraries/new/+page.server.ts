@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const pcrPlates = db.prepare(`SELECT p.id, p.plate_name, p.target_gene, p.target_subfragment,
 		(SELECT COUNT(*) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) AS reaction_count
 		FROM pcr_plates p WHERE p.is_deleted = 0 ORDER BY p.created_at DESC`).all();
-	const picklists = getConstrainedValues('library_prep_kit', 'library_type', 'seq_platform', 'seq_instrument', 'index_i7', 'index_i5', 'barcode');
+	const picklists = getConstrainedValues('library_prep_kit', 'library_type', 'seq_platform', 'seq_instrument', 'index_i7', 'index_i5', 'barcode', 'person_role');
 	const personnel = getActivePersonnel();
 	return {
 		pcrs, extracts, pcrPlates, picklists, personnel,

@@ -3,9 +3,11 @@
 	import { CHECKLIST_OPTIONS } from '$lib/mixs/checklists';
 	import { ENV_PACKAGES, ENVO_BIOMES, ENVO_FEATURES, ENVO_MATERIALS } from '$lib/mixs/controlled-vocab';
 	import { formatLatLon } from '$lib/mixs/validators';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+	let people = $state<{ personnel_id: string; role?: string | null }[]>(data.people ?? []);
 
 	let latitude = $state<number | null>(data.sample.latitude ?? null);
 	let longitude = $state<number | null>(data.sample.longitude ?? null);
@@ -38,7 +40,8 @@
 		const body = {
 			...form,
 			site_id: form.site_id || null,
-			lat_lon: latitude != null && longitude != null ? formatLatLon(latitude, longitude) : null
+			lat_lon: latitude != null && longitude != null ? formatLatLon(latitude, longitude) : null,
+			people
 		};
 		const res = await fetch(`/api/samples/${data.sample.id}`, {
 			method: 'PUT',
@@ -157,6 +160,14 @@
 				</datalist>
 			</div>
 		</fieldset>
+
+		<PeoplePicker
+			bind:people
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			defaultRole="collector"
+			label="People"
+		/>
 
 		<div>
 			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>

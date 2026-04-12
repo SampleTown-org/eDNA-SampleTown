@@ -2,25 +2,24 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
-
-const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
+import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
+import { parseBody } from '$lib/server/validation';
+import { PcrPlateUpdateBody } from '$lib/server/schemas/lab';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
 	const plate = db.prepare('SELECT * FROM pcr_plates WHERE id = ? AND is_deleted = 0').get(params.id);
 	if (!plate) throw error(404, 'PCR plate not found');
-	return json(plate);
+	const people = getEntityPersonnel('pcr_plate', params.id!);
+	return json({ ...plate, people });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
+	const parsed = parseBody(PcrPlateUpdateBody, await request.json().catch(() => null));
+	if (!parsed.ok) return parsed.response;
+	const data = parsed.data;
+
 	try {
-		const data = await request.json();
-		if (!data?.plate_name?.trim()) {
-			return json({ error: 'plate_name is required' }, { status: 400 });
-		}
-		if (!data?.target_gene) {
-			return json({ error: 'target_gene is required' }, { status: 400 });
-		}
 		const db = getDb();
 		db.prepare(
 			`UPDATE pcr_plates SET
@@ -30,22 +29,27 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
-			data.plate_name.trim(),
-			nn(data.pcr_date),
+			data.plate_name,
+			data.pcr_date ?? null,
 			data.target_gene,
-			nn(data.target_subfragment),
-			nn(data.forward_primer_name),
-			nn(data.forward_primer_seq),
-			nn(data.reverse_primer_name),
-			nn(data.reverse_primer_seq),
-			nn(data.pcr_conditions),
+			data.target_subfragment ?? null,
+			data.forward_primer_name ?? null,
+			data.forward_primer_seq ?? null,
+			data.reverse_primer_name ?? null,
+			data.reverse_primer_seq ?? null,
+			data.pcr_conditions ?? null,
 			data.annealing_temp_c ?? null,
 			data.num_cycles ?? null,
-			nn(data.polymerase),
-			nn(data.notes),
+			data.polymerase ?? null,
+			data.notes ?? null,
 			params.id
 		);
-		return json(db.prepare('SELECT * FROM pcr_plates WHERE id = ?').get(params.id));
+		if (data.people !== undefined) {
+			setEntityPersonnel(db, 'pcr_plate', params.id!, normalizePeople(data.people));
+		}
+		const updated = db.prepare('SELECT * FROM pcr_plates WHERE id = ?').get(params.id) as Record<string, unknown>;
+		const people = getEntityPersonnel('pcr_plate', params.id!);
+		return json({ ...updated, people });
 	} catch (err) {
 		return apiError(err);
 	}

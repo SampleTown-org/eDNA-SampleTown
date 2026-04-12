@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+	let people = $state<{ personnel_id: string; role?: string | null }[]>(data.people ?? []);
 
 	let form = $state({
 		run_name: data.run.run_name || '',
@@ -27,6 +29,7 @@
 
 		const body = {
 			...form,
+			people,
 			total_reads: form.total_reads === '' ? null : Number(form.total_reads),
 			total_bases: form.total_bases === '' ? null : Number(form.total_bases)
 		};
@@ -114,6 +117,14 @@
 				<input id="total_bases" type="number" bind:value={form.total_bases} class={inputCls} />
 			</div>
 		</div>
+		<PeoplePicker
+			bind:people
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			defaultRole="sequencer operator"
+			label="People"
+		/>
+
 		<div>
 			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>

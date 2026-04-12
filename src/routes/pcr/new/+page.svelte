@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PlateView from '$lib/components/PlateView.svelte';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
 	// Plate layout — assigns reactions to well positions (A1, A2, …).
 	// Optional visual aid for laying out the plate on the bench; the mapping
@@ -12,7 +15,7 @@
 	let wellAssignments = $state<Record<string, string>>({});
 
 	let plate = $state({
-		plate_name: '', pcr_date: '', pcr_operator: '', target_gene: '16S', target_subfragment: '',
+		plate_name: '', pcr_date: '', target_gene: '16S', target_subfragment: '',
 		forward_primer_name: '', forward_primer_seq: '', reverse_primer_name: '', reverse_primer_seq: '',
 		pcr_conditions: '', annealing_temp_c: '', num_cycles: '', polymerase: '', notes: ''
 	});
@@ -108,6 +111,7 @@
 
 		const body = {
 			...plate,
+			people,
 			annealing_temp_c: plate.annealing_temp_c ? +plate.annealing_temp_c : null,
 			num_cycles: plate.num_cycles ? +plate.num_cycles : null,
 			reactions: rows.map(r => ({
@@ -156,17 +160,19 @@
 
 		<!-- Plate fields -->
 		<div class="lg:col-span-2 space-y-4">
-			<div class="grid grid-cols-3 gap-4">
+			<div class="grid grid-cols-2 gap-4">
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Plate Name</label>
 					<input type="text" bind:value={plate.plate_name} class={inputCls} placeholder={data.namingTemplates?.pcr_plate_name || 'e.g., 16S_Plate_001'} /></div>
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Date</label>
 					<input type="date" bind:value={plate.pcr_date} class={inputCls} /></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=people" target="_blank" class="hover:text-ocean-400">Operator</a></label>
-					<select bind:value={plate.pcr_operator} class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500">
-						<option value="">Select...</option>
-						{#each data.personnel as p}<option value={p.id}>{p.full_name}</option>{/each}
-					</select></div>
 			</div>
+			<PeoplePicker
+				bind:people
+				personnel={data.personnel}
+				roleOptions={data.picklists.person_role}
+				defaultRole="pcr operator"
+				label="People"
+			/>
 
 			<!-- Primer Set selector -->
 			<div>

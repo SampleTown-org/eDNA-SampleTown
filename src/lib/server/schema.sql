@@ -485,6 +485,25 @@ CREATE TABLE IF NOT EXISTS personnel (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Many-to-many: each entity (sample, extract, plate, run) can have any
+-- number of attributed people, each with a free-text role label. The
+-- role vocabulary is suggested via the `person_role` constrained_values
+-- category but not enforced — operators can type their own.
+CREATE TABLE IF NOT EXISTS entity_personnel (
+    entity_type  TEXT NOT NULL CHECK (entity_type IN
+        ('sample', 'extract', 'pcr_plate', 'library_plate', 'sequencing_run')),
+    entity_id    TEXT NOT NULL,
+    personnel_id TEXT NOT NULL REFERENCES personnel(id) ON DELETE CASCADE,
+    role         TEXT,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (entity_type, entity_id, personnel_id, role)
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_personnel_lookup
+    ON entity_personnel(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_entity_personnel_person
+    ON entity_personnel(personnel_id);
+
 -- ============================================================
 -- FEEDBACK
 -- ============================================================

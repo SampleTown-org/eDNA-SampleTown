@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { parseLatLon } from '$lib/mixs/validators';
 import { apiError } from '$lib/server/api-errors';
+import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 
 /** Coerce empty strings to null (CHECK constraints reject ''). */
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
@@ -18,7 +19,8 @@ export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
 	const sample = db.prepare('SELECT * FROM samples WHERE id = ? AND is_deleted = 0').get(params.id);
 	if (!sample) throw error(404, 'Sample not found');
-	return json(sample);
+	const people = getEntityPersonnel('sample', params.id!);
+	return json({ ...sample, people });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
@@ -88,8 +90,16 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			params.id
 		);
 
-		const updated = db.prepare('SELECT * FROM samples WHERE id = ?').get(params.id);
-		return json(updated);
+		// Replace the attributed people if the request supplied a list. We
+		// only touch entity_personnel when `people` is explicitly present so
+		// callers that update other fields don't accidentally clear it.
+		if (data.people !== undefined) {
+			setEntityPersonnel(db, 'sample', params.id!, normalizePeople(data.people));
+		}
+
+		const updated = db.prepare('SELECT * FROM samples WHERE id = ?').get(params.id) as Record<string, unknown>;
+		const people = getEntityPersonnel('sample', params.id!);
+		return json({ ...updated, people });
 	} catch (err) {
 		return apiError(err);
 	}

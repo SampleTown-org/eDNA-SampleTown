@@ -4,6 +4,7 @@
 	import { ENV_PACKAGES } from '$lib/mixs/controlled-vocab';
 	import { CORE_FIELDS, PACKAGE_FIELDS, MEASUREMENT_FIELDS, LOGISTICS_FIELDS } from '$lib/mixs/fields';
 	import { validateSample, formatLatLon } from '$lib/mixs/validators';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { EnvPackage, MixsChecklist } from '$lib/types';
 	import type { PageData } from './$types';
 
@@ -23,6 +24,8 @@
 		env_local_scale: '',
 		env_medium: ''
 	});
+
+	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
 	// Compose lat_lon for validation and submission
 	let latLonStr = $derived(
@@ -79,7 +82,7 @@
 		saving = true;
 		errorMsg = '';
 
-		const body = { ...form, lat_lon: latLonStr };
+		const body = { ...form, lat_lon: latLonStr, people };
 		const res = await fetch('/api/samples', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -239,14 +242,14 @@
 			</fieldset>
 		{/if}
 
-		<!-- Collector -->
-		<div>
-			<label for="collector_id" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=people" target="_blank" class="hover:text-ocean-400">Collector</a></label>
-			<select id="collector_id" bind:value={form.collector_id} class={selectCls}>
-				<option value="">Select...</option>
-				{#each data.personnel as p}<option value={p.id}>{p.full_name}{p.role ? ` (${p.role})` : ''}</option>{/each}
-			</select>
-		</div>
+		<!-- Personnel attribution -->
+		<PeoplePicker
+			bind:people
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			defaultRole="collector"
+			label="People"
+		/>
 
 		<!-- Measurements (collapsible) -->
 		<details class="group">

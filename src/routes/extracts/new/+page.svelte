@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
 	let mode = $state<'single' | 'batch'>(data.preselectedSampleId ? 'single' : 'single');
 
@@ -55,7 +58,7 @@
 	async function submitSingle() {
 		if (!form.sample_id || !form.extract_name.trim()) { errorMsg = 'Sample and extract name are required'; return; }
 		saving = true; errorMsg = '';
-		const body = { ...form,
+		const body = { ...form, people,
 			concentration_ng_ul: form.concentration_ng_ul ? +form.concentration_ng_ul : null,
 			total_volume_ul: form.total_volume_ul ? +form.total_volume_ul : null,
 			a260_280: form.a260_280 ? +form.a260_280 : null, a260_230: form.a260_230 ? +form.a260_230 : null };
@@ -72,6 +75,7 @@
 			sample_id: r.sample_id,
 			extract_name: r.extract_name,
 			...shared,
+			people,
 			concentration_ng_ul: r.concentration_ng_ul ? +r.concentration_ng_ul : null,
 			total_volume_ul: r.total_volume_ul ? +r.total_volume_ul : null,
 			a260_280: r.a260_280 ? +r.a260_280 : null,
@@ -115,12 +119,15 @@
 				<input id="extract_name" type="text" bind:value={form.extract_name} class={inputCls} placeholder={data.namingTemplates?.extract_name || 'e.g., EXT-001'} /></div>
 			<div><label for="extraction_date" class="block text-sm font-medium text-slate-300 mb-1">Extraction Date</label>
 				<input id="extraction_date" type="date" bind:value={form.extraction_date} class={inputCls} /></div>
-			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=people" target="_blank" class="hover:text-ocean-400">Extracted By</a></label>
-				<select bind:value={form.extracted_by} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.personnel as p}<option value={p.id}>{p.full_name}</option>{/each}
-				</select></div>
+			<div></div>
 		</div>
+		<PeoplePicker
+			bind:people
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			defaultRole="extractor"
+			label="People"
+		/>
 		<div class="grid grid-cols-2 gap-4">
 			<div><label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Method</a></label>
 				<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
@@ -226,6 +233,13 @@
 				<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
 					<input type="text" bind:value={shared.notes} class={inputCls} /></div>
 			</div>
+			<PeoplePicker
+				bind:people
+				personnel={data.personnel}
+				roleOptions={data.picklists.person_role}
+				defaultRole="extractor"
+				label="People (applied to all)"
+			/>
 		</div>
 	</div>
 
