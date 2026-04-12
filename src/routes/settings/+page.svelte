@@ -50,16 +50,12 @@
 		}
 	];
 
-	// Which vocab group is active? Default to whichever group contains the initial category.
-	let activeVocabGroup = $state(
-		VOCAB_GROUPS.find(g => g.categories.includes(initialCategory))?.label || 'MIxS'
-	);
-	let activeGroupCategories = $derived(
-		VOCAB_GROUPS.find(g => g.label === activeVocabGroup)?.categories ?? []
-	);
-	let activeGroupDescription = $derived(
-		VOCAB_GROUPS.find(g => g.label === activeVocabGroup)?.description ?? ''
-	);
+	function vocabGroupFor(cat: string): string {
+		for (const g of VOCAB_GROUPS) {
+			if (g.categories.includes(cat)) return g.label;
+		}
+		return 'MIxS';
+	}
 
 	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback';
 
@@ -264,6 +260,13 @@
 	let tabType = $state<TabType>(initialTab);
 	let categories = $state(structuredClone(data.categories) as Record<string, any[]>);
 	let activeCategory = $state(initialCategory);
+	let activeVocabGroup = $state(vocabGroupFor(initialCategory));
+	let activeGroupCategories = $derived(
+		VOCAB_GROUPS.find(g => g.label === activeVocabGroup)?.categories ?? []
+	);
+	let activeGroupDescription = $derived(
+		VOCAB_GROUPS.find(g => g.label === activeVocabGroup)?.description ?? ''
+	);
 	let primerSets = $state(structuredClone(data.primerSets) as any[]);
 	let pcrProtocols = $state(structuredClone(data.pcrProtocols) as any[]);
 
