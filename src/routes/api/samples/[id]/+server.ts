@@ -49,7 +49,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				depth = ?, elevation = ?, host_taxon_id = ?,
 				assembly_software = ?, number_of_contigs = ?, genome_coverage = ?, reference_genome = ?, annotation_source = ?,
 				temp = ?, salinity = ?, ph = ?, dissolved_oxygen = ?, pressure = ?, turbidity = ?, chlorophyll = ?, nitrate = ?, phosphate = ?,
-				sample_type = ?, volume_filtered_ml = ?, filter_type = ?, preservation_method = ?, storage_conditions = ?, collector_name = ?,
+				volume_filtered_ml = ?, filter_type = ?, preservation_method = ?, storage_conditions = ?, collector_name = ?,
 				notes = ?, custom_fields = ?,
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
@@ -77,7 +77,6 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.chlorophyll ?? null,
 			data.nitrate ?? null,
 			data.phosphate ?? null,
-			nn(data.sample_type),
 			data.volume_filtered_ml ?? null,
 			nn(data.filter_type),
 			nn(data.preservation_method),

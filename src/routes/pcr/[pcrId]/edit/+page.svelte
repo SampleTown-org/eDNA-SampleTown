@@ -17,7 +17,7 @@
 			? {
 					plate_name: (data.plate as any).plate_name || '',
 					pcr_date: (data.plate as any).pcr_date || '',
-					target_gene: (data.plate as any).target_gene || '',
+					primer_set_id: (data.plate as any).primer_set_id || '',
 					target_subfragment: (data.plate as any).target_subfragment || '',
 					forward_primer_name: (data.plate as any).forward_primer_name || '',
 					forward_primer_seq: (data.plate as any).forward_primer_seq || '',
@@ -35,12 +35,17 @@
 		data.type === 'plate' ? data.people ?? [] : []
 	);
 
-	let selectedPrimerSetId = $state('');
+	// Resolved target_gene from the selected primer_set (never stored directly).
+	const plateGene = $derived.by(() => {
+		if (data.type !== 'plate') return '';
+		const ps = (data.primerSets as any[] | undefined)?.find((p: any) => p.id === plateForm.primer_set_id);
+		return ps?.target_gene ?? '';
+	});
+
 	function onPrimerSetChange() {
 		if (data.type !== 'plate') return;
-		const ps = (data.primerSets as any[] | undefined)?.find((p: any) => p.id === selectedPrimerSetId);
+		const ps = (data.primerSets as any[] | undefined)?.find((p: any) => p.id === plateForm.primer_set_id);
 		if (!ps) return;
-		plateForm.target_gene = ps.target_gene;
 		plateForm.target_subfragment = ps.target_subfragment || '';
 		plateForm.forward_primer_name = ps.forward_primer_name || '';
 		plateForm.forward_primer_seq = ps.forward_primer_seq || '';
@@ -59,12 +64,12 @@
 		plateForm.pcr_conditions = proto.pcr_conditions || '';
 	}
 
-	// Reaction-edit branch state (legacy form, unchanged from before plates landed)
+	// Reaction-edit branch state
 	let reactionForm = $state(
 		data.type === 'reaction'
 			? {
 					pcr_name: (data.pcr as any).pcr_name || '',
-					target_gene: (data.pcr as any).target_gene || '',
+					primer_set_id: (data.pcr as any).primer_set_id || '',
 					target_subfragment: (data.pcr as any).target_subfragment || '',
 					forward_primer_name: (data.pcr as any).forward_primer_name || '',
 					forward_primer_seq: (data.pcr as any).forward_primer_seq || '',
@@ -86,7 +91,6 @@
 
 	async function submitPlate() {
 		if (!plateForm.plate_name.trim()) { errorMsg = 'Plate name is required'; return; }
-		if (!plateForm.target_gene) { errorMsg = 'Target gene is required'; return; }
 		saving = true; errorMsg = '';
 
 		const body = {
@@ -178,9 +182,10 @@
 			<div>
 				<label class="block text-sm font-medium text-slate-300 mb-1">
 					<a href="/settings?tab=primers" target="_blank" class="hover:text-ocean-400">Primer Set</a>
+					{#if plateGene}<span class="text-xs text-slate-500 font-normal">— {plateGene}{plateForm.target_subfragment ? ` ${plateForm.target_subfragment}` : ''}</span>{/if}
 				</label>
-				<select bind:value={selectedPrimerSetId} onchange={onPrimerSetChange} class={selectCls}>
-					<option value="">Keep current ({plateForm.target_gene}{plateForm.target_subfragment ? ` ${plateForm.target_subfragment}` : ''})</option>
+				<select bind:value={plateForm.primer_set_id} onchange={onPrimerSetChange} class={selectCls}>
+					<option value="">Select primer set...</option>
 					{#each data.primerSets ?? [] as ps}
 						<option value={ps.id}>{ps.name}</option>
 					{/each}
@@ -235,15 +240,9 @@
 	{:else}
 		<!-- Legacy individual-reaction edit form (untouched) -->
 		<form onsubmit={(e) => { e.preventDefault(); submitReaction(); }} class="space-y-6">
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				<div>
-					<label for="pcr_name" class="block text-sm font-medium text-slate-300 mb-1">PCR Name</label>
-					<input id="pcr_name" type="text" bind:value={reactionForm.pcr_name} class={inputCls} />
-				</div>
-				<div>
-					<label for="target_gene_r" class="block text-sm font-medium text-slate-300 mb-1">Target Gene</label>
-					<input id="target_gene_r" type="text" bind:value={reactionForm.target_gene} class={inputCls} placeholder="e.g., 16S, 18S, CO1 (from primer set)" />
-				</div>
+			<div>
+				<label for="pcr_name" class="block text-sm font-medium text-slate-300 mb-1">PCR Name</label>
+				<input id="pcr_name" type="text" bind:value={reactionForm.pcr_name} class={inputCls} />
 			</div>
 			<div>
 				<label class="block text-sm font-medium text-slate-300 mb-1">Target Subfragment</label>

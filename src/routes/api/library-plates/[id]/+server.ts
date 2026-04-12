@@ -26,6 +26,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		db.prepare(
 			`UPDATE library_plates SET
 				plate_name = ?, library_prep_date = ?, library_type = ?,
+				library_source = ?, library_selection = ?,
 				library_prep_kit = ?, platform = ?, instrument_model = ?, fragment_size_bp = ?,
 				notes = ?, sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
@@ -33,6 +34,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.plate_name,
 			data.library_prep_date ?? null,
 			data.library_type,
+			data.library_source ?? null,
+			data.library_selection ?? null,
 			data.library_prep_kit ?? null,
 			data.platform ?? null,
 			data.instrument_model ?? null,

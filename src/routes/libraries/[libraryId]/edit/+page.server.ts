@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		.get(params.libraryId);
 	if (plate) {
 		const personnel = getActivePersonnel();
-		const picklists = getConstrainedValues('person_role', 'library_strategy', 'library_prep_kit', 'seq_platform');
+		const picklists = getConstrainedValues('person_role', 'library_strategy', 'library_source', 'library_selection', 'library_prep_kit');
 		const people = getEntityPersonnel('library_plate', params.libraryId).map((p) => ({
 			personnel_id: p.personnel_id,
 			role: p.role

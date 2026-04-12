@@ -247,14 +247,6 @@ export const MEASUREMENT_FIELDS: MixsField[] = [
 /** Sample logistics fields */
 export const LOGISTICS_FIELDS: MixsField[] = [
 	{
-		name: 'sample_type',
-		label: 'Sample Type',
-		type: 'text',
-		required: false,
-		description: 'Type of physical sample (free text — prefer env_medium ENVO term)',
-		sra_column: 'sample_type'
-	},
-	{
 		name: 'volume_filtered_ml',
 		label: 'Volume Filtered',
 		type: 'number',

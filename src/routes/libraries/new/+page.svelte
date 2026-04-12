@@ -25,7 +25,8 @@
 
 	let plate = $state({
 		plate_name: '', library_prep_date: '', library_type: '',
-		library_prep_kit: '', platform: '', notes: ''
+		library_source: '', library_selection: '',
+		library_prep_kit: '', notes: ''
 	});
 
 	// Source selection
@@ -308,14 +309,17 @@
 						{#each data.picklists.library_prep_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select></div>
 			</div>
-			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1">
-					<a href="/settings?tab=seq_platform" target="_blank" class="hover:text-ocean-400">Platform</a>
-				</label>
-				<select bind:value={plate.platform} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.seq_platform as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select>
+			<div class="grid grid-cols-2 gap-4">
+				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_source" target="_blank" class="hover:text-ocean-400">Source (SRA)</a></label>
+					<select bind:value={plate.library_source} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.library_source as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select></div>
+				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_selection" target="_blank" class="hover:text-ocean-400">Selection (SRA)</a></label>
+					<select bind:value={plate.library_selection} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.library_selection as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select></div>
 			</div>
 			<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
 				<input type="text" bind:value={plate.notes} class={inputCls} /></div>

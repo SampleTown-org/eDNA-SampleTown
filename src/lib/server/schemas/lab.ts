@@ -96,11 +96,10 @@ const peopleField = z.unknown().optional();
 // enums (kept in sync with CHECK constraints in src/lib/server/schema.sql)
 // ----------------------------------------------------------------------------
 
-// target_gene + library_type are operator-managed picklist vocabulary — no
+// library_type is operator-managed picklist vocabulary — no
 // hardcoded enum, just a non-empty string up to SHORT_TEXT length. The DB
 // column is NOT NULL so we require a value, but the picklist is the sole
 // source of truth for what values are valid.
-const TARGET_GENE = z.string().trim().min(1).max(200);
 const LIBRARY_TYPE = z.string().trim().min(1).max(200);
 
 // library_plates.platform allows 'other'; sequencing_runs.platform does not.
@@ -122,11 +121,8 @@ const optionalPlatformWithOther = z.preprocess(
 // /api/runs
 // ============================================================================
 
-// Only run_name is required at create time. platform + seq_meth used to be
-// required (matching the old NOT NULL columns) but operator feedback was that
-// runs are often pre-created before the platform / method is decided —
-// they're filled in later via the edit form. The DB columns were relaxed
-// in a runMigrations step.
+// Only run_name is required at create time. Platform is filled in later if
+// needed; it's nullable on the runs table.
 const optionalPlatformStrict = z.preprocess(
 	(v) => (typeof v === 'string' && v.trim() === '' ? null : v),
 	PLATFORM_STRICT.nullable().optional()
@@ -137,7 +133,6 @@ const runFields = {
 	run_date: optionalDate,
 	platform: optionalPlatformStrict,
 	instrument_model: optionalShortText,
-	seq_meth: optionalShortText,
 	flow_cell_id: optionalShortText,
 	run_directory: optionalShortText,
 	fastq_directory: optionalShortText,
@@ -174,7 +169,7 @@ const pcrReaction = z.object({
 const pcrPlateFields = {
 	plate_name: z.string().trim().min(1).max(200),
 	pcr_date: optionalDate,
-	target_gene: TARGET_GENE,
+	primer_set_id: optionalId,
 	target_subfragment: optionalShortText,
 	forward_primer_name: optionalShortText,
 	forward_primer_seq: optionalShortText,
@@ -217,6 +212,8 @@ const libraryPrepRow = z.object({
 const libraryPlateFields = {
 	plate_name: z.string().trim().min(1).max(200),
 	library_prep_date: optionalDate,
+	library_source: optionalShortText,
+	library_selection: optionalShortText,
 	library_prep_kit: optionalShortText,
 	platform: optionalPlatformWithOther,
 	instrument_model: optionalShortText,

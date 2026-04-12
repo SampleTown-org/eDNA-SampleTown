@@ -31,23 +31,22 @@
 	let wellAssignments = $state<Record<string, string>>({});
 
 	let plate = $state({
-		plate_name: '', pcr_date: '', target_gene: '16S', target_subfragment: '',
+		plate_name: '', pcr_date: '', primer_set_id: '', target_subfragment: '',
 		forward_primer_name: '', forward_primer_seq: '', reverse_primer_name: '', reverse_primer_seq: '',
 		pcr_conditions: '', annealing_temp_c: '', num_cycles: '', polymerase: '', notes: ''
 	});
 
-	// Primer set selector
-	let selectedPrimerSetId = $state('');
+	// Primer set selector — selecting a primer set sets primer_set_id + copies
+	// the primer details into the plate (denormalized for custom overrides).
 	function onPrimerSetChange() {
-		const ps = (data.primerSets as any[]).find((p: any) => p.id === selectedPrimerSetId);
+		const ps = (data.primerSets as any[]).find((p: any) => p.id === plate.primer_set_id);
 		if (ps) {
-			plate.target_gene = ps.target_gene;
 			plate.target_subfragment = ps.target_subfragment || '';
 			plate.forward_primer_name = ps.forward_primer_name || '';
 			plate.forward_primer_seq = ps.forward_primer_seq || '';
 			plate.reverse_primer_name = ps.reverse_primer_name || '';
 			plate.reverse_primer_seq = ps.reverse_primer_seq || '';
-			// Update row names
+			// Update row names using the gene from the selected primer set
 			const gene = ps.target_gene;
 			if (prevGene !== gene) {
 				const old = prevGene;
@@ -93,26 +92,21 @@
 			selectedExtractIds.add(id);
 			rows = [...rows, {
 				extract_id: id, extract_name, samp_name,
-				pcr_name: `${extract_name}_${plate.target_gene || 'PCR'}`,
+				pcr_name: `${extract_name}_${currentGene || 'PCR'}`,
 				concentration_ng_ul: ''
 			}];
 		}
 		selectedExtractIds = new Set(selectedExtractIds);
 	}
 
-	let prevGene = $state(plate.target_gene);
-	$effect(() => {
-		const gene = plate.target_gene;
-		if (gene !== prevGene) {
-			const oldGene = prevGene;
-			prevGene = gene;
-			rows = rows.map(r => ({
-				...r,
-				pcr_name: r.pcr_name === `${r.extract_name}_${oldGene}` || !r.pcr_name
-					? `${r.extract_name}_${gene || 'PCR'}` : r.pcr_name
-			}));
-		}
+	// Resolve the current target_gene from the selected primer_set (for display
+	// and for auto-naming reactions). Never stored on the PCR — primer_sets
+	// is the source of truth.
+	const currentGene = $derived.by(() => {
+		const ps = (data.primerSets as any[]).find((p: any) => p.id === plate.primer_set_id);
+		return ps?.target_gene ?? '';
 	});
+	let prevGene = $state('');
 
 	function selectAll() { data.extracts.forEach(e => { if (!selectedExtractIds.has(e.id)) toggleExtract(e.id, e.extract_name, e.samp_name); }); }
 	function clearAll() { selectedExtractIds = new Set(); rows = []; }
@@ -127,7 +121,7 @@
 			selectedExtractIds.add(e.id);
 			rows.push({
 				extract_id: e.id, extract_name: e.extract_name, samp_name: e.samp_name,
-				pcr_name: `${e.extract_name}_${plate.target_gene || 'PCR'}`,
+				pcr_name: `${e.extract_name}_${currentGene || 'PCR'}`,
 				concentration_ng_ul: ''
 			});
 		}
@@ -222,14 +216,14 @@
 			<!-- Primer Set selector -->
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=primers" target="_blank" class="hover:text-ocean-400">Primer Set</a></label>
-				<select bind:value={selectedPrimerSetId} onchange={onPrimerSetChange} class={selectCls}>
+				<select bind:value={plate.primer_set_id} onchange={onPrimerSetChange} class={selectCls}>
 					<option value="">Select primer set...</option>
 					{#each data.primerSets as ps}
 						<option value={ps.id}>{ps.name}</option>
 					{/each}
 				</select>
-				{#if selectedPrimerSetId}
-					{@const ps = (data.primerSets as any[]).find((p) => p.id === selectedPrimerSetId)}
+				{#if plate.primer_set_id}
+					{@const ps = (data.primerSets as any[]).find((p) => p.id === plate.primer_set_id)}
 					{#if ps}
 					<div class="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400 space-y-1">
 						<div class="flex gap-4">

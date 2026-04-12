@@ -12,8 +12,9 @@
 					plate_name: (data.plate as any).plate_name || '',
 					library_prep_date: (data.plate as any).library_prep_date || '',
 					library_type: (data.plate as any).library_type || '',
+					library_source: (data.plate as any).library_source || '',
+					library_selection: (data.plate as any).library_selection || '',
 					library_prep_kit: (data.plate as any).library_prep_kit || '',
-					platform: (data.plate as any).platform || '',
 					fragment_size_bp: (data.plate as any).fragment_size_bp ?? '',
 					notes: (data.plate as any).notes || ''
 				}
@@ -166,14 +167,25 @@
 				</div>
 			</div>
 
-			<div>
-				<label for="platform" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=seq_platform" target="_blank" class="hover:text-ocean-400">Platform</a>
-				</label>
-				<select id="platform" bind:value={plateForm.platform} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.seq_platform ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select>
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<div>
+					<label for="library_source" class="block text-sm font-medium text-slate-300 mb-1">
+						<a href="/settings?tab=library_source" target="_blank" class="hover:text-ocean-400">Source (SRA)</a>
+					</label>
+					<select id="library_source" bind:value={plateForm.library_source} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.library_source ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select>
+				</div>
+				<div>
+					<label for="library_selection" class="block text-sm font-medium text-slate-300 mb-1">
+						<a href="/settings?tab=library_selection" target="_blank" class="hover:text-ocean-400">Selection (SRA)</a>
+					</label>
+					<select id="library_selection" bind:value={plateForm.library_selection} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.library_selection ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select>
+				</div>
 			</div>
 
 			<div>

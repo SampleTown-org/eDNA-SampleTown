@@ -27,11 +27,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
 		// Create the plate
 		db.prepare(`
-			INSERT INTO pcr_plates (id, plate_name, pcr_date, target_gene, target_subfragment,
+			INSERT INTO pcr_plates (id, plate_name, pcr_date, primer_set_id, target_subfragment,
 				forward_primer_name, forward_primer_seq, reverse_primer_name, reverse_primer_seq,
 				pcr_conditions, annealing_temp_c, num_cycles, polymerase, notes, custom_fields, created_by)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`).run(plateId, data.plate_name, data.pcr_date ?? null, data.target_gene,
+		`).run(plateId, data.plate_name, data.pcr_date ?? null, data.primer_set_id ?? null,
 			data.target_subfragment ?? null, data.forward_primer_name ?? null, data.forward_primer_seq ?? null,
 			data.reverse_primer_name ?? null, data.reverse_primer_seq ?? null,
 			data.pcr_conditions ?? null, data.annealing_temp_c ?? null, data.num_cycles ?? null,
@@ -40,7 +40,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Create individual reactions
 		if (data.reactions && data.reactions.length > 0) {
 			const insertReaction = db.prepare(`
-				INSERT INTO pcr_amplifications (id, plate_id, extract_id, pcr_name, target_gene, target_subfragment,
+				INSERT INTO pcr_amplifications (id, plate_id, extract_id, pcr_name, primer_set_id, target_subfragment,
 					forward_primer_name, forward_primer_seq, reverse_primer_name, reverse_primer_seq,
 					pcr_conditions, annealing_temp_c, num_cycles, polymerase, pcr_date,
 					band_observed, concentration_ng_ul, notes, created_by)
@@ -49,7 +49,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const insertAll = db.transaction((reactions: typeof data.reactions) => {
 				for (const r of reactions!) {
 					insertReaction.run(generateId(), plateId, r.extract_id, r.pcr_name,
-						data.target_gene, data.target_subfragment ?? null,
+						data.primer_set_id ?? null, data.target_subfragment ?? null,
 						data.forward_primer_name ?? null, data.forward_primer_seq ?? null,
 						data.reverse_primer_name ?? null, data.reverse_primer_seq ?? null,
 						data.pcr_conditions ?? null, data.annealing_temp_c ?? null, data.num_cycles ?? null,

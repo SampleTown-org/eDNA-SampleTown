@@ -214,24 +214,10 @@ const NAMING_TEMPLATES = [
 ];
 
 export function seedConstrainedValues(db: Database.Database) {
-	// Repair any picklist categories whose values drifted from a schema CHECK
-	// constraint (or that were seeded with the wrong values to begin with).
-	// Runs every startup and is idempotent — only updates rows that don't
-	// already match a canonical SEED_DATA entry.
-	repairSchemaCoupledPicklists(db);
-
-	// Seed each category independently. The previous all-or-nothing guard
-	// (skip when the whole table was non-empty) meant new SEED_DATA categories
-	// added in later releases never landed on existing prod databases —
-	// e.g. `person_role` shipped empty in the personnel feature.
-	// Per-category back-fill is safe because (a) we only insert when the
-	// category itself is empty, so we won't clobber operator-added values,
-	// and (b) we still won't re-add seed values the operator deactivated,
-	// since deactivation only flips is_active, leaving the row in place.
-	// Also back-fill individual missing entries in categories that already
-	// have rows. This catches the case where SEED_DATA grows (e.g.
-	// ITS_amplicon + whole_genome added to library_type after the CHECK was
-	// dropped) but the category was already seeded in a prior release.
+	// Seed each category only if it's currently empty, so operator-added
+	// values are never clobbered and deactivated entries don't come back.
+	// Missing entries from SEED_DATA are back-filled into already-seeded
+	// categories (INSERT OR IGNORE keyed on category+value).
 	backfillMissingEntries(db);
 
 	const insert = db.prepare(
@@ -321,66 +307,3 @@ function backfillMissingEntries(db: Database.Database) {
 	}
 }
 
-/**
- * Repair categories whose values must match a schema CHECK constraint but
- * shipped with friendly-name values that the constraint rejects.
- *
- * History: `library_type` was seeded with values like "16S amplicon" but the
- * CHECK on library_plates.library_type / library_preps.library_type wants
- * "16S_amplicon". Same story for `seq_platform` ("Illumina" vs "ILLUMINA").
- * The forms were broken end-to-end since day one — submissions failed at the
- * SQLite layer with a CHECK constraint error, then more loudly at the zod
- * layer once Phase 2 landed.
- *
- * This function:
- *  - rewrites legacy bad values in `constrained_values` to canonical
- *  - drops bad values that have no canonical mapping (the operator can pick
- *    a sensible alternative; "Other" usually fits)
- *  - leaves any operator-added values alone — only the legacy seeded ones
- *    are touched
- *  - is idempotent and cheap to run on every startup
- */
-function repairSchemaCoupledPicklists(db: Database.Database) {
-	// Map: category → { wrong value → { value, label } | null }. null means
-	// "delete the row, no canonical mapping". Order doesn't matter.
-	const REPAIRS: Record<string, Record<string, { value: string; label: string } | null>> = {
-		library_type: {
-			'16S amplicon': { value: '16S_amplicon', label: '16S amplicon' },
-			'18S amplicon': { value: '18S_amplicon', label: '18S amplicon' },
-			'CO1 amplicon': { value: 'CO1_amplicon', label: 'CO1 amplicon' },
-			'12S amplicon': { value: '12S_amplicon', label: '12S amplicon' },
-			'Nanopore metagenomic': { value: 'nanopore_metagenomic', label: 'Nanopore metagenomic' },
-			'Illumina metagenomic': { value: 'illumina_metagenomic', label: 'Illumina metagenomic' },
-			'RNA-seq': { value: 'rnaseq', label: 'RNA-seq' },
-			'Other': { value: 'other', label: 'Other' },
-			// No canonical mapping — drop. Operator can re-add via /settings.
-			'ITS amplicon': null,
-			'Whole genome': null
-		},
-		seq_platform: {
-			'Illumina': { value: 'ILLUMINA', label: 'Illumina' },
-			'Oxford Nanopore': { value: 'OXFORD_NANOPORE', label: 'Oxford Nanopore' },
-			'PacBio': { value: 'PACBIO', label: 'PacBio' },
-			'Ion Torrent': { value: 'ION_TORRENT', label: 'Ion Torrent' }
-		}
-	};
-
-	const update = db.prepare(
-		'UPDATE constrained_values SET value = ?, label = ? WHERE category = ? AND value = ?'
-	);
-	const drop = db.prepare(
-		'DELETE FROM constrained_values WHERE category = ? AND value = ?'
-	);
-	const tx = db.transaction(() => {
-		for (const [category, mapping] of Object.entries(REPAIRS)) {
-			for (const [oldValue, target] of Object.entries(mapping)) {
-				if (target === null) {
-					drop.run(category, oldValue);
-				} else {
-					update.run(target.value, target.label, category, oldValue);
-				}
-			}
-		}
-	});
-	tx();
-}

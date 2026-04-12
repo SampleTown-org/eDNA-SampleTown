@@ -24,7 +24,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		db.prepare(
 			`UPDATE sequencing_runs SET
 				run_name = ?, run_date = ?, platform = ?, instrument_model = ?,
-				seq_meth = ?, flow_cell_id = ?, run_directory = ?, fastq_directory = ?,
+				flow_cell_id = ?, run_directory = ?, fastq_directory = ?,
 				total_reads = ?, total_bases = ?, notes = ?,
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
@@ -33,7 +33,6 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.run_date ?? null,
 			data.platform ?? null,
 			data.instrument_model ?? null,
-			data.seq_meth ?? null,
 			data.flow_cell_id ?? null,
 			data.run_directory ?? null,
 			data.fastq_directory ?? null,

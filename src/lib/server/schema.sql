@@ -142,7 +142,6 @@ CREATE TABLE IF NOT EXISTS samples (
     phosphate REAL,
 
     -- Sample logistics
-    sample_type TEXT,
     volume_filtered_ml REAL,
     filter_type TEXT,
     preservation_method TEXT,
@@ -209,7 +208,7 @@ CREATE TABLE IF NOT EXISTS pcr_plates (
     pcr_date TEXT,
 
     -- Shared conditions for the plate
-    target_gene TEXT NOT NULL,
+    primer_set_id TEXT REFERENCES primer_sets(id),  -- source of truth for target_gene
     target_subfragment TEXT,
     forward_primer_name TEXT,
     forward_primer_seq TEXT,
@@ -236,8 +235,8 @@ CREATE TABLE IF NOT EXISTS pcr_amplifications (
     extract_id TEXT NOT NULL REFERENCES extracts(id) ON DELETE CASCADE,
 
     pcr_name TEXT NOT NULL,
-    -- Per-reaction fields (gene/primers inherited from plate if plate_id set)
-    target_gene TEXT NOT NULL,
+    -- Per-reaction fields (primers inherited from plate if plate_id set)
+    primer_set_id TEXT REFERENCES primer_sets(id),
     target_subfragment TEXT,
     forward_primer_name TEXT,
     forward_primer_seq TEXT,
@@ -273,6 +272,8 @@ CREATE TABLE IF NOT EXISTS library_plates (
 
     -- Shared conditions
     library_type TEXT NOT NULL,
+    library_source TEXT,                    -- SRA library_source (GENOMIC, METAGENOMIC, etc.)
+    library_selection TEXT,                 -- SRA library_selection (RANDOM, PCR, etc.)
     library_prep_kit TEXT,
     platform TEXT CHECK (platform IN ('ILLUMINA', 'OXFORD_NANOPORE', 'PACBIO', 'ION_TORRENT', 'other')),
     instrument_model TEXT,
@@ -301,6 +302,8 @@ CREATE TABLE IF NOT EXISTS library_preps (
 
     library_name TEXT NOT NULL,
     library_type TEXT NOT NULL,
+    library_source TEXT,                    -- SRA library_source
+    library_selection TEXT,                 -- SRA library_selection
     library_prep_kit TEXT,
     library_prep_date TEXT,
     platform TEXT CHECK (platform IN ('ILLUMINA', 'OXFORD_NANOPORE', 'PACBIO', 'ION_TORRENT', 'other')),
@@ -335,7 +338,6 @@ CREATE TABLE IF NOT EXISTS sequencing_runs (
     run_date TEXT,
     platform TEXT CHECK (platform IS NULL OR platform IN ('ILLUMINA', 'OXFORD_NANOPORE', 'PACBIO', 'ION_TORRENT')),
     instrument_model TEXT,
-    seq_meth TEXT,
     flow_cell_id TEXT,
     run_directory TEXT,
     fastq_directory TEXT,

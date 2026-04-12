@@ -6,14 +6,19 @@ import { getEntityPersonnel } from '$lib/server/entity-personnel';
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
 
-	// Try as plate first
-	const plate = db.prepare(`SELECT * FROM pcr_plates WHERE id = ? AND is_deleted = 0`).get(params.pcrId);
+	// Try as plate first (JOIN primer_sets for target_gene display)
+	const plate = db.prepare(`
+		SELECT p.*, ps.target_gene FROM pcr_plates p
+		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
+		WHERE p.id = ? AND p.is_deleted = 0
+	`).get(params.pcrId);
 	if (plate) {
 		const reactions = db.prepare(`
-			SELECT r.*, e.extract_name, s.samp_name, s.id as sample_id
+			SELECT r.*, e.extract_name, s.samp_name, s.id as sample_id, ps.target_gene
 			FROM pcr_amplifications r
 			JOIN extracts e ON e.id = r.extract_id
 			JOIN samples s ON s.id = e.sample_id
+			LEFT JOIN primer_sets ps ON ps.id = r.primer_set_id
 			WHERE r.plate_id = ? AND r.is_deleted = 0
 			ORDER BY r.pcr_name
 		`).all(params.pcrId);
@@ -29,9 +34,13 @@ export const load: PageServerLoad = async ({ params }) => {
 		return { type: 'plate', plate, reactions, libraries, people };
 	}
 
-	// Fall back to individual reaction (backward compat)
-	const pcr = db.prepare(`SELECT p.*, e.extract_name, e.id as extract_id, s.samp_name, s.id as sample_id
-		FROM pcr_amplifications p JOIN extracts e ON e.id = p.extract_id JOIN samples s ON s.id = e.sample_id
+	// Fall back to individual reaction
+	const pcr = db.prepare(`SELECT p.*, e.extract_name, e.id as extract_id, s.samp_name, s.id as sample_id,
+			ps.target_gene
+		FROM pcr_amplifications p
+		JOIN extracts e ON e.id = p.extract_id
+		JOIN samples s ON s.id = e.sample_id
+		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
 		WHERE p.id = ? AND p.is_deleted = 0`).get(params.pcrId);
 	if (!pcr) throw error(404, 'PCR plate or reaction not found');
 

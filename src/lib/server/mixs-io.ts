@@ -46,7 +46,6 @@ const EXPORT_COLUMNS = [
 	{ header: 'samp_store_sol', field: 'preservation_method' },
 	{ header: 'samp_store_temp', field: 'storage_conditions' },
 	{ header: 'collected_by', field: 'collector_name' },
-	{ header: 'sample_type', field: 'sample_type' },
 	// Checklist identifier
 	{ header: 'mixs_checklist', field: 'mixs_checklist' },
 ];

@@ -23,7 +23,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		const db = getDb();
 		db.prepare(
 			`UPDATE pcr_plates SET
-				plate_name = ?, pcr_date = ?, target_gene = ?, target_subfragment = ?,
+				plate_name = ?, pcr_date = ?, primer_set_id = ?, target_subfragment = ?,
 				forward_primer_name = ?, forward_primer_seq = ?, reverse_primer_name = ?, reverse_primer_seq = ?,
 				pcr_conditions = ?, annealing_temp_c = ?, num_cycles = ?, polymerase = ?, notes = ?,
 				sync_version = sync_version + 1, updated_at = datetime('now')
@@ -31,7 +31,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		).run(
 			data.plate_name,
 			data.pcr_date ?? null,
-			data.target_gene,
+			data.primer_set_id ?? null,
 			data.target_subfragment ?? null,
 			data.forward_primer_name ?? null,
 			data.forward_primer_seq ?? null,

@@ -87,8 +87,9 @@ export const load: PageServerLoad = async () => {
 		UNION ALL
 
 		SELECT date(p.pcr_date) AS date, 'pcr_plate' AS type, p.id, p.plate_name AS name,
-			p.target_gene || ' · ' || (SELECT COUNT(*) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) || ' reactions' AS detail
+			COALESCE(ps.target_gene, 'PCR') || ' · ' || (SELECT COUNT(*) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) || ' reactions' AS detail
 		FROM pcr_plates p
+		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
 		WHERE p.is_deleted = 0 AND date(p.pcr_date) IS NOT NULL
 
 		UNION ALL

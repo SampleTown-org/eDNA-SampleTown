@@ -18,13 +18,10 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		if (!data?.pcr_name?.trim()) {
 			return json({ error: 'pcr_name is required' }, { status: 400 });
 		}
-		if (!data?.target_gene) {
-			return json({ error: 'target_gene is required' }, { status: 400 });
-		}
 		const db = getDb();
 		db.prepare(
 			`UPDATE pcr_amplifications SET
-				pcr_name = ?, target_gene = ?, target_subfragment = ?,
+				pcr_name = ?, primer_set_id = ?, target_subfragment = ?,
 				forward_primer_name = ?, forward_primer_seq = ?, reverse_primer_name = ?, reverse_primer_seq = ?,
 				pcr_conditions = ?, annealing_temp_c = ?, num_cycles = ?, polymerase = ?, pcr_date = ?,
 				band_observed = ?, concentration_ng_ul = ?, notes = ?,
@@ -32,7 +29,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			 WHERE id = ?`
 		).run(
 			data.pcr_name.trim(),
-			data.target_gene,
+			nn(data.primer_set_id),
 			nn(data.target_subfragment),
 			nn(data.forward_primer_name),
 			nn(data.forward_primer_seq),

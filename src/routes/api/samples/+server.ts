@@ -55,7 +55,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				depth, elevation, host_taxon_id,
 				assembly_software, number_of_contigs, genome_coverage, reference_genome, annotation_source,
 				temp, salinity, ph, dissolved_oxygen, pressure, turbidity, chlorophyll, nitrate, phosphate,
-				sample_type, volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
+				volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
 				notes, custom_fields, created_by
 			) VALUES (
 				?, ?, ?, ?,
@@ -63,7 +63,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				?, ?, ?,
 				?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?, ?, ?, ?,
-				?, ?, ?, ?, ?, ?,
+				?, ?, ?, ?, ?,
 				?, ?, ?
 			)`
 		).run(
@@ -92,7 +92,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			data.chlorophyll ?? null,
 			data.nitrate ?? null,
 			data.phosphate ?? null,
-			nn(data.sample_type),
 			data.volume_filtered_ml ?? null,
 			nn(data.filter_type),
 			nn(data.preservation_method),

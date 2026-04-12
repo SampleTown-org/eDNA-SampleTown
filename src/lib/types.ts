@@ -111,7 +111,6 @@ export interface Sample {
 	phosphate: number | null;
 
 	// Logistics
-	sample_type: string | null;
 	volume_filtered_ml: number | null;
 	filter_type: string | null;
 	preservation_method: string | null;
@@ -154,14 +153,11 @@ export interface Extract {
 	updated_at: string;
 }
 
-/** Operator-managed vocabulary — no hardcoded enum. */
-export type TargetGene = string;
-
 export interface PcrPlate {
 	id: string;
 	plate_name: string;
 	pcr_date: string | null;
-	target_gene: TargetGene;
+	primer_set_id: string | null;
 	target_subfragment: string | null;
 	forward_primer_name: string | null;
 	forward_primer_seq: string | null;
@@ -185,7 +181,7 @@ export interface PcrAmplification {
 	plate_id: string | null;
 	extract_id: string;
 	pcr_name: string;
-	target_gene: TargetGene;
+	primer_set_id: string | null;
 	target_subfragment: string | null;
 	forward_primer_name: string | null;
 	forward_primer_seq: string | null;
@@ -217,6 +213,8 @@ export interface LibraryPlate {
 	plate_name: string;
 	library_prep_date: string | null;
 	library_type: LibraryType;
+	library_source: string | null;
+	library_selection: string | null;
 	library_prep_kit: string | null;
 	platform: Platform | null;
 	instrument_model: string | null;
@@ -238,6 +236,8 @@ export interface LibraryPrep {
 	extract_id: string | null;
 	library_name: string;
 	library_type: LibraryType;
+	library_source: string | null;
+	library_selection: string | null;
 	library_prep_kit: string | null;
 	library_prep_date: string | null;
 	platform: Platform | null;
@@ -262,7 +262,6 @@ export interface SequencingRun {
 	run_date: string | null;
 	platform: Platform;
 	instrument_model: string | null;
-	seq_meth: string;
 	flow_cell_id: string | null;
 	run_directory: string | null;
 	fastq_directory: string | null;
