@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
+	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS, requiredSlotSet } from '$lib/mixs/checklists';
 	import { CORE_FIELDS, EXTENSION_FIELDS, MEASUREMENT_FIELDS, LOGISTICS_FIELDS } from '$lib/mixs/fields';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import MixsCompleteness from '$lib/components/MixsCompleteness.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -36,6 +37,28 @@
 	let errorMsg = $state('');
 
 	let extensionFields = $derived(EXTENSION_FIELDS[form.extension as string] || []);
+
+	/** MIxS-required slots for the currently-selected (checklist, extension) pair.
+	 *  Reactive — changes as the user picks different combinations. */
+	let requiredSet = $derived(
+		requiredSlotSet(form.mixs_checklist as string, (form.extension as string) || null)
+	);
+	/** `*` asterisk helper for any form label whose slot is MIxS-required. */
+	const req = (slot: string) => requiredSet.has(slot) ? '*' : '';
+
+	/** The set of MIxS slot names that this form surfaces as input fields.
+	 *  Used by MixsCompleteness to flag required slots that aren't on the form. */
+	const formSlots = new Set<string>([
+		'samp_name', 'collection_date', 'env_medium', 'project_name',
+		'depth', 'elev', 'host_taxid', 'specific_host',
+		'temp', 'salinity', 'ph', 'diss_oxygen', 'pressure', 'turbidity', 'chlorophyll', 'nitrate', 'phosphate',
+		'samp_collect_device', 'samp_collect_method', 'samp_mat_process', 'samp_size',
+		'samp_vol_we_dna_ext', 'size_frac', 'source_mat_id',
+		'samp_store_sol', 'samp_store_temp', 'samp_store_dur', 'samp_store_loc',
+		'nucl_acid_ext', 'nucl_acid_amp',
+		'ref_biomaterial', 'isol_growth_condt', 'tax_ident',
+		'filter_type'
+	]);
 
 	async function submit() {
 		if (!form.project_id) {
@@ -135,19 +158,19 @@
 
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="samp_name" class="block text-sm font-medium text-slate-300 mb-1">Sample Name</label>
+					<label for="samp_name" class="block text-sm font-medium text-slate-300 mb-1">Sample Name<span class="text-rose-400 ml-0.5">*</span></label>
 					<input id="samp_name" type="text" bind:value={form.samp_name}
 						class="{inputCls} border-slate-700" placeholder={data.namingTemplates?.sample_name || 'e.g., eDNA_River_2026_001'} />
 				</div>
 				<div>
-					<label for="collection_date" class="block text-sm font-medium text-slate-300 mb-1">Collection Date</label>
+					<label for="collection_date" class="block text-sm font-medium text-slate-300 mb-1">Collection Date<span class="text-rose-400 ml-0.5">{req('collection_date')}</span></label>
 					<input id="collection_date" type="date" bind:value={form.collection_date}
 						class="{inputCls} border-slate-700" />
 				</div>
 			</div>
 
 			<div>
-				<label for="env_medium" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=env_medium" target="_blank" class="hover:text-ocean-400">Environmental Medium</a></label>
+				<label for="env_medium" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=env_medium" target="_blank" class="hover:text-ocean-400">Environmental Medium</a><span class="text-rose-400 ml-0.5">{req('env_medium')}</span></label>
 				<select id="env_medium" bind:value={form.env_medium}
 					class="{selectCls} border-slate-700">
 					<option value="">Select...</option>
@@ -156,7 +179,7 @@
 			</div>
 
 			<div>
-				<label for="project_name" class="block text-sm font-medium text-slate-300 mb-1">Project Name (MIxS)</label>
+				<label for="project_name" class="block text-sm font-medium text-slate-300 mb-1">Project Name (MIxS)<span class="text-rose-400 ml-0.5">{req('project_name')}</span></label>
 				<input id="project_name" type="text" bind:value={form.project_name}
 					class="{inputCls} border-slate-700" placeholder="Free-text project label for MIxS export" />
 			</div>
@@ -196,6 +219,15 @@
 			</div>
 		</details>
 
+		<!-- MIxS completeness banner — recomputes reactively from form state. -->
+		<MixsCompleteness
+			checklist={form.mixs_checklist as string}
+			extension={(form.extension as string) || null}
+			requiredSlots={requiredSet}
+			values={form}
+			{formSlots}
+		/>
+
 		<!-- Extension-specific fields -->
 		{#if extensionFields.length > 0}
 			<fieldset class="space-y-4">
@@ -203,7 +235,7 @@
 				{#each extensionFields as field}
 					<div>
 						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">
-							{field.label ?? field.name} {field.unit ? `(${field.unit})` : ''}
+							{field.label ?? field.name} {field.unit ? `(${field.unit})` : ''}<span class="text-rose-400 ml-0.5">{req(field.name)}</span>
 						</label>
 						<input id={field.name} type="text" bind:value={form[field.name]}
 							class="{inputCls} border-slate-700" placeholder={field.placeholder} />
