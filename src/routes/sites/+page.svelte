@@ -2,27 +2,50 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import MapPicker from '$lib/components/MapPicker.svelte';
 	import { goto } from '$app/navigation';
-	import { cart } from '$lib/stores/cart.svelte';
+	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	let allSites = $state(data.sites as any[]);
-	let selectedIds = $state(new Set<string>());
 
-	// Cart filtering: if the cart has projects, only show sites from those projects
+	// Initialize selection from what's already carted
+	let selectedIds = $state(new Set(cart.getByType('site').map((i) => i.id)));
+
+	// Parent filter: always active — carted projects narrow what's visible
 	const cartProjectIds = $derived(cart.idsOfType('project'));
-	const hasCartFilter = $derived(cartProjectIds.size > 0);
-	let cartFilterActive = $state(true);
+	const hasParentFilter = $derived(cartProjectIds.size > 0);
 
-	let sites = $derived(
-		hasCartFilter && cartFilterActive
-			? allSites.filter((s: any) => cartProjectIds.has(s.project_id))
-			: allSites
-	);
+	// Self-type filter: funnel toggle narrows to only carted sites
+	const cartSiteIds = $derived(cart.idsOfType('site'));
+	let selfFilterActive = $state(false);
 
-	function addToCart() {
-		const items = sites
+	const hasCartFilter = $derived(hasParentFilter || (cartSiteIds.size > 0 && selfFilterActive));
+
+	let sites = $derived.by(() => {
+		let result = allSites;
+		// Parent filter always applies
+		if (hasParentFilter) {
+			result = result.filter((s: any) => cartProjectIds.has(s.project_id));
+		}
+		// Self filter only when toggled on
+		if (selfFilterActive && cartSiteIds.size > 0) {
+			result = result.filter((s: any) => cartSiteIds.has(s.id));
+		}
+		return result;
+	});
+
+	// Detect when selection has diverged from the cart
+	const selectionChanged = $derived.by(() => {
+		const carted = cart.idsOfType('site');
+		if (selectedIds.size !== carted.size) return true;
+		for (const id of selectedIds) if (!carted.has(id)) return true;
+		return false;
+	});
+
+	function updateCart() {
+		cart.clearType('site');
+		const items = allSites
 			.filter((s) => selectedIds.has(s.id))
 			.map((s) => ({
 				type: 'site' as const,
@@ -30,9 +53,8 @@
 				label: s.site_name,
 				sublabel: s.project_name
 			}));
-		cart.addMany(items);
+		if (items.length > 0) cart.addMany(items);
 		cart.openSidebar();
-		selectedIds = new Set();
 	}
 	/** Mirrored from the DataTable so the map pins can adopt the same tint. */
 	let colorByKey = $state('');
@@ -90,9 +112,9 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-white">Sites</h1>
 		<div class="flex items-center gap-2">
-			{#if selectedIds.size > 0}
-				<button onclick={addToCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
-					Add {selectedIds.size} to Cart
+			{#if selectionChanged}
+				<button onclick={updateCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
+					Update Cart ({selectedIds.size})
 				</button>
 			{/if}
 			<a href="/sites/new" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Site</a>
@@ -113,8 +135,8 @@
 		showId
 		filterable
 		selectable
-		cartFilterLabel={hasCartFilter ? `showing ${sites.length}/${allSites.length} sites` : ''}
-		bind:cartFilterActive
+		cartFilterLabel={hasParentFilter || cartSiteIds.size > 0 ? `showing ${sites.length}/${allSites.length} sites` : ''}
+		bind:cartFilterActive={selfFilterActive}
 		editHref={(row) => `/sites/${row.id}/edit`}
 		ondelete={deleteSite}
 		onduplicate={duplicateSite}

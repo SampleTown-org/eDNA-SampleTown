@@ -1,20 +1,21 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import { goto } from '$app/navigation';
-	import { cart } from '$lib/stores/cart.svelte';
+	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let allPlates = $state(data.plates as any[]);
 	let orphanLibraries = $state(data.orphanLibraries as any[]);
-	let selectedIds = $state(new Set<string>());
-	let cartFilterActive = $state(true);
 
-	// Filter library plates by carted extracts or PCR reactions
+	// Initialize selection from what's already carted
+	let selectedIds = $state(new Set(cart.getByType('library_plate').map((i) => i.id)));
+
+	// Parent filter: always active — carted pcr plates/extracts narrow what's visible
 	const cartExtractIds = $derived(cart.idsOfType('extract'));
 	const cartPcrIds = $derived(cart.idsOfType('pcr'));
 	const cartPcrPlateIds = $derived(cart.idsOfType('pcr_plate'));
-	const hasCartFilter = $derived(
+	const hasParentFilter = $derived(
 		cartExtractIds.size > 0 || cartPcrIds.size > 0 || cartPcrPlateIds.size > 0
 	);
 
@@ -34,14 +35,36 @@
 		return false;
 	}
 
-	let plates = $derived(
-		hasCartFilter && cartFilterActive
-			? allPlates.filter(plateMatchesCart)
-			: allPlates
-	);
+	// Self-type filter: funnel toggle narrows to only carted library_plates
+	const cartLibPlateIds = $derived(cart.idsOfType('library_plate'));
+	let selfFilterActive = $state(false);
 
-	function addToCart() {
-		const items = plates
+	const hasCartFilter = $derived(hasParentFilter || (cartLibPlateIds.size > 0 && selfFilterActive));
+
+	let plates = $derived.by(() => {
+		let result = allPlates;
+		// Parent filter always applies
+		if (hasParentFilter) {
+			result = result.filter(plateMatchesCart);
+		}
+		// Self filter only when toggled on
+		if (selfFilterActive && cartLibPlateIds.size > 0) {
+			result = result.filter((p: any) => cartLibPlateIds.has(p.id));
+		}
+		return result;
+	});
+
+	// Detect when selection has diverged from the cart
+	const selectionChanged = $derived.by(() => {
+		const carted = cart.idsOfType('library_plate');
+		if (selectedIds.size !== carted.size) return true;
+		for (const id of selectedIds) if (!carted.has(id)) return true;
+		return false;
+	});
+
+	function updateCart() {
+		cart.clearType('library_plate');
+		const items = allPlates
 			.filter((p) => selectedIds.has(p.id))
 			.map((p) => ({
 				type: 'library_plate' as const,
@@ -49,9 +72,8 @@
 				label: p.plate_name,
 				sublabel: `${p.library_type} · ${p.library_count} libraries`
 			}));
-		cart.addMany(items);
+		if (items.length > 0) cart.addMany(items);
 		cart.openSidebar();
-		selectedIds = new Set();
 	}
 
 	const plateColumns = [
@@ -97,9 +119,9 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-white">Libraries</h1>
 		<div class="flex items-center gap-2">
-			{#if selectedIds.size > 0}
-				<button onclick={addToCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
-					Add {selectedIds.size} to Cart
+			{#if selectionChanged}
+				<button onclick={updateCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
+					Update Cart ({selectedIds.size})
 				</button>
 			{/if}
 			<a href="/libraries/new" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Plate</a>
@@ -110,13 +132,13 @@
 		columns={plateColumns}
 		rows={plates}
 		bind:selectedIds
-		bind:cartFilterActive
+		bind:cartFilterActive={selfFilterActive}
 		href={(row) => `/libraries/${row.id}`}
 		selectable
 		empty="No library plates yet."
 		showId
 		filterable
-		cartFilterLabel={hasCartFilter ? `showing ${plates.length}/${allPlates.length} plates` : ''}
+		cartFilterLabel={hasParentFilter || cartLibPlateIds.size > 0 ? `showing ${plates.length}/${allPlates.length} plates` : ''}
 		editHref={(row) => `/libraries/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}

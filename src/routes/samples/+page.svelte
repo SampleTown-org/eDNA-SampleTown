@@ -1,27 +1,66 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import { goto } from '$app/navigation';
-	import { cart } from '$lib/stores/cart.svelte';
+	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let allSamples = $state(data.samples as any[]);
-	let selectedIds = $state(new Set<string>());
 
-	// Cart filtering: if the cart has projects or sites, only show matching samples
+	// Initialize selection from what's already carted
+	let selectedIds = $state(new Set(cart.getByType('sample').map((i) => i.id)));
+
+	// Parent filter: always active — carted projects/sites narrow what's visible
 	const cartProjectIds = $derived(cart.idsOfType('project'));
 	const cartSiteIds = $derived(cart.idsOfType('site'));
-	const hasCartFilter = $derived(cartProjectIds.size > 0 || cartSiteIds.size > 0);
-	let cartFilterActive = $state(true);
+	const hasParentFilter = $derived(cartProjectIds.size > 0 || cartSiteIds.size > 0);
 
-	let samples = $derived(
-		hasCartFilter && cartFilterActive
-			? allSamples.filter((s: any) =>
+	// Self-type filter: funnel toggle narrows to only carted samples within
+	// the parent-filtered set. When OFF, all parent-filtered rows are shown
+	// with carted ones pre-checked.
+	const cartSampleIds = $derived(cart.idsOfType('sample'));
+	let selfFilterActive = $state(false);
+
+	const hasCartFilter = $derived(hasParentFilter || (cartSampleIds.size > 0 && selfFilterActive));
+
+	let samples = $derived.by(() => {
+		let result = allSamples;
+		// Parent filter always applies
+		if (hasParentFilter) {
+			result = result.filter((s: any) =>
 				(cartProjectIds.size === 0 || cartProjectIds.has(s.project_id)) &&
 				(cartSiteIds.size === 0 || cartSiteIds.has(s.site_id))
-			)
-			: allSamples
-	);
+			);
+		}
+		// Self filter only when toggled on
+		if (selfFilterActive && cartSampleIds.size > 0) {
+			result = result.filter((s: any) => cartSampleIds.has(s.id));
+		}
+		return result;
+	});
+
+	// Detect when selection has diverged from the cart
+	const selectionChanged = $derived.by(() => {
+		const carted = cart.idsOfType('sample');
+		if (selectedIds.size !== carted.size) return true;
+		for (const id of selectedIds) if (!carted.has(id)) return true;
+		return false;
+	});
+
+	function updateCart() {
+		// Remove all samples from cart, then re-add the selected ones
+		cart.clearType('sample');
+		const items = allSamples
+			.filter((s) => selectedIds.has(s.id))
+			.map((s) => ({
+				type: 'sample' as const,
+				id: s.id,
+				label: s.samp_name,
+				sublabel: s.project_name
+			}));
+		if (items.length > 0) cart.addMany(items);
+		cart.openSidebar();
+	}
 
 	const columns = [
 		{ key: 'samp_name', label: 'Sample', sortable: true },
@@ -32,20 +71,6 @@
 		{ key: 'collection_date', label: 'Collected', sortable: true },
 		{ key: 'people_summary', label: 'People', sortable: true }
 	];
-
-	function addToCart() {
-		const items = samples
-			.filter((s) => selectedIds.has(s.id))
-			.map((s) => ({
-				type: 'sample' as const,
-				id: s.id,
-				label: s.samp_name,
-				sublabel: s.project_name
-			}));
-		cart.addMany(items);
-		cart.openSidebar();
-		selectedIds = new Set();
-	}
 
 	async function deleteSample(row: Record<string, unknown>) {
 		if (!confirm(`Delete sample "${row.samp_name}"?`)) return;
@@ -67,9 +92,9 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-white">Samples</h1>
 		<div class="flex items-center gap-2">
-			{#if selectedIds.size > 0}
-				<button onclick={addToCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
-					Add {selectedIds.size} to Cart
+			{#if selectionChanged}
+				<button onclick={updateCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
+					Update Cart ({selectedIds.size})
 				</button>
 			{/if}
 			<a href="/samples/new" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Sample</a>
@@ -85,9 +110,8 @@
 		showId
 		filterable
 		selectable
-		cartFilterLabel={hasCartFilter ? `showing ${samples.length}/${allSamples.length} samples` : ''}
-		bind:cartFilterActive
-		cartedIds={cart.idsOfType('sample')}
+		cartFilterLabel={hasParentFilter || cartSampleIds.size > 0 ? `showing ${samples.length}/${allSamples.length} samples` : ''}
+		bind:cartFilterActive={selfFilterActive}
 		editHref={(row) => `/samples/${row.id}/edit`}
 		ondelete={deleteSample}
 		onduplicate={duplicateSample}

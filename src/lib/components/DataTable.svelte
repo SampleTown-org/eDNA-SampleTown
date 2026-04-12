@@ -38,8 +38,6 @@
 		 *  filter icon toggles this. Parents should use this to gate their
 		 *  row-filtering logic. */
 		cartFilterActive?: boolean;
-		/** Set of IDs that are in the cart — rows matching get a subtle marker. */
-		cartedIds?: Set<string>;
 	}
 
 	let {
@@ -57,8 +55,7 @@
 		selectable = false,
 		selectedIds = $bindable(new Set<string>()),
 		cartFilterLabel = '',
-		cartFilterActive = $bindable(true),
-		cartedIds = new Set<string>()
+		cartFilterActive = $bindable(true)
 	}: Props = $props();
 
 	let sortKey = $state('');
@@ -299,9 +296,7 @@
 					{/if}
 					{#if showId}
 						<td class="px-3 py-3">
-							<span class="font-mono text-xs text-slate-600" title={row.id as string}>
-								{#if cartedIds.has(row.id as string)}<span class="text-ocean-400 mr-0.5" title="In cart">&#9679;</span>{/if}{shortId(row)}
-							</span>
+							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>
 						</td>
 					{/if}
 					{#each columns as col}

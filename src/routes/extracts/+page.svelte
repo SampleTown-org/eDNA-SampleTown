@@ -1,26 +1,49 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import { goto } from '$app/navigation';
-	import { cart } from '$lib/stores/cart.svelte';
+	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let allExtracts = $state(data.extracts as any[]);
-	let selectedIds = $state(new Set<string>());
 
-	// Cart filtering: if the cart has samples, only show extracts from those samples
+	// Initialize selection from what's already carted
+	let selectedIds = $state(new Set(cart.getByType('extract').map((i) => i.id)));
+
+	// Parent filter: always active — carted samples narrow what's visible
 	const cartSampleIds = $derived(cart.idsOfType('sample'));
-	const hasCartFilter = $derived(cartSampleIds.size > 0);
-	let cartFilterActive = $state(true);
+	const hasParentFilter = $derived(cartSampleIds.size > 0);
 
-	let extracts = $derived(
-		hasCartFilter && cartFilterActive
-			? allExtracts.filter((e: any) => cartSampleIds.has(e.sample_id))
-			: allExtracts
-	);
+	// Self-type filter: funnel toggle narrows to only carted extracts
+	const cartExtractIds = $derived(cart.idsOfType('extract'));
+	let selfFilterActive = $state(false);
 
-	function addToCart() {
-		const items = extracts
+	const hasCartFilter = $derived(hasParentFilter || (cartExtractIds.size > 0 && selfFilterActive));
+
+	let extracts = $derived.by(() => {
+		let result = allExtracts;
+		// Parent filter always applies
+		if (hasParentFilter) {
+			result = result.filter((e: any) => cartSampleIds.has(e.sample_id));
+		}
+		// Self filter only when toggled on
+		if (selfFilterActive && cartExtractIds.size > 0) {
+			result = result.filter((e: any) => cartExtractIds.has(e.id));
+		}
+		return result;
+	});
+
+	// Detect when selection has diverged from the cart
+	const selectionChanged = $derived.by(() => {
+		const carted = cart.idsOfType('extract');
+		if (selectedIds.size !== carted.size) return true;
+		for (const id of selectedIds) if (!carted.has(id)) return true;
+		return false;
+	});
+
+	function updateCart() {
+		cart.clearType('extract');
+		const items = allExtracts
 			.filter((e) => selectedIds.has(e.id))
 			.map((e) => ({
 				type: 'extract' as const,
@@ -28,9 +51,8 @@
 				label: e.extract_name,
 				sublabel: e.samp_name
 			}));
-		cart.addMany(items);
+		if (items.length > 0) cart.addMany(items);
 		cart.openSidebar();
-		selectedIds = new Set();
 	}
 
 	const columns = [
@@ -62,9 +84,9 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-white">DNA Extracts</h1>
 		<div class="flex items-center gap-2">
-			{#if selectedIds.size > 0}
-				<button onclick={addToCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
-					Add {selectedIds.size} to Cart
+			{#if selectionChanged}
+				<button onclick={updateCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
+					Update Cart ({selectedIds.size})
 				</button>
 			{/if}
 			<a href="/extracts/new" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Extract</a>
@@ -80,8 +102,8 @@
 		empty="No extracts yet."
 		showId
 		filterable
-		cartFilterLabel={hasCartFilter ? `showing ${extracts.length}/${allExtracts.length} extracts` : ''}
-		bind:cartFilterActive
+		cartFilterLabel={hasParentFilter || cartExtractIds.size > 0 ? `showing ${extracts.length}/${allExtracts.length} extracts` : ''}
+		bind:cartFilterActive={selfFilterActive}
 		editHref={(row) => `/extracts/${row.id}/edit`}
 		ondelete={deleteExtract}
 		onduplicate={duplicateExtract}

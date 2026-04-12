@@ -1,17 +1,18 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
-	import { cart } from '$lib/stores/cart.svelte';
+	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let allRuns = $state(data.runs as any[]);
-	let selectedIds = $state(new Set<string>());
-	let cartFilterActive = $state(true);
 
-	// Filter runs by carted library plates or individual libraries
+	// Initialize selection from what's already carted
+	let selectedIds = $state(new Set(cart.getByType('run').map((i) => i.id)));
+
+	// Parent filter: always active — carted library plates/libraries narrow what's visible
 	const cartLibPlateIds = $derived(cart.idsOfType('library_plate'));
 	const cartLibIds = $derived(cart.idsOfType('library'));
-	const hasCartFilter = $derived(cartLibPlateIds.size > 0 || cartLibIds.size > 0);
+	const hasParentFilter = $derived(cartLibPlateIds.size > 0 || cartLibIds.size > 0);
 
 	function runMatchesCart(run: any): boolean {
 		if (cartLibPlateIds.size > 0 && run.library_plate_ids) {
@@ -25,14 +26,36 @@
 		return false;
 	}
 
-	let runs = $derived(
-		hasCartFilter && cartFilterActive
-			? allRuns.filter(runMatchesCart)
-			: allRuns
-	);
+	// Self-type filter: funnel toggle narrows to only carted runs
+	const cartRunIds = $derived(cart.idsOfType('run'));
+	let selfFilterActive = $state(false);
 
-	function addToCart() {
-		const items = runs
+	const hasCartFilter = $derived(hasParentFilter || (cartRunIds.size > 0 && selfFilterActive));
+
+	let runs = $derived.by(() => {
+		let result = allRuns;
+		// Parent filter always applies
+		if (hasParentFilter) {
+			result = result.filter(runMatchesCart);
+		}
+		// Self filter only when toggled on
+		if (selfFilterActive && cartRunIds.size > 0) {
+			result = result.filter((r: any) => cartRunIds.has(r.id));
+		}
+		return result;
+	});
+
+	// Detect when selection has diverged from the cart
+	const selectionChanged = $derived.by(() => {
+		const carted = cart.idsOfType('run');
+		if (selectedIds.size !== carted.size) return true;
+		for (const id of selectedIds) if (!carted.has(id)) return true;
+		return false;
+	});
+
+	function updateCart() {
+		cart.clearType('run');
+		const items = allRuns
 			.filter((r) => selectedIds.has(r.id))
 			.map((r) => ({
 				type: 'run' as const,
@@ -40,9 +63,8 @@
 				label: r.run_name,
 				sublabel: r.platform
 			}));
-		cart.addMany(items);
+		if (items.length > 0) cart.addMany(items);
 		cart.openSidebar();
-		selectedIds = new Set();
 	}
 
 	const columns = [
@@ -65,9 +87,9 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-white">Sequencing Runs</h1>
 		<div class="flex items-center gap-2">
-			{#if selectedIds.size > 0}
-				<button onclick={addToCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
-					Add {selectedIds.size} to Cart
+			{#if selectionChanged}
+				<button onclick={updateCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
+					Update Cart ({selectedIds.size})
 				</button>
 			{/if}
 			<a href="/runs/new" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Run</a>
@@ -77,13 +99,13 @@
 		{columns}
 		rows={runs}
 		bind:selectedIds
-		bind:cartFilterActive
+		bind:cartFilterActive={selfFilterActive}
 		href={(row) => `/runs/${row.id}`}
 		selectable
 		empty="No sequencing runs yet."
 		showId
 		filterable
-		cartFilterLabel={hasCartFilter ? `showing ${runs.length}/${allRuns.length} runs` : ''}
+		cartFilterLabel={hasParentFilter || cartRunIds.size > 0 ? `showing ${runs.length}/${allRuns.length} runs` : ''}
 		editHref={(row) => `/runs/${row.id}/edit`}
 		ondelete={deleteRun}
 	/>
