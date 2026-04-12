@@ -1,45 +1,101 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	type Row = {
-		samp_name: string;
-		collection_date: string;
-		latitude: string;
-		longitude: string;
-		notes: string;
+	type Row = Record<string, string>;
+
+	/**
+	 * Column definition. `key` is the body field name posted to /api/samples;
+	 * `numericPair` flags lat/lon for the lat_lon assembly logic in submit().
+	 */
+	type ColumnDef = {
+		key: string;
+		label: string;
+		placeholder?: string;
+		width?: string;
 	};
 
-	const emptyRow = (): Row => ({
-		samp_name: '',
-		collection_date: '',
-		latitude: '',
-		longitude: '',
-		notes: ''
-	});
+	const CORE_COLUMNS: ColumnDef[] = [
+		{ key: 'samp_name', label: 'Sample name *' },
+		{ key: 'collection_date', label: 'Collection date', placeholder: 'YYYY-MM-DD', width: 'w-36' },
+		{ key: 'latitude', label: 'Latitude', width: 'w-28' },
+		{ key: 'longitude', label: 'Longitude', width: 'w-28' },
+		{ key: 'notes', label: 'Notes' }
+	];
+
+	/**
+	 * Optional sample fields the operator can opt-in via the "+ Add column"
+	 * picker. Curated to common MIxS-style fields — operators who need
+	 * something exotic can still use the single-sample edit form afterwards.
+	 */
+	const ADDITIONAL_COLUMNS: ColumnDef[] = [
+		{ key: 'env_medium', label: 'Env medium', width: 'w-40' },
+		{ key: 'geo_loc_name', label: 'Geo location', width: 'w-40' },
+		{ key: 'env_broad_scale', label: 'Env broad scale', width: 'w-40' },
+		{ key: 'env_local_scale', label: 'Env local scale', width: 'w-40' },
+		{ key: 'depth', label: 'Depth (m)', width: 'w-24' },
+		{ key: 'elevation', label: 'Elevation (m)', width: 'w-24' },
+		{ key: 'temp', label: 'Temp (°C)', width: 'w-24' },
+		{ key: 'salinity', label: 'Salinity', width: 'w-24' },
+		{ key: 'ph', label: 'pH', width: 'w-20' },
+		{ key: 'volume_filtered_ml', label: 'Vol filtered (mL)', width: 'w-28' },
+		{ key: 'filter_type', label: 'Filter type', width: 'w-32' },
+		{ key: 'preservation_method', label: 'Preservation', width: 'w-32' }
+	];
+
+	let extraColumnKeys = $state<string[]>([]);
+	let columns = $derived<ColumnDef[]>([
+		...CORE_COLUMNS,
+		...extraColumnKeys
+			.map((k) => ADDITIONAL_COLUMNS.find((c) => c.key === k))
+			.filter((c): c is ColumnDef => Boolean(c))
+	]);
+	let availableExtras = $derived(
+		ADDITIONAL_COLUMNS.filter((c) => !extraColumnKeys.includes(c.key))
+	);
+
+	function emptyRow(): Row {
+		return Object.fromEntries(columns.map((c) => [c.key, '']));
+	}
 
 	let projectId = $state('');
+	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 	let rows = $state<Row[]>([emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()]);
 	let saving = $state(false);
 	let errorMsg = $state('');
 	let result = $state<{ imported: number; failed: number; errors: string[] } | null>(null);
+	let extraToAdd = $state('');
 
 	function addRow() { rows = [...rows, emptyRow()]; }
 	function removeRow(i: number) {
-		// Don't let the user remove row 0 (the template) — it's the first
-		// row in the list and removing it would silently promote a real
-		// data row to template status. Instead, clearing row 0 is enough.
+		// Don't let the user remove row 0 (the template).
 		if (i === 0) return;
 		rows = rows.filter((_, idx) => idx !== i);
+	}
+
+	function addColumn() {
+		if (!extraToAdd) return;
+		extraColumnKeys = [...extraColumnKeys, extraToAdd];
+		// Initialize the new column to '' across all existing rows so the
+		// reactive table picks it up cleanly.
+		rows = rows.map((r) => ({ ...r, [extraToAdd]: '' }));
+		extraToAdd = '';
+	}
+	function removeColumn(key: string) {
+		extraColumnKeys = extraColumnKeys.filter((k) => k !== key);
+		rows = rows.map((r) => {
+			const next = { ...r };
+			delete next[key];
+			return next;
+		});
 	}
 
 	/**
 	 * Apply the "template" row 0 to every row below it. Only fills empty
 	 * cells in each child row — never overwrites data the user has typed.
-	 * Triggered either manually via a button or automatically when row 0
-	 * changes.
 	 */
 	function applyTemplate() {
 		const tpl = rows[0];
@@ -47,26 +103,26 @@
 		rows = rows.map((row, i) => {
 			if (i === 0) return row;
 			const next = { ...row };
-			for (const k of Object.keys(tpl) as (keyof Row)[]) {
-				if (!next[k]?.toString().trim() && tpl[k]?.toString().trim()) {
-					next[k] = tpl[k];
+			for (const c of columns) {
+				const v = tpl[c.key];
+				if ((!next[c.key] || !next[c.key].toString().trim()) && v?.toString().trim()) {
+					next[c.key] = v;
 				}
 			}
 			return next;
 		});
 	}
 
-	/** Paste handler — if the user pastes TSV/CSV, split into rows + cells. */
-	function handlePaste(e: ClipboardEvent, rowIdx: number, field: keyof Row) {
+	/** Paste handler — TSV/CSV splits across rows + cells. */
+	function handlePaste(e: ClipboardEvent, rowIdx: number, field: string) {
 		const text = e.clipboardData?.getData('text') ?? '';
-		if (!text.includes('\t') && !text.includes('\n')) return; // single cell — let default happen
+		if (!text.includes('\t') && !text.includes('\n')) return;
 		e.preventDefault();
 
 		const lines = text.replace(/\r\n/g, '\n').split('\n').filter((l) => l.trim());
-		const fieldOrder: (keyof Row)[] = ['samp_name', 'collection_date', 'latitude', 'longitude', 'notes'];
+		const fieldOrder = columns.map((c) => c.key);
 		const startFieldIdx = fieldOrder.indexOf(field);
 
-		// Make sure we have enough rows.
 		const newRows = [...rows];
 		while (newRows.length < rowIdx + lines.length) newRows.push(emptyRow());
 
@@ -82,15 +138,12 @@
 		rows = newRows;
 	}
 
-	/** Data rows the user has filled in. Row 0 is the template — never imported,
-	 *  even if it has a samp_name. */
 	const nonEmptyRows = $derived(
-		rows.slice(1).filter((r) => r.samp_name.trim())
+		rows.slice(1).filter((r) => r.samp_name?.trim())
 	);
 
-	/** Pressing Enter in any cell of the template row (row 0) copies that
-	 *  column's value down into every data row, overwriting whatever's there. */
-	function onTemplateKeydown(e: KeyboardEvent, field: keyof Row) {
+	/** Enter in template row 0 fills that column down. */
+	function onTemplateKeydown(e: KeyboardEvent, field: string) {
 		if (e.key !== 'Enter') return;
 		e.preventDefault();
 		const value = rows[0][field];
@@ -116,9 +169,10 @@
 		for (const row of nonEmptyRows) {
 			const body: Record<string, unknown> = {
 				project_id: projectId,
-				samp_name: row.samp_name.trim()
+				samp_name: row.samp_name.trim(),
+				people
 			};
-			if (row.collection_date) body.collection_date = row.collection_date;
+			// Lat/lon assembly
 			if (row.latitude && row.longitude) {
 				const lat = Number(row.latitude);
 				const lon = Number(row.longitude);
@@ -130,7 +184,13 @@
 					body.longitude = lon;
 				}
 			}
-			if (row.notes) body.notes = row.notes;
+			// Copy any non-empty value from every other column straight through
+			// (the API + zod will coerce strings → numbers where needed).
+			for (const col of columns) {
+				if (col.key === 'samp_name' || col.key === 'latitude' || col.key === 'longitude') continue;
+				const v = row[col.key];
+				if (v && v.toString().trim()) body[col.key] = v;
+			}
 
 			const res = await fetch('/api/samples', {
 				method: 'POST',
@@ -148,10 +208,6 @@
 		saving = false;
 		result = { imported, failed: errors.length, errors };
 		if (errors.length === 0) {
-			// Full success — clear the data rows but preserve the template
-			// (row 0) so the operator can keep entering more samples without
-			// retyping the common fields. The template is never imported, so
-			// no need to clear its samp_name.
 			rows = [{ ...rows[0] }, emptyRow(), emptyRow(), emptyRow(), emptyRow()];
 		}
 	}
@@ -160,7 +216,7 @@
 		'w-full px-2 py-1 bg-slate-900 border border-slate-800 rounded text-white text-sm focus:outline-none focus:border-ocean-500';
 </script>
 
-<div class="max-w-5xl space-y-6">
+<div class="max-w-6xl space-y-6">
 	<div>
 		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
 		<h1 class="text-2xl font-bold text-white mt-1">New Sample</h1>
@@ -196,7 +252,7 @@
 		</div>
 	{/if}
 
-	<div class="flex gap-4 items-end">
+	<div class="flex gap-4 items-end flex-wrap">
 		<div>
 			<label class="block text-xs font-medium text-slate-400 mb-1">Project</label>
 			<select
@@ -207,7 +263,27 @@
 				{#each data.projects as p}<option value={p.id}>{p.project_name}</option>{/each}
 			</select>
 		</div>
-		<p class="text-xs text-slate-500 pb-2">
+		{#if availableExtras.length > 0}
+		<div>
+			<label class="block text-xs font-medium text-slate-400 mb-1">+ Add column</label>
+			<div class="flex gap-2">
+				<select
+					bind:value={extraToAdd}
+					class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500"
+				>
+					<option value="">Pick a field…</option>
+					{#each availableExtras as col}<option value={col.key}>{col.label}</option>{/each}
+				</select>
+				<button
+					type="button"
+					onclick={addColumn}
+					disabled={!extraToAdd}
+					class="px-3 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 disabled:opacity-40 transition-colors text-sm"
+				>Add</button>
+			</div>
+		</div>
+		{/if}
+		<p class="text-xs text-slate-500 pb-2 flex-1 min-w-64">
 			Paste a block of rows from a spreadsheet to auto-fill.
 			Row <span class="text-ocean-400">⭐</span> is a template (never imported) —
 			press <kbd class="text-ocean-400">Enter</kbd> in any of its cells to fill that column down,
@@ -218,16 +294,34 @@
 		</p>
 	</div>
 
+	<PeoplePicker
+		bind:people
+		personnel={data.personnel}
+		roleOptions={data.picklists.person_role}
+		defaultRole="collector"
+		label="People (applied to all rows)"
+	/>
+
 	<div class="overflow-x-auto rounded-lg border border-slate-800">
 		<table class="w-full text-sm">
 			<thead>
 				<tr class="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
 					<th class="px-2 py-2 text-left font-medium w-10">#</th>
-					<th class="px-2 py-2 text-left font-medium">Sample name *</th>
-					<th class="px-2 py-2 text-left font-medium w-36">Collection date</th>
-					<th class="px-2 py-2 text-left font-medium w-28">Latitude</th>
-					<th class="px-2 py-2 text-left font-medium w-28">Longitude</th>
-					<th class="px-2 py-2 text-left font-medium">Notes</th>
+					{#each columns as col}
+						<th class="px-2 py-2 text-left font-medium {col.width ?? ''}">
+							<div class="flex items-center gap-1">
+								<span>{col.label}</span>
+								{#if extraColumnKeys.includes(col.key)}
+									<button
+										type="button"
+										onclick={() => removeColumn(col.key)}
+										class="text-slate-600 hover:text-red-400 text-xs ml-auto"
+										title="Remove column"
+									>×</button>
+								{/if}
+							</div>
+						</th>
+					{/each}
 					<th class="w-8"></th>
 				</tr>
 			</thead>
@@ -242,52 +336,18 @@
 								{i}
 							{/if}
 						</td>
-						<td class="px-2 py-1">
-							<input
-								type="text"
-								bind:value={row.samp_name}
-								onpaste={(e) => handlePaste(e, i, 'samp_name')}
-								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'samp_name') : undefined}
-								class={inputCls}
-							/>
-						</td>
-						<td class="px-2 py-1">
-							<input
-								type="text"
-								bind:value={row.collection_date}
-								onpaste={(e) => handlePaste(e, i, 'collection_date')}
-								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'collection_date') : undefined}
-								placeholder="YYYY-MM-DD"
-								class={inputCls}
-							/>
-						</td>
-						<td class="px-2 py-1">
-							<input
-								type="text"
-								bind:value={row.latitude}
-								onpaste={(e) => handlePaste(e, i, 'latitude')}
-								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'latitude') : undefined}
-								class={inputCls}
-							/>
-						</td>
-						<td class="px-2 py-1">
-							<input
-								type="text"
-								bind:value={row.longitude}
-								onpaste={(e) => handlePaste(e, i, 'longitude')}
-								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'longitude') : undefined}
-								class={inputCls}
-							/>
-						</td>
-						<td class="px-2 py-1">
-							<input
-								type="text"
-								bind:value={row.notes}
-								onpaste={(e) => handlePaste(e, i, 'notes')}
-								onkeydown={isTpl ? (e) => onTemplateKeydown(e, 'notes') : undefined}
-								class={inputCls}
-							/>
-						</td>
+						{#each columns as col}
+							<td class="px-2 py-1">
+								<input
+									type="text"
+									bind:value={rows[i][col.key]}
+									onpaste={(e) => handlePaste(e, i, col.key)}
+									onkeydown={isTpl ? (e) => onTemplateKeydown(e, col.key) : undefined}
+									placeholder={col.placeholder}
+									class={inputCls}
+								/>
+							</td>
+						{/each}
 						<td class="px-2 py-1">
 							<button
 								type="button"

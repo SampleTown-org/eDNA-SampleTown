@@ -113,3 +113,23 @@ export function normalizePeople(input: unknown): PersonAttribution[] {
 			role: typeof (p as any).role === 'string' ? (p as any).role : null
 		}));
 }
+
+/**
+ * Stitch a people roster summary onto each row of an entity list. Used by
+ * the list-page loaders so the DataTable can display "Alice (collector),
+ * Bob (lab tech)" without N+1 queries. Returns a new array — does not
+ * mutate the input.
+ */
+export function attachPeopleSummary<T extends { id: string }>(
+	entityType: EntityType,
+	rows: T[]
+): (T & { people_summary: string })[] {
+	const map = getEntityPersonnelBulk(entityType, rows.map((r) => r.id));
+	return rows.map((r) => {
+		const people = map.get(r.id) ?? [];
+		const summary = people
+			.map((p) => (p.role ? `${p.full_name} (${p.role})` : p.full_name))
+			.join(', ');
+		return { ...r, people_summary: summary };
+	});
+}

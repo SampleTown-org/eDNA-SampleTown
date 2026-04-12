@@ -10,7 +10,8 @@
 		{ key: 'platform', label: 'Platform', sortable: true },
 		{ key: 'instrument_model', label: 'Instrument', sortable: true },
 		{ key: 'total_reads', label: 'Reads', sortable: true },
-		{ key: 'run_date', label: 'Date', sortable: true }
+		{ key: 'run_date', label: 'Date', sortable: true },
+		{ key: 'people_summary', label: 'People', sortable: true }
 	];
 
 	async function deleteRun(row: Record<string, unknown>) {

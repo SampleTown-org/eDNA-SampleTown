@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { getEntityPersonnel } from '$lib/server/entity-personnel';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
@@ -8,5 +9,6 @@ export const load: PageServerLoad = async ({ params }) => {
 	if (!extract) throw error(404, 'Extract not found');
 	const pcrs = db.prepare('SELECT * FROM pcr_amplifications WHERE extract_id = ? AND is_deleted = 0 ORDER BY created_at DESC').all(params.extractId);
 	const libraries = db.prepare('SELECT * FROM library_preps WHERE extract_id = ? AND is_deleted = 0 ORDER BY created_at DESC').all(params.extractId);
-	return { extract, pcrs, libraries };
+	const people = getEntityPersonnel('extract', params.extractId);
+	return { extract, pcrs, libraries, people };
 };

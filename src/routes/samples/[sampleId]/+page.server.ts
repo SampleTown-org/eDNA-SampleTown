@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { getEntityPersonnel } from '$lib/server/entity-personnel';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
@@ -18,5 +19,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		SELECT * FROM extracts WHERE sample_id = ? AND is_deleted = 0 ORDER BY created_at DESC
 	`).all(params.sampleId);
 
-	return { sample, extracts };
+	const people = getEntityPersonnel('sample', params.sampleId);
+
+	return { sample, extracts, people };
 };

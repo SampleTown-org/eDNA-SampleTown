@@ -13,7 +13,8 @@
 		{ key: 'platform', label: 'Platform', sortable: true },
 		{ key: 'pcr_plate_name', label: 'PCR Plate', sortable: true },
 		{ key: 'library_count', label: 'Libraries', sortable: true },
-		{ key: 'library_prep_date', label: 'Date', sortable: true }
+		{ key: 'library_prep_date', label: 'Date', sortable: true },
+		{ key: 'people_summary', label: 'People', sortable: true }
 	];
 
 	const libColumns = [

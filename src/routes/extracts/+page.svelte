@@ -11,7 +11,8 @@
 		{ key: 'samp_name', label: 'Sample', sortable: true },
 		{ key: 'extraction_method', label: 'Method', sortable: true },
 		{ key: 'concentration_ng_ul', label: 'Conc. (ng/µL)', sortable: true },
-		{ key: 'extraction_date', label: 'Date', sortable: true }
+		{ key: 'extraction_date', label: 'Date', sortable: true },
+		{ key: 'people_summary', label: 'People', sortable: true }
 	];
 
 	async function deleteExtract(row: Record<string, unknown>) {

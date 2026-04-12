@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { attachPeopleSummary } from '$lib/server/entity-personnel';
 
 export const load: PageServerLoad = async () => {
 	const db = getDb();
@@ -10,9 +11,10 @@ export const load: PageServerLoad = async () => {
 		LEFT JOIN sites st ON st.id = s.site_id
 		WHERE s.is_deleted = 0
 		ORDER BY s.created_at DESC
-	`).all();
+	`).all() as { id: string }[];
 
+	const samplesWithPeople = attachPeopleSummary('sample', samples);
 	const projects = db.prepare('SELECT id, project_name FROM projects ORDER BY project_name').all();
 
-	return { samples, projects };
+	return { samples: samplesWithPeople, projects };
 };

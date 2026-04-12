@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { getEntityPersonnel } from '$lib/server/entity-personnel';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
@@ -23,7 +24,9 @@ export const load: PageServerLoad = async ({ params }) => {
 			WHERE r.plate_id = ? AND l.is_deleted = 0
 		`).all(params.pcrId);
 
-		return { type: 'plate', plate, reactions, libraries };
+		const people = getEntityPersonnel('pcr_plate', params.pcrId);
+
+		return { type: 'plate', plate, reactions, libraries, people };
 	}
 
 	// Fall back to individual reaction (backward compat)

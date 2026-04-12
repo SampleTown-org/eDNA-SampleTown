@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { attachPeopleSummary } from '$lib/server/entity-personnel';
 
 export const load: PageServerLoad = async () => {
 	const db = getDb();
@@ -10,11 +11,11 @@ export const load: PageServerLoad = async () => {
 		FROM library_plates p
 		LEFT JOIN pcr_plates pp ON pp.id = p.pcr_plate_id
 		WHERE p.is_deleted = 0 ORDER BY p.created_at DESC
-	`).all();
+	`).all() as { id: string }[];
 
 	const orphanLibraries = db.prepare(`
 		SELECT * FROM library_preps WHERE library_plate_id IS NULL AND is_deleted = 0 ORDER BY created_at DESC
 	`).all();
 
-	return { plates, orphanLibraries };
+	return { plates: attachPeopleSummary('library_plate', plates), orphanLibraries };
 };

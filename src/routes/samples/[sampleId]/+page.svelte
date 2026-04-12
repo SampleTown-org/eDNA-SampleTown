@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import { CHECKLISTS } from '$lib/mixs/checklists';
 	import { validateSample } from '$lib/mixs/validators';
 	import type { PageData } from './$types';
@@ -102,6 +103,13 @@
 		<div class="rounded-lg border border-slate-800 p-5">
 			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-2">Notes</h2>
 			<p class="text-sm text-slate-300">{data.sample.notes}</p>
+		</div>
+	{/if}
+
+	{#if data.people.length > 0}
+		<div class="rounded-lg border border-slate-800 p-5 space-y-3">
+			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">People</h2>
+			<PeopleRoster people={data.people} />
 		</div>
 	{/if}
 

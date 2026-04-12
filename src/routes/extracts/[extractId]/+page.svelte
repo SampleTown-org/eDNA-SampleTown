@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -52,6 +53,13 @@
 	</div>
 
 	{#if data.extract.notes}<div class="rounded-lg border border-slate-800 p-5"><h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-2">Notes</h2><p class="text-sm text-slate-300">{data.extract.notes}</p></div>{/if}
+
+	{#if data.people.length > 0}
+		<div class="rounded-lg border border-slate-800 p-5 space-y-3">
+			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">People</h2>
+			<PeopleRoster people={data.people} />
+		</div>
+	{/if}
 
 	<div>
 		<div class="flex items-center justify-between mb-3">

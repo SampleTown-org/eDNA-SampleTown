@@ -13,7 +13,8 @@
 		{ key: 'target_subfragment', label: 'Region', sortable: true },
 		{ key: 'forward_primer_name', label: 'Fwd Primer', sortable: true },
 		{ key: 'reaction_count', label: 'Reactions', sortable: true },
-		{ key: 'pcr_date', label: 'Date', sortable: true }
+		{ key: 'pcr_date', label: 'Date', sortable: true },
+		{ key: 'people_summary', label: 'People', sortable: true }
 	];
 
 	const reactionColumns = [

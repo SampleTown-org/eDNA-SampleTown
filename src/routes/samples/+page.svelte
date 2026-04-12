@@ -12,7 +12,8 @@
 		{ key: 'site_name', label: 'Site', sortable: true },
 		{ key: 'mixs_checklist', label: 'Checklist', sortable: true },
 		{ key: 'geo_loc_name', label: 'Location', sortable: true },
-		{ key: 'collection_date', label: 'Collected', sortable: true }
+		{ key: 'collection_date', label: 'Collected', sortable: true },
+		{ key: 'people_summary', label: 'People', sortable: true }
 	];
 
 	async function deleteSample(row: Record<string, unknown>) {

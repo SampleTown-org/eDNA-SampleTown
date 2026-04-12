@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { getEntityPersonnel } from '$lib/server/entity-personnel';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
@@ -31,7 +32,8 @@ export const load: PageServerLoad = async ({ params }) => {
 			WHERE l.library_plate_id = ? AND sr.is_deleted = 0
 		`).all(params.libraryId);
 
-		return { type: 'plate', plate, libraries, runs };
+		const people = getEntityPersonnel('library_plate', params.libraryId);
+		return { type: 'plate', plate, libraries, runs, people };
 	}
 
 	// Fall back to individual library

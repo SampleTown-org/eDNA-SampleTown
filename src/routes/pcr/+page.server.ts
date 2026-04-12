@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { attachPeopleSummary } from '$lib/server/entity-personnel';
 
 export const load: PageServerLoad = async () => {
 	const db = getDb();
@@ -7,7 +8,7 @@ export const load: PageServerLoad = async () => {
 		SELECT p.*,
 			(SELECT COUNT(*) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) AS reaction_count
 		FROM pcr_plates p WHERE p.is_deleted = 0 ORDER BY p.created_at DESC
-	`).all();
+	`).all() as { id: string }[];
 
 	// Also show any orphan reactions (no plate) for backward compat
 	const orphanReactions = db.prepare(`
@@ -18,5 +19,5 @@ export const load: PageServerLoad = async () => {
 		ORDER BY r.created_at DESC
 	`).all();
 
-	return { plates, orphanReactions };
+	return { plates: attachPeopleSummary('pcr_plate', plates), orphanReactions };
 };
