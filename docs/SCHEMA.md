@@ -2,7 +2,7 @@
 
 The full DDL lives in [`src/lib/server/schema.sql`](../src/lib/server/schema.sql) and is applied automatically by `getDb()` in `src/lib/server/db.ts` on first connection. SQLite, WAL mode, foreign keys on. Picklist data is seeded by `src/lib/server/seed-constrained-values.ts`.
 
-Additive migrations (new columns, relaxed constraints, CHECK drops) run in `runMigrations()` on every startup — idempotent and safe to re-run.
+`schema.sql` is the single source of truth — `runMigrations()` is a no-op. For breaking schema changes (column rename, drop, type change) we wipe and re-initialize the DB rather than carrying a migration runner. Backups are snapshotted before any destructive operation.
 
 ## Hierarchy
 
@@ -32,7 +32,7 @@ A library prep can come from either a `pcr_amplification` or directly from an `e
 | `oauth_states` | GitHub OAuth state nonces | Separate table so the FK on `sessions.user_id` isn't violated mid-flow |
 | `projects` | Top-level container | Has optional `github_repo` for DB snapshots |
 | `sites` | Sampling locations | Reusable across many samples; carries default ENVO terms |
-| `samples` | MIxS-compliant physical samples | `mixs_checklist` selects which checklist's required fields apply |
+| `samples` | MIxS 6.3-aligned physical samples | Column names mirror MIxS LinkML slot names 1:1; `(mixs_checklist, extension)` selects the materialized combination class for required-slot resolution |
 | `extracts` | DNA extracts | Each FK'd to one sample |
 | `pcr_plates` | PCR plate header | Carries shared plate-level conditions (primers, polymerase, cycling) |
 | `pcr_amplifications` | Individual reactions | Always belong to a plate; per-reaction band/concentration |
@@ -64,13 +64,13 @@ The same person can be attributed multiple times with different roles (e.g. "col
 
 ## CHECK constraints — what's kept vs. dropped
 
-Columns whose values are mandated by an **external standard** retain schema-level CHECK constraints:
+Columns whose values are mandated by an **external standard** retain schema-level CHECK constraints only when the valid set is stable across versions:
 
 | Column | Standard | Values |
 |---|---|---|
-| `samples.mixs_checklist` | MIxS/GSC | MIMARKS-SU, MIMARKS-SP, MIMS, MIMAG, MISAG, MIGS-EU/BA/PL/VI/ORG, MIUViG |
-| `samples.env_package`, `sites.env_package` | MIxS | water, soil, sediment, host-associated, air, built, plant-associated, agriculture |
 | `*.platform` | INSDC/SRA | ILLUMINA, OXFORD_NANOPORE, PACBIO, ION_TORRENT [+ 'other' on library tables] |
+
+`samples.mixs_checklist` and `samples.extension` are intentionally NOT CHECK-constrained — the valid set evolves between MIxS releases, and enforcement happens against the active schema index at runtime (`src/lib/mixs/schema-index.ts`). Bumping to a new MIxS release doesn't require a schema migration.
 
 Internal system-state columns also keep CHECKs:
 
@@ -83,13 +83,19 @@ Internal system-state columns also keep CHECKs:
 | `db_snapshots.status` | pending, committed, pushed, failed |
 | `entity_personnel.entity_type` | sample, extract, pcr_plate, library_plate, sequencing_run |
 
-All other categorical columns (`target_gene`, `library_type`, `pipeline`, `extraction_method`, `library_prep_kit`, etc.) are **operator-managed vocabulary** — no schema CHECK, the picklist in `/settings` is the sole source of truth. Zod schemas on the API layer enforce string type + length but not specific values.
+All other categorical columns (`pipeline`, `extraction_method`, `library_prep_kit`, `samp_store_sol`, `samp_collect_device`, etc.) are **operator-managed vocabulary** — no schema CHECK, the picklist in `/settings` is the sole source of truth. Zod schemas on the API layer enforce string type + length but not specific values.
+
+MIxS controlled vocabularies (ENVO biomes for `env_broad_scale`, ENVO features for `env_local_scale`, ENVO materials for `env_medium`, country:region for `geo_loc_name`) are picklist-seeded from the LinkML schema and editable in Settings; values are not CHECK-enforced so operators can add site-specific terms.
 
 ## Constrained vocabularies
 
 Three patterns:
 
-1. **`constrained_values`** — single table with `(category, value, label, sort_order, is_active)` rows. Categories include: `target_gene`, `pipeline`, `person_role`, `habitat_type`, `geo_loc_name`, `locality`, `env_broad_scale`, `env_local_scale`, `env_medium`, `sample_type`, `filter_type`, `preservation_method`, `storage_conditions`, `storage_room`, `storage_box`, `extraction_method`, `extraction_kit`, `library_prep_kit`, `library_type`, `polymerase`, `seq_platform`, `seq_instrument`, `seq_method`, `index_i7`, `index_i5`, `barcode`, and `naming_template`. Categories whose values must match a schema CHECK (like `seq_platform`) use `{value, label}` pairs where the value is the canonical string and the label is human-friendly.
+1. **`constrained_values`** — single table with `(category, value, label, sort_order, is_active)` rows. Categories are grouped in `/settings` by vocabulary authority:
+   - **MIxS** — `geo_loc_name`, `locality`, `env_broad_scale`, `env_local_scale`, `env_medium`, `samp_store_sol`, `samp_collect_device`
+   - **SRA / ENA** — `library_strategy`, `library_source`, `library_selection`, `seq_platform`, `seq_instrument` (validated against the NCBI SRA_metadata.xlsx vocabulary)
+   - **Custom** — `pipeline`, `filter_type`, `storage_room`, `storage_box`, `extraction_method`, `library_prep_kit`, `barcode`, `person_role`, and `naming_template`
+   Categories whose values must match a schema CHECK (like `seq_platform`) use `{value, label}` pairs where the value is the canonical string and the label is human-friendly.
 2. **`primer_sets`** — composite (gene + region + F/R name + F/R sequence + reference). Selected as a unit on the PCR plate form to populate four primer fields at once.
 3. **`pcr_protocols`** — composite (polymerase + annealing temp + cycles + free-text conditions). Selected as a unit on the PCR plate form to populate four protocol fields at once.
 

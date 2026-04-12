@@ -6,8 +6,11 @@ Tracks the full chain: **Project → Site → Sample → Extract → PCR → Lib
 
 ## Features
 
-- **MIxS v6 compliant** — supports the full GSC checklist family (MIMARKS-SU/SP, MIMS, MIMAG, MISAG, MIGS-EU/BA/PL/VI/ORG, MIUViG)
-- **NCBI-ready** — import the official BioSample xlsx templates, export TSV that drops into the SRA submission portal
+- **MIxS 6.3 native** — column names mirror LinkML slot names 1:1; full GSC checklist family (MimarksS/C, Mims, MimsMisip, Mimag, Misag, MigsBa/Eu/Org/Pl/Vi, Miuvig) × 23 extensions (Water, Soil, Sediment, HostAssociated, …) = 276 materialized combination classes driving required-slot validation
+- **Live MIxS completeness** — pick a (checklist, extension) on a sample form and the UI reactively highlights required slots with a red `*`, shows "N of M filled" progress, and flags missing required slots; import validates each row with ajv against the materialized combination class
+- **Searchable MIxS glossary** — `/glossary` reference for all 786 slots, deep-linkable by slot name, ships baked-in for offline ship use
+- **NCBI-ready** — import the official BioSample xlsx templates with automatic SRA↔MIxS column translation; export TSV columns ordered and `*`-marked per the GSC combination-class template
+- **Mechanical MIxS upgrades** — `npm run mixs:update 6.4.0` fetches a new release, rebuilds runtime indices, and emits a diff report identifying renamed / added / removed / required-tightened slots by stable `slot_uri`
 - **Plate-based batch entry** — PCR and library prep are organized around plates (not single reactions), with one form to create a whole plate of reactions in a transaction
 - **Constrained vocabularies** — picklist-driven for target genes, library types, pipelines, primers, protocols, kits, instruments, environments, storage locations, person roles; managed in-app via the Settings page. Only SRA/MIxS-mandated values have schema-level CHECK constraints; everything else is fully operator-managed.
 - **Linked composites** — primer sets (gene + region + F/R primer + sequence + reference) and PCR protocols (polymerase + annealing + cycles + conditions) live in dedicated tables and are selected as a unit
@@ -90,20 +93,36 @@ src/
 │   │   ├── personnel.ts                # active personnel lookup
 │   │   ├── constrained-values.ts       # picklist loader
 │   │   ├── mixs-io.ts                  # MIxS TSV/xlsx import + export
+│   │   ├── mixs-validator.ts           # server-only ajv validator against LinkML JSON Schema
 │   │   └── github.ts                   # Octokit DB-snapshot commits
+│   ├── mixs/
+│   │   ├── schema/v6.3.0/              # checked-in LinkML YAML + JSON Schema + VERSION
+│   │   ├── generated/v6.3.0/           # compact runtime indices (slots/classes/enums.json)
+│   │   ├── schema-index.ts             # typed loader (getSlot, requiredSlotsFor, …)
+│   │   ├── checklists.ts               # CHECKLIST_OPTIONS, EXTENSION_OPTIONS, requiredSlotSet
+│   │   ├── fields.ts                   # UI field grouping (view over schema-index)
+│   │   ├── validators.ts               # client-side form-level MIxS validation
+│   │   └── sra-mapping.ts              # SRA/BioSample ↔ MIxS column translation
 │   └── components/
 │       ├── DataTable.svelte            # sortable, filterable, color-by table
 │       ├── MapPicker.svelte            # Leaflet map with click-to-place + colored markers
 │       ├── PeoplePicker.svelte         # chip-list for attributing personnel + roles
 │       ├── PeopleRoster.svelte         # read-only chip-list for detail pages
 │       ├── PlateView.svelte            # 8/96/384-well visual layout
+│       ├── MixsCompleteness.svelte     # reactive MIxS-required-slot progress banner
+│       ├── FieldLabel.svelte           # <label> with (i) popover pulling MIxS slot docs
 │       └── FeedbackForm.svelte         # persistent form in bottom-right corner
 └── routes/
     ├── projects/  sites/  samples/     # CRUD pages (list, new, edit, [id])
     ├── extracts/  pcr/  libraries/  runs/  analysis/
     ├── settings/                       # Naming, picklists, primers, protocols, people, feedback
     ├── export/                         # MIxS import / export UI
+    ├── glossary/                       # searchable MIxS slot reference
     └── api/                            # REST endpoints (one folder per resource)
+
+scripts/
+├── mixs-build-index.mjs                # YAML → runtime JSON indices
+└── mixs-update.mjs                     # fetch a new MIxS release + diff report
 ```
 
 ## Documentation
