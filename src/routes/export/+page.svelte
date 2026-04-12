@@ -67,6 +67,22 @@
 	// Set of fields that belong to the sites table (for display in mapper)
 	let siteFieldSet = $derived(new Set(importPreview?.site_fields ?? ['lat_lon', 'latitude', 'longitude', 'geo_loc_name', 'env_broad_scale', 'env_local_scale']));
 
+	// Detect duplicate target fields — two columns mapped to the same field
+	let duplicateTargets = $derived.by(() => {
+		const seen = new Map<string, string[]>();
+		for (const [header, field] of Object.entries(columnMap)) {
+			if (!field || field === '_skip_' || field.startsWith('custom:')) continue;
+			if (!seen.has(field)) seen.set(field, []);
+			seen.get(field)!.push(header);
+		}
+		const dupes: { field: string; headers: string[] }[] = [];
+		for (const [field, headers] of seen) {
+			if (headers.length > 1) dupes.push({ field, headers });
+		}
+		return dupes;
+	});
+	let hasDuplicates = $derived(duplicateTargets.length > 0);
+
 	function fieldLabel(field: string): string {
 		if (!field || field === '_skip_') return field;
 		return siteFieldSet.has(field) ? `site: ${field}` : `sample: ${field}`;
@@ -266,7 +282,7 @@
 				{importing ? 'Parsing...' : 'Validate'}
 			</button>
 			{#if importPreview && importPreview.samples.length > 0}
-			<button onclick={runImport} disabled={importing} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
+			<button onclick={runImport} disabled={importing || hasDuplicates} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 				{importing ? 'Importing...' : `Import ${importPreview.count} Samples`}
 			</button>
 			{/if}
@@ -279,8 +295,8 @@
 				<div class="rounded-lg border border-slate-800 bg-slate-900/50">
 					<button
 						type="button"
-						onclick={() => (showMapper = !showMapper)}
-						class="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-300 hover:text-white"
+						onclick={() => { showMapper = !showMapper; }}
+						class="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-300 hover:text-white cursor-pointer"
 					>
 						<span>
 							Column mapping ·
@@ -332,10 +348,18 @@
 									</tbody>
 								</table>
 							</div>
+							{#if hasDuplicates}
+								<div class="p-2 rounded bg-red-900/30 border border-red-800 text-red-300 text-xs space-y-1">
+									<p class="font-medium">Multiple columns mapped to the same target field:</p>
+									{#each duplicateTargets as d}
+										<div>{d.headers.join(', ')} &rarr; <strong>{d.field}</strong></div>
+									{/each}
+								</div>
+							{/if}
 							<div class="flex justify-end pt-2">
 								<button
 									onclick={revalidateWithMapping}
-									disabled={importing}
+									disabled={importing || hasDuplicates}
 									class="px-3 py-1.5 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 text-xs font-medium"
 								>
 									{importing ? 'Re-validating...' : 'Re-validate with mapping'}

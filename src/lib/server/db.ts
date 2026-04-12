@@ -266,7 +266,7 @@ function deduplicateSiteSampleColumns(db: Database.Database) {
 		insertSite.run(
 			id,
 			g.project_id,
-			id, // site_name = hash ID
+			id.slice(0, 8), // site_name = 8-digit hash prefix
 			g.lat_lon,
 			g.latitude,
 			g.longitude,

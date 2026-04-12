@@ -5,7 +5,7 @@ import { parseMixsTsv, xlsxToTsv, getImportableFields, SITE_FIELDS } from '$lib/
 import { parseLatLon } from '$lib/mixs/validators';
 import { checkRate } from '$lib/server/rate-limit';
 import { apiError } from '$lib/server/api-errors';
-import { findNearbySites } from '$lib/server/proximity';
+import { findNearbySites, haversineKm } from '$lib/server/proximity';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_TSV_BYTES = 20 * 1024 * 1024; // post-decompression cap (xlsx is zipped)
@@ -15,9 +15,9 @@ const MAX_ROWS = 10_000;
 const DEFAULT_SITE_MATCH_KM = 1;
 
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
-	// Rate limit per IP: 10 imports / hour. Hooks already require a session.
+	// Rate limit per IP: 1 request / second. Hooks already require a session.
 	const ip = getClientAddress();
-	if (!checkRate(`import:${ip}`, 10, 60 * 60_000)) {
+	if (!checkRate(`import:${ip}`, 1, 1_000)) {
 		return json({ error: 'Too many import requests, try again later' }, { status: 429 });
 	}
 
@@ -106,32 +106,41 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		return { sample: s, lat, lon, matched_site: nearby[0] ?? null, new_site: false };
 	});
 
-	// Auto-create sites for unmatched samples, grouped by lat_lon string.
-	const newSitesByLatLon = new Map<string, { id: string; site_name: string; lat: number; lon: number; lat_lon: string; geo_loc_name: string | null; env_broad_scale: string | null; env_local_scale: string | null }>();
+	// Auto-create sites for unmatched samples, clustered by proximity.
+	// Samples within siteMatchKm of each other share the same new site.
+	type NewSite = { id: string; site_name: string; lat: number; lon: number; lat_lon: string; geo_loc_name: string | null; env_broad_scale: string | null; env_local_scale: string | null };
+	const newSites: NewSite[] = [];
 
 	for (const row of matched) {
 		if (row.matched_site || row.lat == null || row.lon == null) continue;
 
-		// Build a lat_lon key — either from the parsed sample or compose one
-		const latLonKey = (row.sample.lat_lon as string) ||
-			`${Math.abs(row.lat).toFixed(4)} ${row.lat >= 0 ? 'N' : 'S'} ${Math.abs(row.lon).toFixed(4)} ${row.lon >= 0 ? 'E' : 'W'}`;
+		// Check if this sample is close enough to an already-created new site
+		let cluster: NewSite | null = null;
+		for (const site of newSites) {
+			if (haversineKm(row.lat, row.lon, site.lat, site.lon) <= siteMatchKm) {
+				cluster = site;
+				break;
+			}
+		}
 
-		if (!newSitesByLatLon.has(latLonKey)) {
+		if (!cluster) {
 			const id = generateId();
-			newSitesByLatLon.set(latLonKey, {
+			const latLon = (row.sample.lat_lon as string) ||
+				`${Math.abs(row.lat).toFixed(4)} ${row.lat >= 0 ? 'N' : 'S'} ${Math.abs(row.lon).toFixed(4)} ${row.lon >= 0 ? 'E' : 'W'}`;
+			cluster = {
 				id,
-				site_name: id,
+				site_name: id.slice(0, 8),
 				lat: row.lat,
 				lon: row.lon,
-				lat_lon: latLonKey,
+				lat_lon: latLon,
 				geo_loc_name: (row.sample.geo_loc_name as string) || null,
 				env_broad_scale: (row.sample.env_broad_scale as string) || null,
 				env_local_scale: (row.sample.env_local_scale as string) || null
-			});
+			};
+			newSites.push(cluster);
 		}
 
-		const site = newSitesByLatLon.get(latLonKey)!;
-		row.matched_site = { id: site.id, site_name: site.site_name, distance_km: 0 };
+		row.matched_site = { id: cluster.id, site_name: cluster.site_name, distance_km: 0 };
 		row.new_site = true;
 	}
 
@@ -156,7 +165,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 						}
 					: null
 			})),
-			new_sites: Array.from(newSitesByLatLon.values()).map((s) => ({
+			new_sites: Array.from(newSites).map((s) => ({
 				id: s.id,
 				site_name: s.site_name,
 				lat_lon: s.lat_lon,
@@ -197,7 +206,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	const insertAll = db.transaction((rows: typeof matched) => {
 		// First, insert all new sites
 		const insertedSiteIds = new Set<string>();
-		for (const site of newSitesByLatLon.values()) {
+		for (const site of newSites) {
 			if (insertedSiteIds.has(site.id)) continue;
 			insertSiteStmt.run(
 				site.id,
