@@ -10,27 +10,14 @@
 	// Initialize selection from what's already carted
 	let selectedIds = $state(new Set(cart.getByType('extract').map((i) => i.id)));
 
-	// Parent filter: always active — carted samples narrow what's visible
+	// Parent filter: carted samples narrow what's visible (togglable via funnel)
 	const cartSampleIds = $derived(cart.idsOfType('sample'));
 	const hasParentFilter = $derived(cartSampleIds.size > 0);
-
-	// Self-type filter: funnel toggle narrows to only carted extracts
-	const cartExtractIds = $derived(cart.idsOfType('extract'));
-	let selfFilterActive = $state(false);
-
-	const hasCartFilter = $derived(hasParentFilter || (cartExtractIds.size > 0 && selfFilterActive));
+	let parentFilterActive = $state(true);
 
 	let extracts = $derived.by(() => {
-		let result = allExtracts;
-		// Parent filter always applies
-		if (hasParentFilter) {
-			result = result.filter((e: any) => cartSampleIds.has(e.sample_id));
-		}
-		// Self filter only when toggled on
-		if (selfFilterActive && cartExtractIds.size > 0) {
-			result = result.filter((e: any) => cartExtractIds.has(e.id));
-		}
-		return result;
+		if (!hasParentFilter || !parentFilterActive) return allExtracts;
+		return allExtracts.filter((e: any) => cartSampleIds.has(e.sample_id));
 	});
 
 	// Detect when selection has diverged from the cart
@@ -102,8 +89,8 @@
 		empty="No extracts yet."
 		showId
 		filterable
-		cartFilterLabel={hasParentFilter || cartExtractIds.size > 0 ? `showing ${extracts.length}/${allExtracts.length} extracts` : ''}
-		bind:cartFilterActive={selfFilterActive}
+		cartFilterLabel={hasParentFilter ? `showing ${extracts.length}/${allExtracts.length} extracts` : ''}
+		bind:cartFilterActive={parentFilterActive}
 		editHref={(row) => `/extracts/${row.id}/edit`}
 		ondelete={deleteExtract}
 		onduplicate={duplicateExtract}

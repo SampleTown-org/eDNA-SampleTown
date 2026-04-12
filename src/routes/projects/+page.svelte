@@ -10,20 +10,8 @@
 	// Initialize selection from what's already carted
 	let selectedIds = $state(new Set(cart.getByType('project').map((i) => i.id)));
 
-	// No parent filter — projects are top-level
-
-	// Self-type filter: funnel toggle narrows to only carted projects
-	const cartProjectIds = $derived(cart.idsOfType('project'));
-	let selfFilterActive = $state(false);
-
-	let projects = $derived.by(() => {
-		let result = allProjects;
-		// Self filter only when toggled on
-		if (selfFilterActive && cartProjectIds.size > 0) {
-			result = result.filter((p: any) => cartProjectIds.has(p.id));
-		}
-		return result;
-	});
+	// No parent filter — projects are top-level. No funnel toggle.
+	let projects = $derived(allProjects);
 
 	// Detect when selection has diverged from the cart
 	const selectionChanged = $derived.by(() => {
@@ -93,8 +81,6 @@
 		showId
 		filterable
 		selectable
-		cartFilterLabel={cartProjectIds.size > 0 ? `showing ${projects.length}/${allProjects.length} projects` : ''}
-		bind:cartFilterActive={selfFilterActive}
 		editHref={(row) => `/projects/${row.id}/edit`}
 		ondelete={deleteProject}
 		onduplicate={duplicateProject}

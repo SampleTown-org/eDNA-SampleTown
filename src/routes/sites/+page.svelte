@@ -12,27 +12,14 @@
 	// Initialize selection from what's already carted
 	let selectedIds = $state(new Set(cart.getByType('site').map((i) => i.id)));
 
-	// Parent filter: always active — carted projects narrow what's visible
+	// Parent filter: carted projects narrow what's visible (togglable via funnel)
 	const cartProjectIds = $derived(cart.idsOfType('project'));
 	const hasParentFilter = $derived(cartProjectIds.size > 0);
-
-	// Self-type filter: funnel toggle narrows to only carted sites
-	const cartSiteIds = $derived(cart.idsOfType('site'));
-	let selfFilterActive = $state(false);
-
-	const hasCartFilter = $derived(hasParentFilter || (cartSiteIds.size > 0 && selfFilterActive));
+	let parentFilterActive = $state(true);
 
 	let sites = $derived.by(() => {
-		let result = allSites;
-		// Parent filter always applies
-		if (hasParentFilter) {
-			result = result.filter((s: any) => cartProjectIds.has(s.project_id));
-		}
-		// Self filter only when toggled on
-		if (selfFilterActive && cartSiteIds.size > 0) {
-			result = result.filter((s: any) => cartSiteIds.has(s.id));
-		}
-		return result;
+		if (!hasParentFilter || !parentFilterActive) return allSites;
+		return allSites.filter((s: any) => cartProjectIds.has(s.project_id));
 	});
 
 	// Detect when selection has diverged from the cart
@@ -135,8 +122,8 @@
 		showId
 		filterable
 		selectable
-		cartFilterLabel={hasParentFilter || cartSiteIds.size > 0 ? `showing ${sites.length}/${allSites.length} sites` : ''}
-		bind:cartFilterActive={selfFilterActive}
+		cartFilterLabel={hasParentFilter ? `showing ${sites.length}/${allSites.length} sites` : ''}
+		bind:cartFilterActive={parentFilterActive}
 		editHref={(row) => `/sites/${row.id}/edit`}
 		ondelete={deleteSite}
 		onduplicate={duplicateSite}

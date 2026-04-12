@@ -11,23 +11,21 @@
 	// Initialize selection from what's already carted
 	let selectedIds = $state(new Set(cart.getByType('library_plate').map((i) => i.id)));
 
-	// Parent filter: always active — carted pcr plates/extracts narrow what's visible
+	// Parent filter: carted pcr plates/extracts narrow what's visible (togglable)
 	const cartExtractIds = $derived(cart.idsOfType('extract'));
 	const cartPcrIds = $derived(cart.idsOfType('pcr'));
 	const cartPcrPlateIds = $derived(cart.idsOfType('pcr_plate'));
 	const hasParentFilter = $derived(
 		cartExtractIds.size > 0 || cartPcrIds.size > 0 || cartPcrPlateIds.size > 0
 	);
+	let parentFilterActive = $state(true);
 
 	function plateMatchesCart(plate: any): boolean {
-		// Match by source PCR plate
 		if (cartPcrPlateIds.size > 0 && plate.pcr_plate_id && cartPcrPlateIds.has(plate.pcr_plate_id)) return true;
-		// Match by PCR reaction IDs inside the plate
 		if (cartPcrIds.size > 0 && plate.pcr_ids) {
 			const ids = (plate.pcr_ids as string).split(',');
 			if (ids.some((id) => cartPcrIds.has(id))) return true;
 		}
-		// Match by extract IDs inside the plate
 		if (cartExtractIds.size > 0 && plate.extract_ids) {
 			const ids = (plate.extract_ids as string).split(',');
 			if (ids.some((id) => cartExtractIds.has(id))) return true;
@@ -35,23 +33,9 @@
 		return false;
 	}
 
-	// Self-type filter: funnel toggle narrows to only carted library_plates
-	const cartLibPlateIds = $derived(cart.idsOfType('library_plate'));
-	let selfFilterActive = $state(false);
-
-	const hasCartFilter = $derived(hasParentFilter || (cartLibPlateIds.size > 0 && selfFilterActive));
-
 	let plates = $derived.by(() => {
-		let result = allPlates;
-		// Parent filter always applies
-		if (hasParentFilter) {
-			result = result.filter(plateMatchesCart);
-		}
-		// Self filter only when toggled on
-		if (selfFilterActive && cartLibPlateIds.size > 0) {
-			result = result.filter((p: any) => cartLibPlateIds.has(p.id));
-		}
-		return result;
+		if (!hasParentFilter || !parentFilterActive) return allPlates;
+		return allPlates.filter(plateMatchesCart);
 	});
 
 	// Detect when selection has diverged from the cart
@@ -132,13 +116,13 @@
 		columns={plateColumns}
 		rows={plates}
 		bind:selectedIds
-		bind:cartFilterActive={selfFilterActive}
+		bind:cartFilterActive={parentFilterActive}
 		href={(row) => `/libraries/${row.id}`}
 		selectable
 		empty="No library plates yet."
 		showId
 		filterable
-		cartFilterLabel={hasParentFilter || cartLibPlateIds.size > 0 ? `showing ${plates.length}/${allPlates.length} plates` : ''}
+		cartFilterLabel={hasParentFilter ? `showing ${plates.length}/${allPlates.length} plates` : ''}
 		editHref={(row) => `/libraries/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}

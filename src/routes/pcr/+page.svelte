@@ -11,34 +11,20 @@
 	// Initialize selection from what's already carted
 	let selectedIds = $state(new Set(cart.getByType('pcr_plate').map((i) => i.id)));
 
-	// Parent filter: always active — carted extracts narrow what's visible
+	// Parent filter: carted extracts narrow which plates are visible (togglable)
 	const cartExtractIds = $derived(cart.idsOfType('extract'));
 	const hasParentFilter = $derived(cartExtractIds.size > 0);
+	let parentFilterActive = $state(true);
 
-	/** Parse comma-separated extract_ids from the server query */
 	function plateHasCartedExtract(plate: any): boolean {
 		if (!plate.extract_ids) return false;
 		const ids = (plate.extract_ids as string).split(',');
 		return ids.some((id) => cartExtractIds.has(id));
 	}
 
-	// Self-type filter: funnel toggle narrows to only carted pcr_plates
-	const cartPcrPlateIds = $derived(cart.idsOfType('pcr_plate'));
-	let selfFilterActive = $state(false);
-
-	const hasCartFilter = $derived(hasParentFilter || (cartPcrPlateIds.size > 0 && selfFilterActive));
-
 	let plates = $derived.by(() => {
-		let result = allPlates;
-		// Parent filter always applies
-		if (hasParentFilter) {
-			result = result.filter(plateHasCartedExtract);
-		}
-		// Self filter only when toggled on
-		if (selfFilterActive && cartPcrPlateIds.size > 0) {
-			result = result.filter((p: any) => cartPcrPlateIds.has(p.id));
-		}
-		return result;
+		if (!hasParentFilter || !parentFilterActive) return allPlates;
+		return allPlates.filter(plateHasCartedExtract);
 	});
 
 	// Detect when selection has diverged from the cart
@@ -120,13 +106,13 @@
 		columns={plateColumns}
 		rows={plates}
 		bind:selectedIds
-		bind:cartFilterActive={selfFilterActive}
+		bind:cartFilterActive={parentFilterActive}
 		href={(row) => `/pcr/${row.id}`}
 		selectable
 		empty="No PCR plates yet."
 		showId
 		filterable
-		cartFilterLabel={hasParentFilter || cartPcrPlateIds.size > 0 ? `showing ${plates.length}/${allPlates.length} plates` : ''}
+		cartFilterLabel={hasParentFilter ? `showing ${plates.length}/${allPlates.length} plates` : ''}
 		editHref={(row) => `/pcr/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}

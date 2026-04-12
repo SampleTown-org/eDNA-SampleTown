@@ -9,10 +9,11 @@
 	// Initialize selection from what's already carted
 	let selectedIds = $state(new Set(cart.getByType('run').map((i) => i.id)));
 
-	// Parent filter: always active — carted library plates/libraries narrow what's visible
+	// Parent filter: carted library plates/libraries narrow what's visible (togglable)
 	const cartLibPlateIds = $derived(cart.idsOfType('library_plate'));
 	const cartLibIds = $derived(cart.idsOfType('library'));
 	const hasParentFilter = $derived(cartLibPlateIds.size > 0 || cartLibIds.size > 0);
+	let parentFilterActive = $state(true);
 
 	function runMatchesCart(run: any): boolean {
 		if (cartLibPlateIds.size > 0 && run.library_plate_ids) {
@@ -26,23 +27,9 @@
 		return false;
 	}
 
-	// Self-type filter: funnel toggle narrows to only carted runs
-	const cartRunIds = $derived(cart.idsOfType('run'));
-	let selfFilterActive = $state(false);
-
-	const hasCartFilter = $derived(hasParentFilter || (cartRunIds.size > 0 && selfFilterActive));
-
 	let runs = $derived.by(() => {
-		let result = allRuns;
-		// Parent filter always applies
-		if (hasParentFilter) {
-			result = result.filter(runMatchesCart);
-		}
-		// Self filter only when toggled on
-		if (selfFilterActive && cartRunIds.size > 0) {
-			result = result.filter((r: any) => cartRunIds.has(r.id));
-		}
-		return result;
+		if (!hasParentFilter || !parentFilterActive) return allRuns;
+		return allRuns.filter(runMatchesCart);
 	});
 
 	// Detect when selection has diverged from the cart
@@ -99,13 +86,13 @@
 		{columns}
 		rows={runs}
 		bind:selectedIds
-		bind:cartFilterActive={selfFilterActive}
+		bind:cartFilterActive={parentFilterActive}
 		href={(row) => `/runs/${row.id}`}
 		selectable
 		empty="No sequencing runs yet."
 		showId
 		filterable
-		cartFilterLabel={hasParentFilter || cartRunIds.size > 0 ? `showing ${runs.length}/${allRuns.length} runs` : ''}
+		cartFilterLabel={hasParentFilter ? `showing ${runs.length}/${allRuns.length} runs` : ''}
 		editHref={(row) => `/runs/${row.id}/edit`}
 		ondelete={deleteRun}
 	/>

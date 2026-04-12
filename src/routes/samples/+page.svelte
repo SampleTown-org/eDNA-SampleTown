@@ -10,33 +10,18 @@
 	// Initialize selection from what's already carted
 	let selectedIds = $state(new Set(cart.getByType('sample').map((i) => i.id)));
 
-	// Parent filter: always active — carted projects/sites narrow what's visible
+	// Parent filter: carted projects/sites narrow what's visible (togglable via funnel)
 	const cartProjectIds = $derived(cart.idsOfType('project'));
 	const cartSiteIds = $derived(cart.idsOfType('site'));
 	const hasParentFilter = $derived(cartProjectIds.size > 0 || cartSiteIds.size > 0);
-
-	// Self-type filter: funnel toggle narrows to only carted samples within
-	// the parent-filtered set. When OFF, all parent-filtered rows are shown
-	// with carted ones pre-checked.
-	const cartSampleIds = $derived(cart.idsOfType('sample'));
-	let selfFilterActive = $state(false);
-
-	const hasCartFilter = $derived(hasParentFilter || (cartSampleIds.size > 0 && selfFilterActive));
+	let parentFilterActive = $state(true);
 
 	let samples = $derived.by(() => {
-		let result = allSamples;
-		// Parent filter always applies
-		if (hasParentFilter) {
-			result = result.filter((s: any) =>
-				(cartProjectIds.size === 0 || cartProjectIds.has(s.project_id)) &&
-				(cartSiteIds.size === 0 || cartSiteIds.has(s.site_id))
-			);
-		}
-		// Self filter only when toggled on
-		if (selfFilterActive && cartSampleIds.size > 0) {
-			result = result.filter((s: any) => cartSampleIds.has(s.id));
-		}
-		return result;
+		if (!hasParentFilter || !parentFilterActive) return allSamples;
+		return allSamples.filter((s: any) =>
+			(cartProjectIds.size === 0 || cartProjectIds.has(s.project_id)) &&
+			(cartSiteIds.size === 0 || cartSiteIds.has(s.site_id))
+		);
 	});
 
 	// Detect when selection has diverged from the cart
@@ -110,8 +95,8 @@
 		showId
 		filterable
 		selectable
-		cartFilterLabel={hasParentFilter || cartSampleIds.size > 0 ? `showing ${samples.length}/${allSamples.length} samples` : ''}
-		bind:cartFilterActive={selfFilterActive}
+		cartFilterLabel={hasParentFilter ? `showing ${samples.length}/${allSamples.length} samples` : ''}
+		bind:cartFilterActive={parentFilterActive}
 		editHref={(row) => `/samples/${row.id}/edit`}
 		ondelete={deleteSample}
 		onduplicate={duplicateSample}
