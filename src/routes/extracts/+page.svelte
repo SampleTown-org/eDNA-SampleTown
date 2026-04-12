@@ -71,17 +71,6 @@
 		</div>
 	</div>
 
-	{#if hasCartFilter}
-		<div class="flex items-center gap-2 text-xs text-slate-400">
-			<span class="text-ocean-400">Cart filter:</span>
-			<span>showing {extracts.length} of {allExtracts.length} extracts</span>
-			<button
-				onclick={() => (cartFilterActive = !cartFilterActive)}
-				class="px-2 py-0.5 rounded border {cartFilterActive ? 'border-ocean-700 text-ocean-400' : 'border-slate-700 text-slate-500'} hover:text-white"
-			>{cartFilterActive ? 'On' : 'Off'}</button>
-		</div>
-	{/if}
-
 	<DataTable
 		{columns}
 		rows={extracts}
@@ -91,6 +80,7 @@
 		empty="No extracts yet."
 		showId
 		filterable
+		cartFilterLabel={hasCartFilter && cartFilterActive ? `showing ${extracts.length}/${allExtracts.length} extracts` : ''}
 		editHref={(row) => `/extracts/${row.id}/edit`}
 		ondelete={deleteExtract}
 		onduplicate={duplicateExtract}

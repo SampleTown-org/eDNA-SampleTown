@@ -8,11 +8,14 @@
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
 	// If the cart has samples, auto-switch to batch mode and pre-populate.
+	// cartSamples is captured once at mount for pre-population; hasCartSamples
+	// is reactive so the banner disappears when the user clears the cart.
 	const cartSamples = cart.getByType('sample');
-	const hasCartSamples = cartSamples.length > 0;
+	const initialCartCount = cartSamples.length;
+	let hasCartSamples = $derived(cart.getByType('sample').length > 0);
 
 	let mode = $state<'single' | 'batch'>(
-		hasCartSamples ? 'batch' : (data.preselectedSampleId ? 'single' : 'single')
+		initialCartCount > 0 ? 'batch' : (data.preselectedSampleId ? 'single' : 'single')
 	);
 
 	// Single mode
@@ -109,11 +112,12 @@
 		else { errorMsg = 'Failed to create extracts'; saving = false; }
 	}
 
-	// Filter sample list by cart when populated
-	const cartSampleIdSet = new Set(cartSamples.map(c => c.id));
-	const filteredSamples = hasCartSamples
-		? (data.samples as any[]).filter((s: any) => cartSampleIdSet.has(s.id))
-		: (data.samples as any[]);
+	// Filter sample list by cart when populated (reactive so clearing cart shows all)
+	let filteredSamples = $derived.by(() => {
+		const cartIds = cart.idsOfType('sample');
+		if (cartIds.size === 0) return data.samples as any[];
+		return (data.samples as any[]).filter((s: any) => cartIds.has(s.id));
+	});
 
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 	const selectCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';

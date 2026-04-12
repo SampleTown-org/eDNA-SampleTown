@@ -9,6 +9,20 @@
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 	const cartExtracts = cart.getByType('extract');
 
+	// Filter extract picker by cart: show extracts that are carted directly,
+	// OR extracts from carted samples. Falls back to all if cart is empty.
+	let displayExtracts = $derived.by(() => {
+		const cartExtractIds = cart.idsOfType('extract');
+		const cartSampleIds = cart.idsOfType('sample');
+		if (cartExtractIds.size === 0 && cartSampleIds.size === 0) return data.extracts as any[];
+		return (data.extracts as any[]).filter((e: any) =>
+			cartExtractIds.has(e.id) || cartSampleIds.has(e.sample_id)
+		);
+	});
+	let hasExtractFilter = $derived(
+		cart.idsOfType('extract').size > 0 || cart.idsOfType('sample').size > 0
+	);
+
 	// Plate layout — assigns reactions to well positions (A1, A2, …).
 	// Optional visual aid for laying out the plate on the bench; the mapping
 	// doesn't currently persist (no well column in the schema yet).
@@ -172,8 +186,14 @@
 					<button onclick={clearAll} class="text-xs text-slate-500 hover:text-slate-300">Clear</button>
 				</div>
 			</div>
+			{#if hasExtractFilter}
+				<p class="text-[10px] text-ocean-400">
+					<svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v5l-4 2V12L3 4z"/></svg>
+					showing {displayExtracts.length}/{(data.extracts as any[]).length} from cart
+				</p>
+			{/if}
 			<div class="space-y-1 max-h-80 overflow-y-auto pr-1">
-				{#each data.extracts as e}
+				{#each displayExtracts as e}
 				<label class="flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors {selectedExtractIds.has(e.id) ? 'bg-ocean-900/40 border border-ocean-700' : 'bg-slate-800/50 border border-transparent hover:bg-slate-800'}">
 					<input type="checkbox" checked={selectedExtractIds.has(e.id)} onchange={() => toggleExtract(e.id, e.extract_name, e.samp_name)} class="mt-0.5 accent-ocean-500" />
 					<div><div class="text-sm text-white">{e.extract_name}</div><div class="text-xs text-slate-500">{e.samp_name}</div></div>

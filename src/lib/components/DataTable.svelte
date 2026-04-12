@@ -29,6 +29,11 @@
 		selectable?: boolean;
 		/** Bindable set of selected row IDs. */
 		selectedIds?: Set<string>;
+		/**
+		 * Optional cart filter label shown inline with the search bar.
+		 * E.g. "showing 4/6 sites". Rendered with a filter icon when non-empty.
+		 */
+		cartFilterLabel?: string;
 	}
 
 	let {
@@ -44,7 +49,8 @@
 		filterable = false,
 		colorByKey = $bindable(''),
 		selectable = false,
-		selectedIds = $bindable(new Set<string>())
+		selectedIds = $bindable(new Set<string>()),
+		cartFilterLabel = ''
 	}: Props = $props();
 
 	let sortKey = $state('');
@@ -166,6 +172,12 @@
 		/>
 		{#if searchQuery}
 			<span class="text-xs text-slate-500">{sortedRows.length} of {rows.length}</span>
+		{/if}
+		{#if cartFilterLabel}
+			<span class="text-xs text-ocean-400 flex items-center gap-1">
+				<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v5l-4 2V12L3 4z"/></svg>
+				{cartFilterLabel}
+			</span>
 		{/if}
 		{#if colorByKey}
 			<button

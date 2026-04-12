@@ -17,6 +17,21 @@
 	const cartLibs = cart.getByType('library');
 	const hasCartLibs = cartLibPlates.length > 0 || cartLibs.length > 0;
 
+	// Filter pickers by cart
+	const displayPlates = $derived.by(() => {
+		const cartIds = cart.idsOfType('library_plate');
+		if (cartIds.size === 0) return data.libraryPlates as any[];
+		return (data.libraryPlates as any[]).filter((p: any) => cartIds.has(p.id));
+	});
+	const displayLibraries = $derived.by(() => {
+		const cartLibIds = cart.idsOfType('library');
+		const cartPlateIds = cart.idsOfType('library_plate');
+		if (cartLibIds.size === 0 && cartPlateIds.size === 0) return data.libraries as any[];
+		return (data.libraries as any[]).filter((l: any) =>
+			cartLibIds.has(l.id) || cartPlateIds.has(l.library_plate_id)
+		);
+	});
+
 	let sourceType = $state<'plate' | 'individual'>(
 		cartLibPlates.length > 0 ? 'plate' : cartLibs.length > 0 ? 'individual' : 'plate'
 	);
@@ -127,8 +142,8 @@
 				<div class="flex gap-2 items-end">
 					<div class="flex-1">
 						<select bind:value={selectedPlateId} class={selectCls}>
-							<option value="">Select library plate...</option>
-							{#each data.libraryPlates as p}
+							<option value="">Select library plate{displayPlates.length < (data.libraryPlates as any[]).length ? ` (${displayPlates.length} from cart)` : ''}...</option>
+							{#each displayPlates as p}
 								<option value={p.id}>{p.plate_name} ({p.library_count} libraries, {p.library_type})</option>
 							{/each}
 						</select>
@@ -141,8 +156,14 @@
 					<p class="text-xs text-slate-400">{selectedLibraries.length} libraries loaded</p>
 				{/if}
 			{:else}
+				{#if displayLibraries.length < (data.libraries as any[]).length}
+					<p class="text-[10px] text-ocean-400 mb-1">
+						<svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v5l-4 2V12L3 4z"/></svg>
+						showing {displayLibraries.length}/{(data.libraries as any[]).length} from cart
+					</p>
+				{/if}
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-					{#each data.libraries as lib}
+					{#each displayLibraries as lib}
 						<label class="flex items-center gap-2 p-2 rounded border border-slate-800 hover:border-slate-700 cursor-pointer text-sm {selectedLibraries.includes(lib.id) ? 'bg-slate-800 border-ocean-700' : ''}">
 							<input type="checkbox" checked={selectedLibraries.includes(lib.id)} onchange={() => toggleLibrary(lib.id)} class="accent-ocean-500" />
 							<span class="text-slate-300">{lib.library_name}</span>

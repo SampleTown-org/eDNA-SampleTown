@@ -88,7 +88,29 @@
 		selectedIds = new Set(reactions.map((r: any) => r.id));
 	}
 
-	const sources = $derived(sourceType === 'pcr' ? data.pcrs : data.extracts);
+	// Filter source lists by cart when available
+	const displayPcrPlates = $derived.by(() => {
+		const cartPlateIds = cart.idsOfType('pcr_plate');
+		if (cartPlateIds.size === 0) return data.pcrPlates as any[];
+		return (data.pcrPlates as any[]).filter((p: any) => cartPlateIds.has(p.id));
+	});
+	const displayPcrs = $derived.by(() => {
+		const cartPcrIds = cart.idsOfType('pcr');
+		const cartExtractIds = cart.idsOfType('extract');
+		if (cartPcrIds.size === 0 && cartExtractIds.size === 0) return data.pcrs as any[];
+		return (data.pcrs as any[]).filter((p: any) =>
+			cartPcrIds.has(p.id) || cartExtractIds.has(p.extract_id)
+		);
+	});
+	const displayExtracts = $derived.by(() => {
+		const cartExtractIds = cart.idsOfType('extract');
+		const cartSampleIds = cart.idsOfType('sample');
+		if (cartExtractIds.size === 0 && cartSampleIds.size === 0) return data.extracts as any[];
+		return (data.extracts as any[]).filter((e: any) =>
+			cartExtractIds.has(e.id) || cartSampleIds.has(e.sample_id)
+		);
+	});
+	const sources = $derived(sourceType === 'pcr' ? displayPcrs : displayExtracts);
 
 	function toggleSource(id: string, source_name: string, parent_name: string) {
 		if (selectedIds.has(id)) {
@@ -224,8 +246,14 @@
 		<div class="space-y-2">
 			{#if sourceType === 'pcr_plate'}
 			<span class="text-sm font-semibold text-slate-300">Select PCR Plate</span>
+			{#if displayPcrPlates.length < (data.pcrPlates as any[]).length}
+				<p class="text-[10px] text-ocean-400">
+					<svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v5l-4 2V12L3 4z"/></svg>
+					showing {displayPcrPlates.length}/{(data.pcrPlates as any[]).length} from cart
+				</p>
+			{/if}
 			<div class="space-y-1">
-				{#each data.pcrPlates as p}
+				{#each displayPcrPlates as p}
 				<label class="flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors {selectedPcrPlateId === p.id ? 'bg-ocean-900/40 border border-ocean-700' : 'bg-slate-800/50 border border-transparent hover:bg-slate-800'}">
 					<input type="radio" bind:group={selectedPcrPlateId} value={p.id} class="mt-0.5 accent-ocean-500" />
 					<div>
