@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -11,9 +12,18 @@
 		flow_cell_id: '', run_directory: '', fastq_directory: '', total_reads: '', total_bases: '', notes: ''
 	});
 
-	let sourceType = $state<'plate' | 'individual'>('plate');
-	let selectedPlateId = $state('');
-	let selectedLibraries = $state<string[]>([]);
+	// Cart pre-fill: library plates take priority over individual libraries
+	const cartLibPlates = cart.getByType('library_plate');
+	const cartLibs = cart.getByType('library');
+	const hasCartLibs = cartLibPlates.length > 0 || cartLibs.length > 0;
+
+	let sourceType = $state<'plate' | 'individual'>(
+		cartLibPlates.length > 0 ? 'plate' : cartLibs.length > 0 ? 'individual' : 'plate'
+	);
+	let selectedPlateId = $state(cartLibPlates.length > 0 ? cartLibPlates[0].id : '');
+	let selectedLibraries = $state<string[]>(
+		cartLibs.length > 0 ? cartLibs.map((l) => l.id) : []
+	);
 	let saving = $state(false);
 	let errorMsg = $state('');
 
@@ -44,7 +54,10 @@
 		const body = { ...form, library_ids: selectedLibraries, people,
 			total_reads: form.total_reads ? +form.total_reads : null, total_bases: form.total_bases ? +form.total_bases : null };
 		const res = await fetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-		if (res.ok) { const r = await res.json(); goto(`/runs/${r.id}`); }
+		if (res.ok) {
+			if (hasCartLibs) { cart.clearType('library_plate'); cart.clearType('library'); }
+			const r = await res.json(); goto(`/runs/${r.id}`);
+		}
 		else {
 			const err = await res.json().catch(() => null);
 			if (err?.issues?.length) {

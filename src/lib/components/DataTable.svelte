@@ -25,6 +25,10 @@
 		 * the rows. Used by /sites to mirror the color onto map pins.
 		 */
 		colorByKey?: string;
+		/** Enable row-selection checkboxes. */
+		selectable?: boolean;
+		/** Bindable set of selected row IDs. */
+		selectedIds?: Set<string>;
 	}
 
 	let {
@@ -38,7 +42,9 @@
 		ondelete,
 		onduplicate,
 		filterable = false,
-		colorByKey = $bindable('')
+		colorByKey = $bindable(''),
+		selectable = false,
+		selectedIds = $bindable(new Set<string>())
 	}: Props = $props();
 
 	let sortKey = $state('');
@@ -102,6 +108,31 @@
 		const id = row.id as string;
 		return id ? id.slice(0, 8) : '';
 	}
+
+	// Selection helpers
+	const allVisibleSelected = $derived(
+		selectable &&
+			sortedRows.length > 0 &&
+			sortedRows.every((r) => selectedIds.has(r.id as string))
+	);
+
+	function toggleSelectAll() {
+		if (allVisibleSelected) {
+			const visibleIds = new Set(sortedRows.map((r) => r.id as string));
+			selectedIds = new Set([...selectedIds].filter((id) => !visibleIds.has(id)));
+		} else {
+			const next = new Set(selectedIds);
+			for (const r of sortedRows) next.add(r.id as string);
+			selectedIds = next;
+		}
+	}
+
+	function toggleSelect(id: string) {
+		const next = new Set(selectedIds);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selectedIds = next;
+	}
 </script>
 
 {#if filterable}
@@ -131,6 +162,17 @@
 	<table class="w-full text-sm">
 		<thead>
 			<tr class="border-b border-slate-800 bg-slate-900/50">
+				{#if selectable}
+					<th class="px-2 py-3 w-8">
+						<input
+							type="checkbox"
+							checked={allVisibleSelected}
+							onchange={toggleSelectAll}
+							class="accent-ocean-500"
+							title={allVisibleSelected ? 'Deselect all visible' : 'Select all visible'}
+						/>
+					</th>
+				{/if}
 				{#if showId}
 					<th class="px-3 py-3 text-left font-medium text-slate-500 w-20">ID</th>
 				{/if}
@@ -176,7 +218,7 @@
 			{#if sortedRows.length === 0}
 				<tr>
 					<td
-						colspan={columns.length + (showId ? 1 : 0) + (hasActions ? 1 : 0)}
+						colspan={columns.length + (showId ? 1 : 0) + (hasActions ? 1 : 0) + (selectable ? 1 : 0)}
 						class="px-4 py-8 text-center text-slate-500"
 					>
 						{empty}
@@ -185,9 +227,19 @@
 			{/if}
 			{#each sortedRows as row}
 				<tr
-					class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors"
+					class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors {selectable && selectedIds.has(row.id as string) ? 'bg-ocean-900/20' : ''}"
 					style={colorByKey ? colorForValue(row[colorByKey]) : ''}
 				>
+					{#if selectable}
+						<td class="px-2 py-3">
+							<input
+								type="checkbox"
+								checked={selectedIds.has(row.id as string)}
+								onchange={() => toggleSelect(row.id as string)}
+								class="accent-ocean-500"
+							/>
+						</td>
+					{/if}
 					{#if showId}
 						<td class="px-3 py-3">
 							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>

@@ -2,10 +2,12 @@
 	import { goto } from '$app/navigation';
 	import PlateView from '$lib/components/PlateView.svelte';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
+	const cartExtracts = cart.getByType('extract');
 
 	// Plate layout — assigns reactions to well positions (A1, A2, …).
 	// Optional visual aid for laying out the plate on the bench; the mapping
@@ -101,6 +103,23 @@
 	function selectAll() { data.extracts.forEach(e => { if (!selectedExtractIds.has(e.id)) toggleExtract(e.id, e.extract_name, e.samp_name); }); }
 	function clearAll() { selectedExtractIds = new Set(); rows = []; }
 
+	// Pre-populate from cart
+	if (cartExtracts.length > 0) {
+		const extractMap = new Map((data.extracts as any[]).map((e: any) => [e.id, e]));
+		for (const ci of cartExtracts) {
+			const e = extractMap.get(ci.id);
+			if (!e) continue;
+			if (selectedExtractIds.has(e.id)) continue;
+			selectedExtractIds.add(e.id);
+			rows.push({
+				extract_id: e.id, extract_name: e.extract_name, samp_name: e.samp_name,
+				pcr_name: `${e.extract_name}_${plate.target_gene || 'PCR'}`,
+				concentration_ng_ul: ''
+			});
+		}
+		selectedExtractIds = new Set(selectedExtractIds);
+	}
+
 	let saving = $state(false);
 	let errorMsg = $state('');
 
@@ -120,7 +139,7 @@
 			}))
 		};
 		const res = await fetch('/api/pcr-plates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-		if (res.ok) { const p = await res.json(); goto(`/pcr/${p.id}`); }
+		if (res.ok) { cart.clearType('extract'); const p = await res.json(); goto(`/pcr/${p.id}`); }
 		else { const err = await res.json().catch(() => null); errorMsg = err?.error || `Failed (${res.status})`; saving = false; }
 	}
 
@@ -135,6 +154,12 @@
 		<h1 class="text-2xl font-bold text-white mt-1">New PCR Plate</h1>
 	</div>
 
+	{#if cartExtracts.length > 0}
+		<div class="p-3 rounded-lg bg-ocean-900/20 border border-ocean-800 text-ocean-300 text-sm flex items-center justify-between">
+			<span>Pre-filled {cartExtracts.length} extract{cartExtracts.length === 1 ? '' : 's'} from cart</span>
+			<button onclick={() => { cart.clearType('extract'); rows = []; selectedExtractIds = new Set(); }} class="text-xs text-slate-400 hover:text-white">Clear</button>
+		</div>
+	{/if}
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 
 	<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import PlateView from '$lib/components/PlateView.svelte';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 	import { inferPlatformFromInstrument } from '$lib/platform-infer';
 	let { data }: { data: PageData } = $props();
@@ -12,7 +13,16 @@
 	let plateFormat = $state<8 | 96 | 384>(96);
 	let wellAssignments = $state<Record<string, string>>({});
 
-	let sourceType = $state<'pcr_plate' | 'pcr' | 'extract'>(data.preselectedPcrPlateId ? 'pcr_plate' : 'pcr');
+	// Cart pre-fill: check for PCR plates, individual PCRs, or extracts in order of priority
+	const cartPcrPlates = cart.getByType('pcr_plate');
+	const cartPcrs = cart.getByType('pcr');
+	const cartExtracts = cart.getByType('extract');
+	const cartSourceType = cartPcrPlates.length > 0 ? 'pcr_plate' : cartPcrs.length > 0 ? 'pcr' : cartExtracts.length > 0 ? 'extract' : null;
+	const hasCartItems = cartSourceType !== null;
+
+	let sourceType = $state<'pcr_plate' | 'pcr' | 'extract'>(
+		cartSourceType ?? (data.preselectedPcrPlateId ? 'pcr_plate' : 'pcr')
+	);
 
 	let plate = $state({
 		plate_name: '', library_prep_date: '', library_type: '',
@@ -112,6 +122,41 @@
 		selectedPcrPlateId = '';
 	}
 
+	// Pre-populate from cart
+	if (hasCartItems) {
+		if (cartSourceType === 'pcr_plate' && cartPcrPlates.length > 0) {
+			selectedPcrPlateId = cartPcrPlates[0].id;
+		} else if (cartSourceType === 'pcr') {
+			const pcrMap = new Map((data.pcrs as any[]).map((p: any) => [p.id, p]));
+			for (const ci of cartPcrs) {
+				const p = pcrMap.get(ci.id);
+				if (!p || selectedIds.has(p.id)) continue;
+				selectedIds.add(p.id);
+				rows.push({
+					source_id: p.id, source_type: 'pcr', source_name: p.pcr_name,
+					parent_name: p.extract_name || '',
+					library_name: `${p.pcr_name}_LIB`,
+					index_sequence_i7: '', index_sequence_i5: '', barcode: '', final_concentration_ng_ul: ''
+				});
+			}
+			selectedIds = new Set(selectedIds);
+		} else if (cartSourceType === 'extract') {
+			const extMap = new Map((data.extracts as any[]).map((e: any) => [e.id, e]));
+			for (const ci of cartExtracts) {
+				const e = extMap.get(ci.id);
+				if (!e || selectedIds.has(e.id)) continue;
+				selectedIds.add(e.id);
+				rows.push({
+					source_id: e.id, source_type: 'extract', source_name: e.extract_name,
+					parent_name: e.samp_name || '',
+					library_name: `${e.extract_name}_LIB`,
+					index_sequence_i7: '', index_sequence_i5: '', barcode: '', final_concentration_ng_ul: ''
+				});
+			}
+			selectedIds = new Set(selectedIds);
+		}
+	}
+
 	let saving = $state(false);
 	let errorMsg = $state('');
 
@@ -136,7 +181,10 @@
 			}))
 		};
 		const res = await fetch('/api/library-plates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-		if (res.ok) { const p = await res.json(); goto(`/libraries/${p.id}`); }
+		if (res.ok) {
+			if (cartSourceType) cart.clearType(cartSourceType);
+			const p = await res.json(); goto(`/libraries/${p.id}`);
+		}
 		else {
 			const err = await res.json().catch(() => null);
 			if (err?.issues?.length) {

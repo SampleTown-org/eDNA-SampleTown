@@ -1,12 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
-	let mode = $state<'single' | 'batch'>(data.preselectedSampleId ? 'single' : 'single');
+	// If the cart has samples, auto-switch to batch mode and pre-populate.
+	const cartSamples = cart.getByType('sample');
+	const hasCartSamples = cartSamples.length > 0;
+
+	let mode = $state<'single' | 'batch'>(
+		hasCartSamples ? 'batch' : (data.preselectedSampleId ? 'single' : 'single')
+	);
 
 	// Single mode
 	let form = $state({
@@ -24,6 +31,22 @@
 	});
 	type RowItem = { sample_id: string; samp_name: string; project_name: string; extract_name: string; concentration_ng_ul: string; total_volume_ul: string; a260_280: string; a260_230: string };
 	let rows = $state<RowItem[]>([]);
+
+	// Pre-populate from cart on mount
+	if (hasCartSamples) {
+		const sampleMap = new Map((data.samples as any[]).map((s: any) => [s.id, s]));
+		for (const ci of cartSamples) {
+			const s = sampleMap.get(ci.id);
+			if (!s) continue;
+			selectedSampleIds.add(s.id);
+			rows.push({
+				sample_id: s.id, samp_name: s.samp_name, project_name: s.project_name,
+				extract_name: `${s.samp_name}_EXT`,
+				concentration_ng_ul: '', total_volume_ul: '', a260_280: '', a260_230: ''
+			});
+		}
+		selectedSampleIds = new Set(selectedSampleIds);
+	}
 
 	function toggleSample(id: string, samp_name: string, project_name: string) {
 		if (selectedSampleIds.has(id)) {
@@ -63,7 +86,7 @@
 			total_volume_ul: form.total_volume_ul ? +form.total_volume_ul : null,
 			a260_280: form.a260_280 ? +form.a260_280 : null, a260_230: form.a260_230 ? +form.a260_230 : null };
 		const res = await fetch('/api/extracts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-		if (res.ok) { const e = await res.json(); goto(`/extracts/${e.id}`); }
+		if (res.ok) { cart.clearType('sample'); const e = await res.json(); goto(`/extracts/${e.id}`); }
 		else { errorMsg = 'Failed to create extract'; saving = false; }
 	}
 
@@ -82,7 +105,7 @@
 			a260_230: r.a260_230 ? +r.a260_230 : null,
 		}));
 		const res = await fetch('/api/extracts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-		if (res.ok) { goto('/extracts'); }
+		if (res.ok) { cart.clearType('sample'); goto('/extracts'); }
 		else { errorMsg = 'Failed to create extracts'; saving = false; }
 	}
 
@@ -102,6 +125,13 @@
 		<button onclick={() => mode = 'single'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {mode === 'single' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Single</button>
 		<button onclick={() => mode = 'batch'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {mode === 'batch' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Batch</button>
 	</div>
+
+	{#if hasCartSamples}
+		<div class="p-3 rounded-lg bg-ocean-900/20 border border-ocean-800 text-ocean-300 text-sm flex items-center justify-between">
+			<span>Pre-filled {cartSamples.length} sample{cartSamples.length === 1 ? '' : 's'} from cart</span>
+			<button onclick={() => { cart.clearType('sample'); rows = []; selectedSampleIds = new Set(); }} class="text-xs text-slate-400 hover:text-white">Clear</button>
+		</div>
+	{/if}
 
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 
