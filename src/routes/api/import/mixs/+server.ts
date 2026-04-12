@@ -152,7 +152,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			count: samples.length,
 			column_map,
 			available_fields: getImportableFields(),
-			site_fields: SITE_FIELDS,
+			site_fields: Array.from(SITE_FIELDS),
 			site_match_km: siteMatchKm,
 			site_matches: matched.map((m) => ({
 				samp_name: m.sample.samp_name,
