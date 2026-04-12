@@ -30,6 +30,7 @@
 		{ href: '/runs', label: 'Runs' },
 		{ href: '/analysis', label: 'Analysis' },
 		{ href: '/export', label: 'Import/Export' },
+		{ href: '/glossary', label: 'Glossary' },
 		{ href: '/settings', label: 'Settings' }
 	];
 
