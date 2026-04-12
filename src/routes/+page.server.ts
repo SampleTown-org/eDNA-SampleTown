@@ -67,5 +67,53 @@ export const load: PageServerLoad = async () => {
 	`;
 	const events = db.prepare(eventSql).all() as DayEvent[];
 
-	return { counts, events };
+	// Activity list: individual items with dates, for the chronological list
+	// below the calendar. Each row has enough info to display and to cart.
+	const activitySql = `
+		SELECT date(s.collection_date) AS date, 'sample' AS type, s.id, s.samp_name AS name,
+			p.project_name AS detail
+		FROM samples s
+		JOIN projects p ON p.id = s.project_id
+		WHERE s.is_deleted = 0 AND date(s.collection_date) IS NOT NULL
+
+		UNION ALL
+
+		SELECT date(e.extraction_date) AS date, 'extract' AS type, e.id, e.extract_name AS name,
+			s.samp_name AS detail
+		FROM extracts e
+		JOIN samples s ON s.id = e.sample_id
+		WHERE e.is_deleted = 0 AND date(e.extraction_date) IS NOT NULL
+
+		UNION ALL
+
+		SELECT date(p.pcr_date) AS date, 'pcr_plate' AS type, p.id, p.plate_name AS name,
+			p.target_gene || ' · ' || (SELECT COUNT(*) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) || ' reactions' AS detail
+		FROM pcr_plates p
+		WHERE p.is_deleted = 0 AND date(p.pcr_date) IS NOT NULL
+
+		UNION ALL
+
+		SELECT date(lp.library_prep_date) AS date, 'library_plate' AS type, lp.id, lp.plate_name AS name,
+			lp.library_type || ' · ' || (SELECT COUNT(*) FROM library_preps WHERE library_plate_id = lp.id AND is_deleted = 0) || ' libraries' AS detail
+		FROM library_plates lp
+		WHERE lp.is_deleted = 0 AND date(lp.library_prep_date) IS NOT NULL
+
+		UNION ALL
+
+		SELECT date(r.run_date) AS date, 'run' AS type, r.id, r.run_name AS name,
+			r.platform AS detail
+		FROM sequencing_runs r
+		WHERE r.is_deleted = 0 AND date(r.run_date) IS NOT NULL
+
+		ORDER BY date DESC
+	`;
+	const activities = db.prepare(activitySql).all() as {
+		date: string;
+		type: string;
+		id: string;
+		name: string;
+		detail: string | null;
+	}[];
+
+	return { counts, events, activities };
 };

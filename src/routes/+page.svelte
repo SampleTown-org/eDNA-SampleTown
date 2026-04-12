@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -15,29 +16,30 @@
 	];
 
 	// --- Event calendar ---------------------------------------------------
-	// Each event_type gets a distinct tailwind color class. Days with multiple
-	// event types stack the colors as small dots inside the cell.
 	const EVENT_COLORS: Record<string, { dot: string; label: string }> = {
-		sample:  { dot: 'bg-ocean-400',   label: 'Sample collection' },
-		extract: { dot: 'bg-emerald-400', label: 'DNA extraction' },
-		pcr:     { dot: 'bg-amber-400',   label: 'PCR plate' },
-		library: { dot: 'bg-violet-400',  label: 'Library prep' },
-		run:     { dot: 'bg-rose-400',    label: 'Sequencing run' }
+		sample:        { dot: 'bg-ocean-400',   label: 'Sample collection' },
+		extract:       { dot: 'bg-emerald-400', label: 'DNA extraction' },
+		pcr_plate:     { dot: 'bg-amber-400',   label: 'PCR plate' },
+		library_plate: { dot: 'bg-violet-400',  label: 'Library prep' },
+		run:           { dot: 'bg-rose-400',    label: 'Sequencing run' }
+	};
+	// Backward compat for the calendar aggregates which use short type names
+	const CAL_TYPE_MAP: Record<string, string> = {
+		pcr: 'pcr_plate', library: 'library_plate'
 	};
 
-	// Group events by date for O(1) lookup by ISO date string.
 	const eventsByDate = $derived.by(() => {
 		const map = new Map<string, { type: string; count: number }[]>();
 		for (const e of data.events) {
 			if (!e.date) continue;
+			const type = CAL_TYPE_MAP[e.type] ?? e.type;
 			const arr = map.get(e.date) ?? [];
-			arr.push({ type: e.type, count: e.count });
+			arr.push({ type, count: e.count });
 			map.set(e.date, arr);
 		}
 		return map;
 	});
 
-	// Available years — distinct years from events, always including current year.
 	const years = $derived.by(() => {
 		const set = new Set<number>();
 		for (const e of data.events) {
@@ -49,16 +51,97 @@
 
 	let selectedYear = $state(new Date().getFullYear());
 
-	// Build a grid for the selected year: 12 rows (months) × 31 cols (days).
-	// Cells for days that don't exist in a given month (e.g. Feb 30) are blank.
 	const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 	function daysInMonth(year: number, month: number): number {
 		return new Date(year, month + 1, 0).getDate();
 	}
-	function iso(year: number, month: number, day: number): string {
-		const m = String(month + 1).padStart(2, '0');
-		const d = String(day).padStart(2, '0');
-		return `${year}-${m}-${d}`;
+	function isoDate(year: number, month: number, day: number): string {
+		return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+	}
+
+	// --- Calendar ↔ activity list interaction ---
+	let selectedDates = $state<Set<string>>(new Set());
+
+	function onDayClick(dateKey: string, e: MouseEvent) {
+		if (e.shiftKey) {
+			// Multi-select: toggle this date
+			const next = new Set(selectedDates);
+			if (next.has(dateKey)) next.delete(dateKey);
+			else next.add(dateKey);
+			selectedDates = next;
+		} else {
+			// Single click: select only this date (or deselect if already sole selection)
+			if (selectedDates.size === 1 && selectedDates.has(dateKey)) {
+				selectedDates = new Set();
+			} else {
+				selectedDates = new Set([dateKey]);
+			}
+		}
+	}
+
+	// --- Activity list ---
+	const TYPE_HREF: Record<string, (id: string) => string> = {
+		sample: (id) => `/samples/${id}`,
+		extract: (id) => `/extracts/${id}`,
+		pcr_plate: (id) => `/pcr/${id}`,
+		library_plate: (id) => `/libraries/${id}`,
+		run: (id) => `/runs/${id}`
+	};
+	const TYPE_LABEL: Record<string, string> = {
+		sample: 'Sample', extract: 'Extract', pcr_plate: 'PCR Plate',
+		library_plate: 'Library Plate', run: 'Run'
+	};
+
+	// Sort control
+	let sortDir = $state<'desc' | 'asc'>('desc');
+
+	// Filtered + sorted activities
+	let filteredActivities = $derived.by(() => {
+		let result = data.activities;
+		if (selectedDates.size > 0) {
+			result = result.filter((a) => selectedDates.has(a.date));
+		}
+		return sortDir === 'desc'
+			? result
+			: [...result].reverse();
+	});
+
+	// Pagination
+	const PAGE_SIZE = 50;
+	let currentPage = $state(0);
+	const totalPages = $derived(Math.max(1, Math.ceil(filteredActivities.length / PAGE_SIZE)));
+	const pagedActivities = $derived(
+		filteredActivities.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
+	);
+
+	// Reset page when filter changes
+	$effect(() => {
+		filteredActivities; // touch to subscribe
+		currentPage = 0;
+	});
+
+	// Cart integration
+	let selectedIds = $state<Set<string>>(new Set());
+
+	function toggleActivity(id: string) {
+		const next = new Set(selectedIds);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selectedIds = next;
+	}
+
+	function addSelectedToCart() {
+		const items = data.activities
+			.filter((a) => selectedIds.has(a.id))
+			.map((a) => ({
+				type: a.type as CartEntityType,
+				id: a.id,
+				label: a.name,
+				sublabel: a.detail || undefined
+			}));
+		cart.addMany(items);
+		cart.openSidebar();
+		selectedIds = new Set();
 	}
 </script>
 
@@ -84,12 +167,20 @@
 	<div class="space-y-3">
 		<div class="flex items-center justify-between">
 			<h2 class="text-lg font-semibold text-white">Activity calendar</h2>
-			<select
-				bind:value={selectedYear}
-				class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
-			>
-				{#each years as y}<option value={y}>{y}</option>{/each}
-			</select>
+			<div class="flex items-center gap-3">
+				{#if selectedDates.size > 0}
+					<button
+						onclick={() => (selectedDates = new Set())}
+						class="text-xs text-slate-500 hover:text-ocean-400"
+					>Clear {selectedDates.size} date{selectedDates.size === 1 ? '' : 's'}</button>
+				{/if}
+				<select
+					bind:value={selectedYear}
+					class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
+				>
+					{#each years as y}<option value={y}>{y}</option>{/each}
+				</select>
+			</div>
 		</div>
 
 		<div class="rounded-lg border border-slate-800 bg-slate-900/50 p-4 overflow-x-auto">
@@ -110,15 +201,20 @@
 							<td class="pr-2 text-xs text-slate-500 text-right font-medium">{month}</td>
 							{#each Array.from({ length: 31 }, (_, i) => i + 1) as day}
 								{#if day <= daysInMonth(selectedYear, mi)}
-									{@const dateKey = iso(selectedYear, mi, day)}
+									{@const dateKey = isoDate(selectedYear, mi, day)}
 									{@const dayEvents = eventsByDate.get(dateKey) ?? []}
+									{@const isSelected = selectedDates.has(dateKey)}
 									<td
-										class="w-5 h-5 border border-slate-800/60 {dayEvents.length > 0
-											? 'bg-slate-800/80'
-											: 'bg-slate-900/40'}"
+										class="w-5 h-5 border cursor-pointer transition-colors
+											{isSelected
+												? 'border-ocean-500 bg-ocean-900/60'
+												: dayEvents.length > 0
+													? 'border-slate-800/60 bg-slate-800/80 hover:border-ocean-700'
+													: 'border-slate-800/60 bg-slate-900/40 hover:border-slate-700'}"
 										title={dayEvents.length > 0
 											? `${dateKey}\n` + dayEvents.map((e) => `${EVENT_COLORS[e.type]?.label ?? e.type}: ${e.count}`).join('\n')
 											: dateKey}
+										onclick={(e) => onDayClick(dateKey, e)}
 									>
 										{#if dayEvents.length > 0}
 											<div class="flex flex-wrap gap-0.5 items-center justify-center h-full w-full p-0.5">
@@ -144,7 +240,104 @@
 						<span class="text-slate-400">{cfg.label}</span>
 					</div>
 				{/each}
+				<span class="text-slate-600 ml-auto">Click date to filter list · Shift+click to multi-select</span>
 			</div>
 		</div>
+	</div>
+
+	<!-- Activity list -->
+	<div class="space-y-3">
+		<div class="flex items-center justify-between">
+			<h2 class="text-lg font-semibold text-white">
+				Activities
+				<span class="text-sm font-normal text-slate-500">
+					({filteredActivities.length}{selectedDates.size > 0 ? ` of ${data.activities.length}` : ''})
+				</span>
+			</h2>
+			<div class="flex items-center gap-2">
+				{#if selectedIds.size > 0}
+					<button
+						onclick={addSelectedToCart}
+						class="px-3 py-1.5 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium"
+					>Add {selectedIds.size} to Cart</button>
+				{/if}
+				<button
+					onclick={() => (sortDir = sortDir === 'desc' ? 'asc' : 'desc')}
+					class="text-xs text-slate-500 hover:text-ocean-400 px-2 py-1"
+				>
+					{sortDir === 'desc' ? 'Newest first ↓' : 'Oldest first ↑'}
+				</button>
+			</div>
+		</div>
+
+		<div class="rounded-lg border border-slate-800 overflow-hidden">
+			<table class="w-full text-sm">
+				<thead>
+					<tr class="bg-slate-900/50 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
+						<th class="w-8 px-2 py-2"></th>
+						<th class="px-3 py-2 text-left font-medium">Date</th>
+						<th class="px-3 py-2 text-left font-medium">Type</th>
+						<th class="px-3 py-2 text-left font-medium">Name</th>
+						<th class="px-3 py-2 text-left font-medium">Detail</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#if pagedActivities.length === 0}
+						<tr>
+							<td colspan="5" class="px-3 py-8 text-center text-slate-500">
+								{selectedDates.size > 0 ? 'No activities on the selected date(s).' : 'No dated activities yet.'}
+							</td>
+						</tr>
+					{/if}
+					{#each pagedActivities as act}
+						{@const colors = EVENT_COLORS[act.type]}
+						<tr class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors {selectedIds.has(act.id) ? 'bg-ocean-900/20' : ''}">
+							<td class="px-2 py-2">
+								<input
+									type="checkbox"
+									checked={selectedIds.has(act.id)}
+									onchange={() => toggleActivity(act.id)}
+									class="accent-ocean-500"
+								/>
+							</td>
+							<td class="px-3 py-2 text-slate-400 font-mono text-xs whitespace-nowrap">{act.date}</td>
+							<td class="px-3 py-2">
+								<span class="inline-flex items-center gap-1.5">
+									<span class="w-2 h-2 rounded-full {colors?.dot ?? 'bg-slate-400'}"></span>
+									<span class="text-slate-300 text-xs">{TYPE_LABEL[act.type] ?? act.type}</span>
+								</span>
+							</td>
+							<td class="px-3 py-2">
+								{#if TYPE_HREF[act.type]}
+									<a href={TYPE_HREF[act.type](act.id)} class="text-ocean-400 hover:text-ocean-300 hover:underline">{act.name}</a>
+								{:else}
+									<span class="text-slate-300">{act.name}</span>
+								{/if}
+							</td>
+							<td class="px-3 py-2 text-slate-500 text-xs">{act.detail ?? ''}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+
+		<!-- Pagination -->
+		{#if totalPages > 1}
+			<div class="flex items-center justify-between text-xs text-slate-500">
+				<span>Page {currentPage + 1} of {totalPages}</span>
+				<div class="flex gap-1">
+					<button
+						onclick={() => (currentPage = Math.max(0, currentPage - 1))}
+						disabled={currentPage === 0}
+						class="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 disabled:opacity-30"
+					>Prev</button>
+					<button
+						onclick={() => (currentPage = Math.min(totalPages - 1, currentPage + 1))}
+						disabled={currentPage >= totalPages - 1}
+						class="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800 disabled:opacity-30"
+					>Next</button>
+				</div>
+			</div>
+		{/if}
 	</div>
 </div>
