@@ -109,6 +109,27 @@
 		return id ? id.slice(0, 8) : '';
 	}
 
+	// Keyboard navigation: shift+up/down to move focus, spacebar to toggle selection
+	let focusedIndex = $state(-1);
+	let tableEl: HTMLDivElement | undefined = $state();
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (!selectable) return;
+		const len = sortedRows.length;
+		if (len === 0) return;
+
+		if (e.key === 'ArrowDown' && e.shiftKey) {
+			e.preventDefault();
+			focusedIndex = Math.min(focusedIndex + 1, len - 1);
+		} else if (e.key === 'ArrowUp' && e.shiftKey) {
+			e.preventDefault();
+			focusedIndex = Math.max(focusedIndex - 1, 0);
+		} else if (e.key === ' ' && focusedIndex >= 0 && focusedIndex < len) {
+			e.preventDefault();
+			toggleSelect(sortedRows[focusedIndex].id as string);
+		}
+	}
+
 	// Selection helpers
 	const allVisibleSelected = $derived(
 		selectable &&
@@ -158,7 +179,13 @@
 	</div>
 {/if}
 
-<div class="overflow-x-auto rounded-lg border border-slate-800">
+<div
+	class="overflow-x-auto rounded-lg border border-slate-800"
+	bind:this={tableEl}
+	tabindex={selectable ? 0 : undefined}
+	onkeydown={selectable ? handleKeydown : undefined}
+	role={selectable ? 'grid' : undefined}
+>
 	<table class="w-full text-sm">
 		<thead>
 			<tr class="border-b border-slate-800 bg-slate-900/50">
@@ -225,10 +252,11 @@
 					</td>
 				</tr>
 			{/if}
-			{#each sortedRows as row}
+			{#each sortedRows as row, rowIdx}
 				<tr
-					class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors {selectable && selectedIds.has(row.id as string) ? 'bg-ocean-900/20' : ''}"
+					class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors {selectable && selectedIds.has(row.id as string) ? 'bg-ocean-900/20' : ''} {selectable && focusedIndex === rowIdx ? 'outline outline-1 outline-ocean-500 -outline-offset-1' : ''}"
 					style={colorByKey ? colorForValue(row[colorByKey]) : ''}
+					onclick={() => { if (selectable) focusedIndex = rowIdx; }}
 				>
 					{#if selectable}
 						<td class="px-2 py-3">

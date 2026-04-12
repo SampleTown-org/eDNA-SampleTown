@@ -109,6 +109,12 @@
 		else { errorMsg = 'Failed to create extracts'; saving = false; }
 	}
 
+	// Filter sample list by cart when populated
+	const cartSampleIdSet = new Set(cartSamples.map(c => c.id));
+	const filteredSamples = hasCartSamples
+		? (data.samples as any[]).filter((s: any) => cartSampleIdSet.has(s.id))
+		: (data.samples as any[]);
+
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 	const selectCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';
 	const cellInput = 'w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500';
@@ -140,8 +146,8 @@
 		<div>
 			<label for="sample_id" class="block text-sm font-medium text-slate-300 mb-1">Source Sample *</label>
 			<select id="sample_id" bind:value={form.sample_id} class={selectCls}>
-				<option value="">Select sample...</option>
-				{#each data.samples as s}<option value={s.id}>{s.samp_name} ({s.project_name})</option>{/each}
+				<option value="">Select sample{hasCartSamples ? ` (${filteredSamples.length} from cart)` : ''}...</option>
+				{#each filteredSamples as s}<option value={s.id}>{s.samp_name} ({s.project_name})</option>{/each}
 			</select>
 		</div>
 		<div class="grid grid-cols-3 gap-4">
@@ -217,7 +223,7 @@
 				</div>
 			</div>
 			<div class="space-y-1 max-h-72 overflow-y-auto pr-1">
-				{#each data.samples as s}
+				{#each filteredSamples as s}
 				<label class="flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors {selectedSampleIds.has(s.id) ? 'bg-ocean-900/40 border border-ocean-700' : 'bg-slate-800/50 border border-transparent hover:bg-slate-800'}">
 					<input type="checkbox" checked={selectedSampleIds.has(s.id)} onchange={() => toggleSample(s.id, s.samp_name, s.project_name)} class="mt-0.5 accent-ocean-500" />
 					<div>

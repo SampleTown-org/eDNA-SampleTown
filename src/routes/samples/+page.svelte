@@ -5,8 +5,23 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let samples = $state(data.samples as any[]);
+	let allSamples = $state(data.samples as any[]);
 	let selectedIds = $state(new Set<string>());
+
+	// Cart filtering: if the cart has projects or sites, only show matching samples
+	const cartProjectIds = $derived(cart.idsOfType('project'));
+	const cartSiteIds = $derived(cart.idsOfType('site'));
+	const hasCartFilter = $derived(cartProjectIds.size > 0 || cartSiteIds.size > 0);
+	let cartFilterActive = $state(true);
+
+	let samples = $derived(
+		hasCartFilter && cartFilterActive
+			? allSamples.filter((s: any) =>
+				(cartProjectIds.size === 0 || cartProjectIds.has(s.project_id)) &&
+				(cartSiteIds.size === 0 || cartSiteIds.has(s.site_id))
+			)
+			: allSamples
+	);
 
 	const columns = [
 		{ key: 'samp_name', label: 'Sample', sortable: true },
@@ -28,13 +43,14 @@
 				sublabel: s.project_name
 			}));
 		cart.addMany(items);
+		cart.openSidebar();
 		selectedIds = new Set();
 	}
 
 	async function deleteSample(row: Record<string, unknown>) {
 		if (!confirm(`Delete sample "${row.samp_name}"?`)) return;
 		await fetch(`/api/samples/${row.id}`, { method: 'DELETE' });
-		samples = samples.filter(s => s.id !== row.id);
+		allSamples = allSamples.filter(s => s.id !== row.id);
 	}
 
 	async function duplicateSample(row: Record<string, unknown>) {
@@ -60,9 +76,20 @@
 		</div>
 	</div>
 
+	{#if hasCartFilter}
+		<div class="flex items-center gap-2 text-xs text-slate-400">
+			<span class="text-ocean-400">Cart filter:</span>
+			<span>showing {samples.length} of {allSamples.length} samples</span>
+			<button
+				onclick={() => (cartFilterActive = !cartFilterActive)}
+				class="px-2 py-0.5 rounded border {cartFilterActive ? 'border-ocean-700 text-ocean-400' : 'border-slate-700 text-slate-500'} hover:text-white"
+			>{cartFilterActive ? 'On' : 'Off'}</button>
+		</div>
+	{/if}
+
 	<DataTable
 		{columns}
-		bind:rows={samples}
+		rows={samples}
 		bind:selectedIds
 		href={(row) => `/samples/${row.id}`}
 		empty="No samples yet."

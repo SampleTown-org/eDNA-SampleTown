@@ -19,6 +19,7 @@
 				sublabel: `${p.target_gene} · ${p.reaction_count} reactions`
 			}));
 		cart.addMany(items);
+		cart.openSidebar();
 		selectedIds = new Set();
 	}
 

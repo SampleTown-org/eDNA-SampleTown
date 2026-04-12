@@ -18,6 +18,7 @@
  */
 
 export type CartEntityType =
+	| 'project'
 	| 'site'
 	| 'sample'
 	| 'extract'
@@ -52,6 +53,10 @@ function persist(items: CartItem[]) {
 }
 
 let items = $state<CartItem[]>(loadFromStorage());
+
+let _sidebarOpen = $state(
+	typeof window !== 'undefined' ? localStorage.getItem('sampletown-cart-open') === '1' : false
+);
 
 /** Compound key for deduplication. */
 function key(type: string, id: string): string {
@@ -104,5 +109,28 @@ export const cart = {
 	clearAll() {
 		items = [];
 		persist(items);
+	},
+
+	get sidebarOpen() {
+		return _sidebarOpen;
+	},
+
+	toggleSidebar() {
+		_sidebarOpen = !_sidebarOpen;
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('sampletown-cart-open', _sidebarOpen ? '1' : '0');
+		}
+	},
+
+	openSidebar() {
+		_sidebarOpen = true;
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('sampletown-cart-open', '1');
+		}
+	},
+
+	/** Get IDs of a specific type as a Set, for efficient filtering. */
+	idsOfType(type: CartEntityType): Set<string> {
+		return new Set(items.filter((i) => i.type === type).map((i) => i.id));
 	}
 };

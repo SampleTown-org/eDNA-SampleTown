@@ -19,6 +19,7 @@
 				sublabel: `${p.library_type} · ${p.library_count} libraries`
 			}));
 		cart.addMany(items);
+		cart.openSidebar();
 		selectedIds = new Set();
 	}
 

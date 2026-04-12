@@ -17,6 +17,7 @@
 				sublabel: r.platform
 			}));
 		cart.addMany(items);
+		cart.openSidebar();
 		selectedIds = new Set();
 	}
 

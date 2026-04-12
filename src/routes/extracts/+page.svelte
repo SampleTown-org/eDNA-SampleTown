@@ -5,8 +5,19 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let extracts = $state(data.extracts as any[]);
+	let allExtracts = $state(data.extracts as any[]);
 	let selectedIds = $state(new Set<string>());
+
+	// Cart filtering: if the cart has samples, only show extracts from those samples
+	const cartSampleIds = $derived(cart.idsOfType('sample'));
+	const hasCartFilter = $derived(cartSampleIds.size > 0);
+	let cartFilterActive = $state(true);
+
+	let extracts = $derived(
+		hasCartFilter && cartFilterActive
+			? allExtracts.filter((e: any) => cartSampleIds.has(e.sample_id))
+			: allExtracts
+	);
 
 	function addToCart() {
 		const items = extracts
@@ -18,6 +29,7 @@
 				sublabel: e.samp_name
 			}));
 		cart.addMany(items);
+		cart.openSidebar();
 		selectedIds = new Set();
 	}
 
@@ -33,7 +45,7 @@
 	async function deleteExtract(row: Record<string, unknown>) {
 		if (!confirm(`Delete extract "${row.extract_name}"?`)) return;
 		await fetch(`/api/extracts/${row.id}`, { method: 'DELETE' });
-		extracts = extracts.filter(e => e.id !== row.id);
+		allExtracts = allExtracts.filter(e => e.id !== row.id);
 	}
 
 	async function duplicateExtract(row: Record<string, unknown>) {
@@ -59,9 +71,20 @@
 		</div>
 	</div>
 
+	{#if hasCartFilter}
+		<div class="flex items-center gap-2 text-xs text-slate-400">
+			<span class="text-ocean-400">Cart filter:</span>
+			<span>showing {extracts.length} of {allExtracts.length} extracts</span>
+			<button
+				onclick={() => (cartFilterActive = !cartFilterActive)}
+				class="px-2 py-0.5 rounded border {cartFilterActive ? 'border-ocean-700 text-ocean-400' : 'border-slate-700 text-slate-500'} hover:text-white"
+			>{cartFilterActive ? 'On' : 'Off'}</button>
+		</div>
+	{/if}
+
 	<DataTable
 		{columns}
-		bind:rows={extracts}
+		rows={extracts}
 		bind:selectedIds
 		href={(row) => `/extracts/${row.id}`}
 		selectable
