@@ -113,7 +113,8 @@
 		showId
 		filterable
 		selectable
-		cartFilterLabel={hasCartFilter && cartFilterActive ? `showing ${sites.length}/${allSites.length} sites` : ''}
+		cartFilterLabel={hasCartFilter ? `showing ${sites.length}/${allSites.length} sites` : ''}
+		bind:cartFilterActive
 		editHref={(row) => `/sites/${row.id}/edit`}
 		ondelete={deleteSite}
 		onduplicate={duplicateSite}

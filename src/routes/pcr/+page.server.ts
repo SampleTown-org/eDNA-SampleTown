@@ -6,7 +6,8 @@ export const load: PageServerLoad = async () => {
 	const db = getDb();
 	const plates = db.prepare(`
 		SELECT p.*,
-			(SELECT COUNT(*) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) AS reaction_count
+			(SELECT COUNT(*) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) AS reaction_count,
+			(SELECT GROUP_CONCAT(DISTINCT extract_id) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) AS extract_ids
 		FROM pcr_plates p WHERE p.is_deleted = 0 ORDER BY p.created_at DESC
 	`).all() as { id: string }[];
 

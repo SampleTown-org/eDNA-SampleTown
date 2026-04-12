@@ -5,9 +5,40 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let plates = $state(data.plates as any[]);
+	let allPlates = $state(data.plates as any[]);
 	let orphanLibraries = $state(data.orphanLibraries as any[]);
 	let selectedIds = $state(new Set<string>());
+	let cartFilterActive = $state(true);
+
+	// Filter library plates by carted extracts or PCR reactions
+	const cartExtractIds = $derived(cart.idsOfType('extract'));
+	const cartPcrIds = $derived(cart.idsOfType('pcr'));
+	const cartPcrPlateIds = $derived(cart.idsOfType('pcr_plate'));
+	const hasCartFilter = $derived(
+		cartExtractIds.size > 0 || cartPcrIds.size > 0 || cartPcrPlateIds.size > 0
+	);
+
+	function plateMatchesCart(plate: any): boolean {
+		// Match by source PCR plate
+		if (cartPcrPlateIds.size > 0 && plate.pcr_plate_id && cartPcrPlateIds.has(plate.pcr_plate_id)) return true;
+		// Match by PCR reaction IDs inside the plate
+		if (cartPcrIds.size > 0 && plate.pcr_ids) {
+			const ids = (plate.pcr_ids as string).split(',');
+			if (ids.some((id) => cartPcrIds.has(id))) return true;
+		}
+		// Match by extract IDs inside the plate
+		if (cartExtractIds.size > 0 && plate.extract_ids) {
+			const ids = (plate.extract_ids as string).split(',');
+			if (ids.some((id) => cartExtractIds.has(id))) return true;
+		}
+		return false;
+	}
+
+	let plates = $derived(
+		hasCartFilter && cartFilterActive
+			? allPlates.filter(plateMatchesCart)
+			: allPlates
+	);
 
 	function addToCart() {
 		const items = plates
@@ -43,7 +74,7 @@
 	async function deletePlate(row: Record<string, unknown>) {
 		if (!confirm(`Delete library plate "${row.plate_name}"?`)) return;
 		await fetch(`/api/library-plates/${row.id}`, { method: 'DELETE' });
-		plates = plates.filter(p => p.id !== row.id);
+		allPlates = allPlates.filter(p => p.id !== row.id);
 	}
 
 	async function duplicatePlate(row: Record<string, unknown>) {
@@ -77,13 +108,15 @@
 
 	<DataTable
 		columns={plateColumns}
-		bind:rows={plates}
+		rows={plates}
 		bind:selectedIds
+		bind:cartFilterActive
 		href={(row) => `/libraries/${row.id}`}
 		selectable
 		empty="No library plates yet."
 		showId
 		filterable
+		cartFilterLabel={hasCartFilter ? `showing ${plates.length}/${allPlates.length} plates` : ''}
 		editHref={(row) => `/libraries/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}

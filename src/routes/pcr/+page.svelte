@@ -5,9 +5,27 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let plates = $state(data.plates as any[]);
+	let allPlates = $state(data.plates as any[]);
 	let orphanReactions = $state(data.orphanReactions as any[]);
 	let selectedIds = $state(new Set<string>());
+	let cartFilterActive = $state(true);
+
+	// Filter plates by carted extracts: show plates that contain any carted extract
+	const cartExtractIds = $derived(cart.idsOfType('extract'));
+	const hasCartFilter = $derived(cartExtractIds.size > 0);
+
+	/** Parse comma-separated extract_ids from the server query */
+	function plateHasCartedExtract(plate: any): boolean {
+		if (!plate.extract_ids) return false;
+		const ids = (plate.extract_ids as string).split(',');
+		return ids.some((id) => cartExtractIds.has(id));
+	}
+
+	let plates = $derived(
+		hasCartFilter && cartFilterActive
+			? allPlates.filter(plateHasCartedExtract)
+			: allPlates
+	);
 
 	function addToCart() {
 		const items = plates
@@ -43,7 +61,7 @@
 	async function deletePlate(row: Record<string, unknown>) {
 		if (!confirm(`Delete PCR plate "${row.plate_name}"?`)) return;
 		await fetch(`/api/pcr-plates/${row.id}`, { method: 'DELETE' });
-		plates = plates.filter(p => p.id !== row.id);
+		allPlates = allPlates.filter(p => p.id !== row.id);
 	}
 
 	async function duplicatePlate(row: Record<string, unknown>) {
@@ -78,13 +96,15 @@
 
 	<DataTable
 		columns={plateColumns}
-		bind:rows={plates}
+		rows={plates}
 		bind:selectedIds
+		bind:cartFilterActive
 		href={(row) => `/pcr/${row.id}`}
 		selectable
 		empty="No PCR plates yet."
 		showId
 		filterable
+		cartFilterLabel={hasCartFilter ? `showing ${plates.length}/${allPlates.length} plates` : ''}
 		editHref={(row) => `/pcr/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}

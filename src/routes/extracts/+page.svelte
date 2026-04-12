@@ -80,7 +80,8 @@
 		empty="No extracts yet."
 		showId
 		filterable
-		cartFilterLabel={hasCartFilter && cartFilterActive ? `showing ${extracts.length}/${allExtracts.length} extracts` : ''}
+		cartFilterLabel={hasCartFilter ? `showing ${extracts.length}/${allExtracts.length} extracts` : ''}
+		bind:cartFilterActive
 		editHref={(row) => `/extracts/${row.id}/edit`}
 		ondelete={deleteExtract}
 		onduplicate={duplicateExtract}

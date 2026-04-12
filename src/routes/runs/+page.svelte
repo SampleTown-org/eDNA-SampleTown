@@ -4,8 +4,32 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-	let runs = $state(data.runs as any[]);
+	let allRuns = $state(data.runs as any[]);
 	let selectedIds = $state(new Set<string>());
+	let cartFilterActive = $state(true);
+
+	// Filter runs by carted library plates or individual libraries
+	const cartLibPlateIds = $derived(cart.idsOfType('library_plate'));
+	const cartLibIds = $derived(cart.idsOfType('library'));
+	const hasCartFilter = $derived(cartLibPlateIds.size > 0 || cartLibIds.size > 0);
+
+	function runMatchesCart(run: any): boolean {
+		if (cartLibPlateIds.size > 0 && run.library_plate_ids) {
+			const ids = (run.library_plate_ids as string).split(',');
+			if (ids.some((id) => cartLibPlateIds.has(id))) return true;
+		}
+		if (cartLibIds.size > 0 && run.library_ids) {
+			const ids = (run.library_ids as string).split(',');
+			if (ids.some((id) => cartLibIds.has(id))) return true;
+		}
+		return false;
+	}
+
+	let runs = $derived(
+		hasCartFilter && cartFilterActive
+			? allRuns.filter(runMatchesCart)
+			: allRuns
+	);
 
 	function addToCart() {
 		const items = runs
@@ -33,7 +57,7 @@
 	async function deleteRun(row: Record<string, unknown>) {
 		if (!confirm(`Delete run "${row.run_name}"?`)) return;
 		await fetch(`/api/runs/${row.id}`, { method: 'DELETE' });
-		runs = runs.filter(r => r.id !== row.id);
+		allRuns = allRuns.filter(r => r.id !== row.id);
 	}
 </script>
 
@@ -51,13 +75,15 @@
 	</div>
 	<DataTable
 		{columns}
-		bind:rows={runs}
+		rows={runs}
 		bind:selectedIds
+		bind:cartFilterActive
 		href={(row) => `/runs/${row.id}`}
 		selectable
 		empty="No sequencing runs yet."
 		showId
 		filterable
+		cartFilterLabel={hasCartFilter ? `showing ${runs.length}/${allRuns.length} runs` : ''}
 		editHref={(row) => `/runs/${row.id}/edit`}
 		ondelete={deleteRun}
 	/>

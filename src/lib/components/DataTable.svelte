@@ -34,6 +34,10 @@
 		 * E.g. "showing 4/6 sites". Rendered with a filter icon when non-empty.
 		 */
 		cartFilterLabel?: string;
+		/** Bindable: whether the cart filter is currently active. Clicking the
+		 *  filter icon toggles this. Parents should use this to gate their
+		 *  row-filtering logic. */
+		cartFilterActive?: boolean;
 	}
 
 	let {
@@ -50,7 +54,8 @@
 		colorByKey = $bindable(''),
 		selectable = false,
 		selectedIds = $bindable(new Set<string>()),
-		cartFilterLabel = ''
+		cartFilterLabel = '',
+		cartFilterActive = $bindable(true)
 	}: Props = $props();
 
 	let sortKey = $state('');
@@ -174,10 +179,14 @@
 			<span class="text-xs text-slate-500">{sortedRows.length} of {rows.length}</span>
 		{/if}
 		{#if cartFilterLabel}
-			<span class="text-xs text-ocean-400 flex items-center gap-1">
-				<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v5l-4 2V12L3 4z"/></svg>
+			<button
+				onclick={() => (cartFilterActive = !cartFilterActive)}
+				class="text-xs flex items-center gap-1 px-2 py-0.5 rounded transition-colors {cartFilterActive ? 'text-ocean-400 hover:text-ocean-300' : 'text-slate-500 line-through hover:text-slate-400'}"
+				title="{cartFilterActive ? 'Click to disable' : 'Click to enable'} cart filter"
+			>
+				<svg class="w-3 h-3" fill={cartFilterActive ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M3 4h18l-7 8v5l-4 2V12L3 4z"/></svg>
 				{cartFilterLabel}
-			</span>
+			</button>
 		{/if}
 		{#if colorByKey}
 			<button
