@@ -48,6 +48,12 @@
 	let siteMatchKm = $state(1);
 	type SiteMatch = { samp_name: string; new_site: boolean; site: { id: string; site_name: string; distance_km: number } | null };
 	type NewSite = { id: string; site_name: string; lat_lon: string; geo_loc_name: string | null };
+	type MixsRowValidation = {
+		samp_name: string;
+		checklist: string;
+		extension: string | null;
+		errors: { slot: string; message: string; keyword: string }[];
+	};
 	let importPreview: {
 		samples: any[];
 		errors: string[];
@@ -58,6 +64,7 @@
 		column_map?: Record<string, string>;
 		available_fields?: { value: string; label: string }[];
 		site_fields?: string[];
+		mixs_validation?: MixsRowValidation[];
 	} | null = $state(null);
 	let importing = $state(false);
 	let importResult: { imported: number; errors: string[]; site_matches?: number; new_sites?: number } | null = $state(null);
@@ -416,6 +423,44 @@
 					<div>{err}</div>
 				{/each}
 			</div>
+			{/if}
+
+			<!-- MIxS LinkML validation — per-row ajv errors against the
+			     materialized combination class. -->
+			{#if importPreview.mixs_validation}
+				{@const rowsWithErrors = importPreview.mixs_validation.filter((r) => r.errors.length > 0)}
+				{#if rowsWithErrors.length > 0}
+				<details class="p-3 rounded-lg bg-rose-900/20 border border-rose-800 text-rose-200 text-sm">
+					<summary class="cursor-pointer font-medium">
+						{rowsWithErrors.length} of {importPreview.mixs_validation.length} samples fail MIxS validation
+						<span class="text-xs text-rose-300/70 ml-1">
+							(checklist+extension compliance per mixs.yaml v6.3.0)
+						</span>
+					</summary>
+					<div class="mt-2 space-y-2 max-h-80 overflow-y-auto">
+						{#each rowsWithErrors as row}
+							<div class="border-l-2 border-rose-700 pl-2">
+								<div class="text-xs">
+									<code class="text-rose-100">{row.samp_name}</code>
+									<span class="text-rose-300/60">&nbsp;· {row.checklist}{row.extension ? ' + ' + row.extension : ''}</span>
+								</div>
+								<ul class="mt-0.5 space-y-0.5 text-xs text-rose-300">
+									{#each row.errors as e}
+										<li>
+											<code class="text-rose-400">{e.slot}</code>
+											<span class="text-rose-200/80">: {e.message}</span>
+										</li>
+									{/each}
+								</ul>
+							</div>
+						{/each}
+					</div>
+				</details>
+				{:else}
+				<div class="p-2 rounded-lg bg-emerald-900/20 border border-emerald-800 text-emerald-300 text-xs">
+					All {importPreview.mixs_validation.length} samples pass MIxS validation against their checklist+extension.
+				</div>
+				{/if}
 			{/if}
 
 			{#if importPreview.site_matches && importPreview.site_matches.length > 0}

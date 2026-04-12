@@ -10,7 +10,7 @@
  * validation on top of this. For now: plain MIxS slot-name columns.
  */
 import { getDb } from './db';
-import { allSlotNames, getSlot } from '$lib/mixs/schema-index';
+import { allSlotNames, getSlot, getClass, getCombinationClass } from '$lib/mixs/schema-index';
 import * as XLSX from 'xlsx';
 
 /** Fields that live on the sites table, not the samples table. */
@@ -62,13 +62,23 @@ function escTsv(val: unknown): string {
 	return s;
 }
 
+/** Slots where values live on the sites table, joined in at export time. */
+const SITE_SLOT_SET = new Set<string>(SITE_SLOT_COLUMNS);
+
+/**
+ * Export samples to a MIxS TSV. When both checklist and extension are given,
+ * column selection + order come from the materialized combination class's
+ * `required` then `properties` arrays, with `*` prefixing MIxS-required slots
+ * per GSC template convention. When only a checklist is given, we use that
+ * checklist mixin's slots. When neither, we fall back to SampleTown's full
+ * MIxS slot column set for generic dumps.
+ */
 export function exportMixsTsv(options: {
 	projectId?: string;
 	checklist?: string;
 	extension?: string;
 } = {}): string {
 	const db = getDb();
-	// Site fields are joined in and aliased under their MIxS slot names.
 	const siteSelect = SITE_SLOT_COLUMNS.map((c) => `st.${c} AS site_${c}`).join(', ');
 	let query = `SELECT s.*, ${siteSelect}, p.project_name AS proj_project_name
 		FROM samples s
@@ -81,29 +91,9 @@ export function exportMixsTsv(options: {
 	query += ' ORDER BY s.samp_name';
 	const rows = db.prepare(query).all(...params) as Record<string, unknown>[];
 
-	// Column order: checklist/extension selectors + core + sample slots + site slots.
-	const columns: { header: string; source: string }[] = [
-		{ header: '*samp_name', source: 'samp_name' },
-		{ header: '*collection_date', source: 'collection_date' },
-		{ header: '*env_medium', source: 'env_medium' },
-		{ header: '*lat_lon', source: 'site_lat_lon' },
-		{ header: '*geo_loc_name', source: 'site_geo_loc_name' },
-		{ header: '*env_broad_scale', source: 'site_env_broad_scale' },
-		{ header: '*env_local_scale', source: 'site_env_local_scale' },
-		{ header: 'project_name', source: '__project_name__' },
-		{ header: 'mixs_checklist', source: 'mixs_checklist' },
-		{ header: 'extension', source: 'extension' }
-	];
-	for (const slot of SAMPLE_SLOT_COLUMNS) {
-		if (['samp_name', 'collection_date', 'env_medium', 'project_name'].includes(slot)) continue;
-		// Prefix `*` if this slot is MIxS-mandatory in general (doesn't check combination class).
-		const isMandatory = getSlot(slot)?.required ?? false;
-		columns.push({ header: (isMandatory ? '*' : '') + slot, source: slot });
-	}
-
+	const columns = chooseExportColumns(options.checklist, options.extension);
 	const headers = columns.map((c) => c.header);
 	const lines = rows.map((row) => {
-		// Prefer sample.project_name if set; else fall back to the joined project record name.
 		const projectName = (row.project_name as string | null) ?? (row.proj_project_name as string | null);
 		return columns
 			.map((c) => {
@@ -112,8 +102,74 @@ export function exportMixsTsv(options: {
 			})
 			.join('\t');
 	});
-
 	return [headers.join('\t'), ...lines].join('\n');
+}
+
+/** Column selection logic extracted so import UI can preview the column list. */
+export function chooseExportColumns(
+	checklist?: string,
+	extension?: string
+): { header: string; source: string; required: boolean }[] {
+	// Prefer the combination class when available.
+	let cls = checklist && extension ? getCombinationClass(checklist, extension) : undefined;
+	if (!cls && checklist) cls = getClass(checklist);
+
+	const baseColumns: { header: string; source: string; required: boolean }[] = [];
+
+	if (cls) {
+		const required = new Set(cls.required ?? []);
+		// required first (in declared order), then the rest of properties
+		const ordered: string[] = [
+			...(cls.required ?? []),
+			...(cls.properties ?? []).filter((p) => !required.has(p))
+		];
+		for (const slot of ordered) {
+			const isRequired = required.has(slot);
+			const source = SITE_SLOT_SET.has(slot) ? `site_${slot}` : slot;
+			baseColumns.push({
+				header: (isRequired ? '*' : '') + slot,
+				source,
+				required: isRequired
+			});
+		}
+		// Ensure samp_name is always first (MIxS convention — it's the row identifier)
+		const nameIdx = baseColumns.findIndex((c) => c.source === 'samp_name');
+		if (nameIdx > 0) {
+			const [nameCol] = baseColumns.splice(nameIdx, 1);
+			baseColumns.unshift(nameCol);
+		}
+		// project_name: some checklists don't list it in properties but the GSC
+		// templates always include it. Append as optional if not already there.
+		if (!baseColumns.some((c) => c.source === 'project_name' || c.source === 'site_project_name')) {
+			baseColumns.push({ header: 'project_name', source: '__project_name__', required: false });
+		}
+		// SampleTown metadata that aren't MIxS slots per se but carry across imports.
+		baseColumns.push(
+			{ header: 'mixs_checklist', source: 'mixs_checklist', required: false },
+			{ header: 'extension', source: 'extension', required: false }
+		);
+		return baseColumns;
+	}
+
+	// Fallback — no class info, emit SampleTown's full known slot set.
+	const legacy: { header: string; source: string; required: boolean }[] = [
+		{ header: '*samp_name', source: 'samp_name', required: true },
+		{ header: '*collection_date', source: 'collection_date', required: true },
+		{ header: '*env_medium', source: 'env_medium', required: true },
+		{ header: '*lat_lon', source: 'site_lat_lon', required: true },
+		{ header: '*geo_loc_name', source: 'site_geo_loc_name', required: true },
+		{ header: '*env_broad_scale', source: 'site_env_broad_scale', required: true },
+		{ header: '*env_local_scale', source: 'site_env_local_scale', required: true },
+		{ header: 'project_name', source: '__project_name__', required: false },
+		{ header: 'mixs_checklist', source: 'mixs_checklist', required: false },
+		{ header: 'extension', source: 'extension', required: false }
+	];
+	for (const slot of SAMPLE_SLOT_COLUMNS) {
+		if (['samp_name', 'collection_date', 'env_medium', 'project_name'].includes(slot)) continue;
+		const isMandatory = getSlot(slot)?.required ?? false;
+		legacy.push({ header: (isMandatory ? '*' : '') + slot, source: slot, required: isMandatory });
+	}
+	return legacy;
 }
 
 /** Parse xlsx file buffer into TSV string. */

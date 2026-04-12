@@ -7,6 +7,7 @@ import { checkRate } from '$lib/server/rate-limit';
 import { apiError } from '$lib/server/api-errors';
 import { findNearbySites, haversineKm } from '$lib/server/proximity';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
+import { validateRow } from '$lib/server/mixs-validator';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_TSV_BYTES = 20 * 1024 * 1024; // post-decompression cap (xlsx is zipped)
@@ -180,6 +181,21 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		}
 	}
 
+	// MIxS validation against the LinkML-generated JSON Schema. Per-row errors
+	// flow back to the dry-run UI so the user sees required/pattern/enum issues
+	// inline before committing the import.
+	const mixsValidation = matched.map((m) => {
+		const checklist = (m.sample.mixs_checklist as string) || 'MimarksS';
+		const extension = (m.sample.extension as string) || null;
+		const rowErrors = validateRow(m.sample, checklist, extension);
+		return {
+			samp_name: m.sample.samp_name,
+			checklist,
+			extension,
+			errors: rowErrors
+		};
+	});
+
 	if (dryRun) {
 		return json({
 			samples,
@@ -190,6 +206,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			available_fields: getImportableFields(),
 			site_fields: Array.from(SITE_FIELDS),
 			site_match_km: siteMatchKm,
+			mixs_validation: mixsValidation,
 			site_matches: matched.map((m) => ({
 				samp_name: m.sample.samp_name,
 				new_site: m.new_site,
