@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import MapPicker from '$lib/components/MapPicker.svelte';
 	import { goto } from '$app/navigation';
 	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
@@ -72,6 +73,30 @@
 		{ key: 'people_summary', label: 'People', sortable: true }
 	];
 
+	/** Mirrored from the DataTable so the map pins can adopt the same tint. */
+	let colorByKey = $state('');
+
+	function pinColorForValue(v: unknown): string | undefined {
+		if (v == null || v === '') return undefined;
+		const s = String(v);
+		let h = 0;
+		for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+		const hue = Math.abs(h) % 360;
+		return `hsl(${hue}, 65%, 55%)`;
+	}
+
+	let markers = $derived(
+		displaySamples
+			.filter((s: any) => s.latitude != null && s.longitude != null)
+			.map((s: any) => ({
+				lat: s.latitude,
+				lng: s.longitude,
+				label: `${s.samp_name} (${s.site_name})`,
+				href: `/samples/${s.id}`,
+				color: colorByKey ? pinColorForValue(s[colorByKey]) : undefined
+			}))
+	);
+
 	async function deleteSample(row: Record<string, unknown>) {
 		if (!confirm(`Delete sample "${row.samp_name}"?`)) return;
 		await fetch(`/api/samples/${row.id}`, { method: 'DELETE' });
@@ -101,6 +126,10 @@
 		</div>
 	</div>
 
+	{#if markers.length > 0}
+		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" />
+	{/if}
+
 	<DataTable
 		{columns}
 		rows={displaySamples}
@@ -115,5 +144,6 @@
 		editHref={(row) => `/samples/${row.id}/edit`}
 		ondelete={deleteSample}
 		onduplicate={duplicateSample}
+		bind:colorByKey
 	/>
 </div>
