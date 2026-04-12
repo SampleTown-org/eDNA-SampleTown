@@ -20,15 +20,46 @@
 		notes: data.run.notes || ''
 	});
 
+	// Library attachment — same UX as runs/new. Pre-populated from the
+	// existing run_libraries rows so the operator can add/remove without
+	// losing the current set.
+	let sourceType = $state<'plate' | 'individual'>('individual');
+	let selectedPlateId = $state('');
+	let selectedLibraries = $state<string[]>([...(data.attachedLibraryIds ?? [])]);
+
+	async function loadFromPlate() {
+		if (!selectedPlateId) return;
+		const plate = (data.libraryPlates as any[]).find((p: any) => p.id === selectedPlateId);
+		if (!plate) return;
+		const res = await fetch(`/api/libraries?plate_id=${selectedPlateId}`);
+		if (!res.ok) return;
+		const libs = await res.json();
+		selectedLibraries = libs.map((l: any) => l.id);
+		if (plate.platform && !form.platform) form.platform = plate.platform;
+	}
+
+	function toggleLibrary(id: string) {
+		if (selectedLibraries.includes(id)) {
+			selectedLibraries = selectedLibraries.filter((l) => l !== id);
+		} else {
+			selectedLibraries = [...selectedLibraries, id];
+		}
+	}
+
 	let saving = $state(false);
 	let errorMsg = $state('');
 
 	async function submit() {
+		if (!form.run_name.trim()) {
+			errorMsg = 'Run name is required';
+			return;
+		}
 		saving = true;
 		errorMsg = '';
 
 		const body = {
 			...form,
+			library_ids: selectedLibraries,
 			people,
 			total_reads: form.total_reads === '' ? null : Number(form.total_reads),
 			total_bases: form.total_bases === '' ? null : Number(form.total_bases)
@@ -41,7 +72,12 @@
 		if (res.ok) {
 			goto(`/runs/${data.run.id}`);
 		} else {
-			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to update run';
+			const err = await res.json().catch(() => null);
+			if (err?.issues?.length) {
+				errorMsg = err.issues.map((i: { path: string; message: string }) => `${i.path}: ${i.message}`).join('; ');
+			} else {
+				errorMsg = err?.error || 'Failed to update run';
+			}
 			saving = false;
 		}
 	}
@@ -52,16 +88,16 @@
 
 <div class="max-w-3xl space-y-6">
 	<div>
-		<a href="/runs" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Runs</a>
-		<h1 class="text-2xl font-bold text-white mt-1">Edit {data.run.run_name}</h1>
+		<a href="/runs/{data.run.id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.run.run_name}</a>
+		<h1 class="text-2xl font-bold text-white mt-1">Edit Sequencing Run</h1>
 	</div>
 
 	{#if errorMsg}
 		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>
 	{/if}
 
-	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-6">
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-4">
+		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<label for="run_name" class="block text-sm font-medium text-slate-300 mb-1">Run Name</label>
 				<input id="run_name" type="text" bind:value={form.run_name} class={inputCls} />
@@ -71,43 +107,57 @@
 				<input id="run_date" type="date" bind:value={form.run_date} class={inputCls} />
 			</div>
 		</div>
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+		<PeoplePicker
+			bind:people
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			defaultRole="sequencer operator"
+			label="People"
+		/>
+
+		<div class="grid grid-cols-3 gap-4">
 			<div>
-				<label for="platform" class="block text-sm font-medium text-slate-300 mb-1">Platform</label>
-				<select id="platform" bind:value={form.platform} class={selectCls}>
+				<label class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Platform</a>
+				</label>
+				<select bind:value={form.platform} class={selectCls}>
 					<option value="">Select...</option>
-					<option value="ILLUMINA">ILLUMINA</option>
-					<option value="OXFORD_NANOPORE">OXFORD_NANOPORE</option>
-					<option value="PACBIO">PACBIO</option>
-					<option value="ION_TORRENT">ION_TORRENT</option>
+					{#each data.picklists.seq_platform as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 			<div>
-				<label for="instrument_model" class="block text-sm font-medium text-slate-300 mb-1">Instrument Model</label>
-				<input id="instrument_model" type="text" bind:value={form.instrument_model} class={inputCls} />
+				<label class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Instrument</a>
+				</label>
+				<select bind:value={form.instrument_model} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.seq_instrument as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
+			</div>
+			<div>
+				<label class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Seq Method</a>
+				</label>
+				<select bind:value={form.seq_meth} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.seq_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
 			</div>
 		</div>
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-			<div>
-				<label for="seq_meth" class="block text-sm font-medium text-slate-300 mb-1">Sequencing Method</label>
-				<input id="seq_meth" type="text" bind:value={form.seq_meth} class={inputCls} />
-			</div>
+
+		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<label for="flow_cell_id" class="block text-sm font-medium text-slate-300 mb-1">Flow Cell ID</label>
 				<input id="flow_cell_id" type="text" bind:value={form.flow_cell_id} class={inputCls} />
 			</div>
-		</div>
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-			<div>
-				<label for="run_directory" class="block text-sm font-medium text-slate-300 mb-1">Run Directory</label>
-				<input id="run_directory" type="text" bind:value={form.run_directory} class={inputCls} />
-			</div>
 			<div>
 				<label for="fastq_directory" class="block text-sm font-medium text-slate-300 mb-1">FASTQ Directory</label>
-				<input id="fastq_directory" type="text" bind:value={form.fastq_directory} class={inputCls} />
+				<input id="fastq_directory" type="text" bind:value={form.fastq_directory} class={inputCls} placeholder="/path/to/fastqs" />
 			</div>
 		</div>
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<label for="total_reads" class="block text-sm font-medium text-slate-300 mb-1">Total Reads</label>
 				<input id="total_reads" type="number" bind:value={form.total_reads} class={inputCls} />
@@ -117,13 +167,43 @@
 				<input id="total_bases" type="number" bind:value={form.total_bases} class={inputCls} />
 			</div>
 		</div>
-		<PeoplePicker
-			bind:people
-			personnel={data.personnel}
-			roleOptions={data.picklists.person_role}
-			defaultRole="sequencer operator"
-			label="People"
-		/>
+
+		<!-- Library attachment -->
+		<fieldset class="space-y-3">
+			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Attach Libraries</legend>
+			<div class="flex gap-4 mb-2">
+				<label class="flex items-center gap-2 text-sm text-slate-300"><input type="radio" bind:group={sourceType} value="plate" class="accent-ocean-500" /> From Library Plate</label>
+				<label class="flex items-center gap-2 text-sm text-slate-300"><input type="radio" bind:group={sourceType} value="individual" class="accent-ocean-500" /> Individual Libraries</label>
+			</div>
+
+			{#if sourceType === 'plate'}
+				<div class="flex gap-2 items-end">
+					<div class="flex-1">
+						<select bind:value={selectedPlateId} class={selectCls}>
+							<option value="">Select library plate...</option>
+							{#each data.libraryPlates as p}
+								<option value={p.id}>{p.plate_name} ({p.library_count} libraries, {p.library_type})</option>
+							{/each}
+						</select>
+					</div>
+					<button type="button" onclick={loadFromPlate} disabled={!selectedPlateId} class="px-3 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 text-sm font-medium">
+						Load
+					</button>
+				</div>
+				<p class="text-xs text-slate-400">{selectedLibraries.length} libraries currently attached.</p>
+			{:else}
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+					{#each data.libraries as lib}
+						<label class="flex items-center gap-2 p-2 rounded border border-slate-800 hover:border-slate-700 cursor-pointer text-sm {selectedLibraries.includes(lib.id) ? 'bg-slate-800 border-ocean-700' : ''}">
+							<input type="checkbox" checked={selectedLibraries.includes(lib.id)} onchange={() => toggleLibrary(lib.id)} class="accent-ocean-500" />
+							<span class="text-slate-300">{lib.library_name}</span>
+							<span class="text-xs text-slate-500">{lib.library_type}</span>
+						</label>
+					{/each}
+				</div>
+				<p class="text-xs text-slate-400">{selectedLibraries.length} attached</p>
+			{/if}
+		</fieldset>
 
 		<div>
 			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>

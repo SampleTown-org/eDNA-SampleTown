@@ -359,9 +359,9 @@ CREATE TABLE IF NOT EXISTS sequencing_runs (
 
     run_name TEXT NOT NULL,
     run_date TEXT,
-    platform TEXT NOT NULL CHECK (platform IN ('ILLUMINA', 'OXFORD_NANOPORE', 'PACBIO', 'ION_TORRENT')),
+    platform TEXT CHECK (platform IS NULL OR platform IN ('ILLUMINA', 'OXFORD_NANOPORE', 'PACBIO', 'ION_TORRENT')),
     instrument_model TEXT,
-    seq_meth TEXT NOT NULL,
+    seq_meth TEXT,
     flow_cell_id TEXT,
     run_directory TEXT,
     fastq_directory TEXT,

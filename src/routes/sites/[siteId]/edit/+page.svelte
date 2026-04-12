@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ENV_PACKAGES, ENVO_BIOMES, ENVO_FEATURES, ENVO_MATERIALS } from '$lib/mixs/controlled-vocab';
 	import { formatLatLon } from '$lib/mixs/validators';
 	import MapPicker from '$lib/components/MapPicker.svelte';
 	import type { PageData } from './$types';
@@ -16,13 +15,11 @@
 		description: data.site.description || '',
 		geo_loc_name: data.site.geo_loc_name || '',
 		locality: data.site.locality || '',
-		habitat_type: data.site.habitat_type || '',
-		env_package: data.site.env_package || '',
-		depth: data.site.depth || '',
-		elevation: data.site.elevation || '',
 		env_broad_scale: data.site.env_broad_scale || '',
 		env_local_scale: data.site.env_local_scale || '',
-		env_medium: data.site.env_medium || '',
+		depth: data.site.depth ?? '',
+		elevation: data.site.elevation ?? '',
+		habitat_type: data.site.habitat_type || '',
 		access_notes: data.site.access_notes || '',
 		notes: data.site.notes || ''
 	});
@@ -36,8 +33,13 @@
 	let errorMsg = $state('');
 
 	async function submit() {
-		saving = true;
-		errorMsg = '';
+		if (!form.project_id) { errorMsg = 'Please select a project'; return; }
+		if (!(form.site_name as string).trim()) { errorMsg = 'Site name is required'; return; }
+		if (latitude == null || longitude == null) {
+			errorMsg = 'GPS coordinates are required — click the map or type lat/lng';
+			return;
+		}
+		saving = true; errorMsg = '';
 
 		const body = {
 			...form,
@@ -64,13 +66,11 @@
 
 <div class="max-w-3xl space-y-6">
 	<div>
-		<a href="/sites" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Sites</a>
-		<h1 class="text-2xl font-bold text-white mt-1">Edit {data.site.site_name}</h1>
+		<a href="/sites/{data.site.id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.site.site_name}</a>
+		<h1 class="text-2xl font-bold text-white mt-1">Edit Site</h1>
 	</div>
 
-	{#if errorMsg}
-		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>
-	{/if}
+	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-6">
 		<fieldset class="space-y-4">
@@ -92,7 +92,7 @@
 			</div>
 			<div>
 				<label for="description" class="block text-sm font-medium text-slate-300 mb-1">Description</label>
-				<input id="description" type="text" bind:value={form.description} class={inputCls} />
+				<input id="description" type="text" bind:value={form.description} class={inputCls} placeholder="Brief description of this sampling site" />
 			</div>
 		</fieldset>
 
@@ -103,76 +103,75 @@
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
 					<label for="latitude" class="block text-sm font-medium text-slate-300 mb-1">Latitude</label>
-					<input id="latitude" type="number" step="any" bind:value={latitude} class={inputCls} />
+					<input id="latitude" type="number" step="any" bind:value={latitude} class={inputCls} placeholder="e.g., 48.4284" />
 				</div>
 				<div>
 					<label for="longitude" class="block text-sm font-medium text-slate-300 mb-1">Longitude</label>
-					<input id="longitude" type="number" step="any" bind:value={longitude} class={inputCls} />
+					<input id="longitude" type="number" step="any" bind:value={longitude} class={inputCls} placeholder="e.g., -123.3656" />
 				</div>
 			</div>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="geo_loc_name" class="block text-sm font-medium text-slate-300 mb-1">Geographic Location</label>
-					<input id="geo_loc_name" type="text" bind:value={form.geo_loc_name} class={inputCls} />
+					<label for="geo_loc_name" class="block text-sm font-medium text-slate-300 mb-1">
+						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Geographic Location</a>
+					</label>
+					<select id="geo_loc_name" bind:value={form.geo_loc_name} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.geo_loc_name as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select>
 				</div>
 				<div>
-					<label for="locality" class="block text-sm font-medium text-slate-300 mb-1">Locality</label>
-					<input id="locality" type="text" bind:value={form.locality} class={inputCls} />
+					<label for="locality" class="block text-sm font-medium text-slate-300 mb-1">
+						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Locality</a>
+					</label>
+					<select id="locality" bind:value={form.locality} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.locality as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select>
 				</div>
 			</div>
 			<div>
-				<label for="habitat_type" class="block text-sm font-medium text-slate-300 mb-1">Habitat Type</label>
-				<input id="habitat_type" type="text" bind:value={form.habitat_type} class={inputCls} />
+				<label for="habitat_type" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Habitat Type</a>
+				</label>
+				<select id="habitat_type" bind:value={form.habitat_type} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.habitat_type as opt}
+						<option value={opt.value}>{opt.label}</option>
+					{/each}
+				</select>
 			</div>
 		</fieldset>
 
 		<fieldset class="space-y-4">
 			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Environment</legend>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				<div>
-					<label for="env_package" class="block text-sm font-medium text-slate-300 mb-1">Env Package</label>
-					<select id="env_package" bind:value={form.env_package} class={selectCls}>
-						<option value="">Select...</option>
-						{#each ENV_PACKAGES as pkg}
-							<option value={pkg.value}>{pkg.label}</option>
-						{/each}
-					</select>
-				</div>
-				<div>
-					<label for="depth" class="block text-sm font-medium text-slate-300 mb-1">Depth</label>
-					<input id="depth" type="text" bind:value={form.depth} class={inputCls} />
-				</div>
+			<div>
+				<label for="depth" class="block text-sm font-medium text-slate-300 mb-1">Depth (m)</label>
+				<input id="depth" type="number" step="any" bind:value={form.depth} class={inputCls} placeholder="e.g., 10" />
 			</div>
 			<div>
-				<label for="elevation" class="block text-sm font-medium text-slate-300 mb-1">Elevation</label>
-				<input id="elevation" type="text" bind:value={form.elevation} class={inputCls} />
+				<label for="env_broad_scale" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Broad-scale Environment</a>
+				</label>
+				<select id="env_broad_scale" bind:value={form.env_broad_scale} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.env_broad_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
 			</div>
 			<div>
-				<label for="env_broad_scale" class="block text-sm font-medium text-slate-300 mb-1">Broad-scale Environment</label>
-				<input id="env_broad_scale" type="text" bind:value={form.env_broad_scale} list="biomes" class={inputCls} />
-				<datalist id="biomes">
-					{#each ENVO_BIOMES as b}<option value="{b.label} [{b.id}]"></option>{/each}
-				</datalist>
-			</div>
-			<div>
-				<label for="env_local_scale" class="block text-sm font-medium text-slate-300 mb-1">Local Environment</label>
-				<input id="env_local_scale" type="text" bind:value={form.env_local_scale} list="features" class={inputCls} />
-				<datalist id="features">
-					{#each ENVO_FEATURES as f}<option value="{f.label} [{f.id}]"></option>{/each}
-				</datalist>
-			</div>
-			<div>
-				<label for="env_medium" class="block text-sm font-medium text-slate-300 mb-1">Environmental Medium</label>
-				<input id="env_medium" type="text" bind:value={form.env_medium} list="materials" class={inputCls} />
-				<datalist id="materials">
-					{#each ENVO_MATERIALS as m}<option value="{m.label} [{m.id}]"></option>{/each}
-				</datalist>
+				<label for="env_local_scale" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Local Environment</a>
+				</label>
+				<select id="env_local_scale" bind:value={form.env_local_scale} class={selectCls}>
+					<option value="">Select...</option>
+					{#each data.picklists.env_local_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
 			</div>
 		</fieldset>
 
 		<div>
 			<label for="access_notes" class="block text-sm font-medium text-slate-300 mb-1">Access Notes</label>
-			<textarea id="access_notes" bind:value={form.access_notes} rows="2" class={inputCls}></textarea>
+			<textarea id="access_notes" bind:value={form.access_notes} rows="2" class={inputCls} placeholder="Boat access only, permit required, etc."></textarea>
 		</div>
 
 		<div>

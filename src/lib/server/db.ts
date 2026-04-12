@@ -51,6 +51,76 @@ function runMigrations(db: Database.Database) {
 	// initial release. Existing rows are grandfathered in (default 1 / 0).
 	ensureColumn(db, 'users', 'is_approved', 'INTEGER NOT NULL DEFAULT 1');
 	ensureColumn(db, 'users', 'must_change_password', 'INTEGER NOT NULL DEFAULT 0');
+
+	// sequencing_runs.platform + seq_meth were originally NOT NULL. Operator
+	// feedback: only run_name should be required at create time (the other
+	// fields can be filled in later when the run actually happens). SQLite
+	// doesn't support ALTER COLUMN DROP NOT NULL, so we do the table-rebuild
+	// dance: create a copy with the new constraints, copy rows over, drop the
+	// old table, rename. Idempotent — runs only if the old NOT NULL is still
+	// in place.
+	relaxSequencingRunsNotNull(db);
+}
+
+/**
+ * Drop NOT NULL on sequencing_runs.platform + sequencing_runs.seq_meth via the
+ * SQLite table-rebuild pattern. No-op once the new constraints are already in
+ * place. Foreign keys (run_libraries → sequencing_runs.id) are temporarily
+ * disabled during the swap so they re-bind to the new table cleanly.
+ */
+function relaxSequencingRunsNotNull(db: Database.Database) {
+	const cols = db.prepare(`PRAGMA table_info(sequencing_runs)`).all() as {
+		name: string;
+		notnull: number;
+	}[];
+	const platform = cols.find((c) => c.name === 'platform');
+	const seqMeth = cols.find((c) => c.name === 'seq_meth');
+	// Both columns already nullable → already migrated, nothing to do.
+	if (platform && platform.notnull === 0 && seqMeth && seqMeth.notnull === 0) return;
+
+	// Suspend FK enforcement so the temporary _new table swap doesn't trip
+	// the run_libraries → sequencing_runs constraint.
+	db.pragma('foreign_keys = OFF');
+	try {
+		db.exec(`
+			BEGIN;
+
+			CREATE TABLE sequencing_runs_new (
+				id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+				run_name TEXT NOT NULL,
+				run_date TEXT,
+				platform TEXT CHECK (platform IS NULL OR platform IN ('ILLUMINA', 'OXFORD_NANOPORE', 'PACBIO', 'ION_TORRENT')),
+				instrument_model TEXT,
+				seq_meth TEXT,
+				flow_cell_id TEXT,
+				run_directory TEXT,
+				fastq_directory TEXT,
+				total_reads INTEGER,
+				total_bases INTEGER,
+				notes TEXT,
+				custom_fields TEXT,
+				sync_version INTEGER NOT NULL DEFAULT 1,
+				is_deleted INTEGER NOT NULL DEFAULT 0,
+				created_by TEXT REFERENCES users(id),
+				created_at TEXT NOT NULL DEFAULT (datetime('now')),
+				updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+			);
+
+			INSERT INTO sequencing_runs_new
+			SELECT id, run_name, run_date, platform, instrument_model, seq_meth,
+				flow_cell_id, run_directory, fastq_directory, total_reads, total_bases,
+				notes, custom_fields, sync_version, is_deleted, created_by, created_at, updated_at
+			FROM sequencing_runs;
+
+			DROP TABLE sequencing_runs;
+			ALTER TABLE sequencing_runs_new RENAME TO sequencing_runs;
+
+			COMMIT;
+		`);
+		console.log('[migration] Relaxed NOT NULL on sequencing_runs.platform + seq_meth');
+	} finally {
+		db.pragma('foreign_keys = ON');
+	}
 }
 
 /**

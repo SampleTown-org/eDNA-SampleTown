@@ -31,9 +31,9 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		).run(
 			data.run_name,
 			data.run_date ?? null,
-			data.platform,
+			data.platform ?? null,
 			data.instrument_model ?? null,
-			data.seq_meth,
+			data.seq_meth ?? null,
 			data.flow_cell_id ?? null,
 			data.run_directory ?? null,
 			data.fastq_directory ?? null,
@@ -44,6 +44,17 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		);
 		if (data.people !== undefined) {
 			setEntityPersonnel(db, 'sequencing_run', params.id!, normalizePeople(data.people));
+		}
+		// If the caller passed library_ids, treat it as a full replacement of
+		// the run_libraries junction. Wrapped in a transaction so a partial
+		// failure doesn't leave the run in a half-attached state.
+		if (data.library_ids !== undefined) {
+			const replaceLibraries = db.transaction((libs: string[]) => {
+				db.prepare('DELETE FROM run_libraries WHERE run_id = ?').run(params.id);
+				const ins = db.prepare('INSERT INTO run_libraries (run_id, library_id) VALUES (?, ?)');
+				for (const libId of libs) ins.run(params.id, libId);
+			});
+			replaceLibraries(data.library_ids);
 		}
 		const updated = db.prepare('SELECT * FROM sequencing_runs WHERE id = ?').get(params.id) as Record<string, unknown>;
 		const people = getEntityPersonnel('sequencing_run', params.id!);

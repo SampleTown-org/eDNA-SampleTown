@@ -128,12 +128,22 @@ const optionalPlatformWithOther = z.preprocess(
 // /api/runs
 // ============================================================================
 
+// Only run_name is required at create time. platform + seq_meth used to be
+// required (matching the old NOT NULL columns) but operator feedback was that
+// runs are often pre-created before the platform / method is decided —
+// they're filled in later via the edit form. The DB columns were relaxed
+// in a runMigrations step.
+const optionalPlatformStrict = z.preprocess(
+	(v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+	PLATFORM_STRICT.nullable().optional()
+);
+
 const runFields = {
 	run_name: z.string().trim().min(1).max(200),
 	run_date: optionalDate,
-	platform: PLATFORM_STRICT,
+	platform: optionalPlatformStrict,
 	instrument_model: optionalShortText,
-	seq_meth: z.string().trim().min(1).max(200),
+	seq_meth: optionalShortText,
 	flow_cell_id: optionalShortText,
 	run_directory: optionalShortText,
 	fastq_directory: optionalShortText,
@@ -151,6 +161,7 @@ export const RunCreateBody = z.object({
 
 export const RunUpdateBody = z.object({
 	...runFields,
+	library_ids: z.array(idString).max(10_000).optional(),
 	people: peopleField
 });
 

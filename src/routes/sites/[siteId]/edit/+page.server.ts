@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { getConstrainedValues } from '$lib/server/constrained-values';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
@@ -14,6 +15,9 @@ export const load: PageServerLoad = async ({ params }) => {
 	if (!site) throw error(404, 'Site not found');
 
 	const projects = db.prepare('SELECT id, project_name FROM projects ORDER BY project_name').all();
+	const picklists = getConstrainedValues(
+		'habitat_type', 'geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale'
+	);
 
-	return { site, projects };
+	return { site, projects, picklists };
 };

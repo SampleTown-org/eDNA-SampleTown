@@ -39,7 +39,7 @@
 	}
 
 	async function submit() {
-		if (!form.run_name.trim() || !form.seq_meth) { errorMsg = 'Run name and sequencing method are required'; return; }
+		if (!form.run_name.trim()) { errorMsg = 'Run name is required'; return; }
 		saving = true; errorMsg = '';
 		const body = { ...form, library_ids: selectedLibraries, people,
 			total_reads: form.total_reads ? +form.total_reads : null, total_bases: form.total_bases ? +form.total_bases : null };
