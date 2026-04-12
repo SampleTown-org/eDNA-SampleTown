@@ -139,7 +139,11 @@
 		if (res.ok) { const p = await res.json(); goto(`/libraries/${p.id}`); }
 		else {
 			const err = await res.json().catch(() => null);
-			errorMsg = err?.error || `Failed to create library plate (${res.status})`;
+			if (err?.issues?.length) {
+				errorMsg = err.issues.map((i: { path: string; message: string }) => `${i.path}: ${i.message}`).join('; ');
+			} else {
+				errorMsg = err?.error || `Failed to create library plate (${res.status})`;
+			}
 			saving = false;
 		}
 	}

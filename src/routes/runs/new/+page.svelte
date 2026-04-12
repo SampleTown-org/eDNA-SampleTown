@@ -42,11 +42,18 @@
 		if (!form.run_name.trim() || !form.seq_meth) { errorMsg = 'Run name and sequencing method are required'; return; }
 		saving = true; errorMsg = '';
 		const body = { ...form, library_ids: selectedLibraries, people,
-			platform: form.platform || null, instrument_model: form.instrument_model || null,
 			total_reads: form.total_reads ? +form.total_reads : null, total_bases: form.total_bases ? +form.total_bases : null };
 		const res = await fetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 		if (res.ok) { const r = await res.json(); goto(`/runs/${r.id}`); }
-		else { const err = await res.json().catch(() => null); errorMsg = err?.error || 'Failed to create run'; saving = false; }
+		else {
+			const err = await res.json().catch(() => null);
+			if (err?.issues?.length) {
+				errorMsg = err.issues.map((i: { path: string; message: string }) => `${i.path}: ${i.message}`).join('; ');
+			} else {
+				errorMsg = err?.error || 'Failed to create run';
+			}
+			saving = false;
+		}
 	}
 
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';

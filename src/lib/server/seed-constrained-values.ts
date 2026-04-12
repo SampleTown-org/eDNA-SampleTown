@@ -1,6 +1,16 @@
 import type Database from 'better-sqlite3';
 
-const SEED_DATA: Record<string, string[]> = {
+/**
+ * Picklist seed data. Each entry is either a bare string (value == label)
+ * or a `{value, label}` pair when the canonical value is ugly but needs to
+ * match a schema CHECK constraint. The canonical-value form is REQUIRED for
+ * any picklist whose values feed a schema-constrained column — `library_type`
+ * and `seq_platform` are the current cases. Bare strings are fine for
+ * everything else.
+ */
+type SeedEntry = string | { value: string; label: string };
+
+const SEED_DATA: Record<string, SeedEntry[]> = {
 	person_role: [
 		'collector',
 		'co-collector',
@@ -116,8 +126,14 @@ const SEED_DATA: Record<string, string[]> = {
 		'Box 6', 'Box 7', 'Box 8', 'Box 9', 'Box 10',
 		'Rack A', 'Rack B', 'Rack C'
 	],
+	// Values must match the schema CHECK constraint on sequencing_runs.platform
+	// (ILLUMINA / OXFORD_NANOPORE / PACBIO / ION_TORRENT) — labels are the
+	// friendly form shown in the dropdown.
 	seq_platform: [
-		'Illumina', 'Oxford Nanopore', 'PacBio', 'Ion Torrent'
+		{ value: 'ILLUMINA', label: 'Illumina' },
+		{ value: 'OXFORD_NANOPORE', label: 'Oxford Nanopore' },
+		{ value: 'PACBIO', label: 'PacBio' },
+		{ value: 'ION_TORRENT', label: 'Ion Torrent' }
 	],
 	seq_instrument: [
 		'Illumina MiSeq', 'Illumina HiSeq 2500', 'Illumina HiSeq 4000',
@@ -131,10 +147,20 @@ const SEED_DATA: Record<string, string[]> = {
 		'Ion semiconductor sequencing', 'Amplicon sequencing', 'Shotgun metagenomics',
 		'RNA-seq', 'Whole genome sequencing'
 	],
+	// Values must match the schema CHECK constraint on library_plates.library_type
+	// and library_preps.library_type (16S_amplicon / 18S_amplicon / CO1_amplicon /
+	// 12S_amplicon / nanopore_metagenomic / illumina_metagenomic / rnaseq / other).
+	// ITS amplicon and whole genome are not in the schema enum yet — operators
+	// who need them today should pick "Other".
 	library_type: [
-		'16S amplicon', '18S amplicon', 'CO1 amplicon', '12S amplicon',
-		'ITS amplicon', 'Nanopore metagenomic', 'Illumina metagenomic',
-		'RNA-seq', 'Whole genome', 'Other'
+		{ value: '16S_amplicon', label: '16S amplicon' },
+		{ value: '18S_amplicon', label: '18S amplicon' },
+		{ value: 'CO1_amplicon', label: 'CO1 amplicon' },
+		{ value: '12S_amplicon', label: '12S amplicon' },
+		{ value: 'nanopore_metagenomic', label: 'Nanopore metagenomic' },
+		{ value: 'illumina_metagenomic', label: 'Illumina metagenomic' },
+		{ value: 'rnaseq', label: 'RNA-seq' },
+		{ value: 'other', label: 'Other' }
 	],
 	index_i7: [
 		'N701 (TAAGGCGA)', 'N702 (CGTACTAG)', 'N703 (AGGCAGAA)', 'N704 (TCCTGAGC)',
@@ -192,6 +218,12 @@ const NAMING_TEMPLATES = [
 ];
 
 export function seedConstrainedValues(db: Database.Database) {
+	// Repair any picklist categories whose values drifted from a schema CHECK
+	// constraint (or that were seeded with the wrong values to begin with).
+	// Runs every startup and is idempotent — only updates rows that don't
+	// already match a canonical SEED_DATA entry.
+	repairSchemaCoupledPicklists(db);
+
 	// Seed each category independently. The previous all-or-nothing guard
 	// (skip when the whole table was non-empty) meant new SEED_DATA categories
 	// added in later releases never landed on existing prod databases —
@@ -201,17 +233,20 @@ export function seedConstrainedValues(db: Database.Database) {
 	// and (b) we still won't re-add seed values the operator deactivated,
 	// since deactivation only flips is_active, leaving the row in place.
 	const insert = db.prepare(
-		'INSERT OR IGNORE INTO constrained_values (id, category, value, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?)'
+		'INSERT OR IGNORE INTO constrained_values (id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)'
 	);
 	const countByCategory = db.prepare(
 		'SELECT COUNT(*) AS count FROM constrained_values WHERE category = ?'
 	);
-	const seedCategory = db.transaction((category: string, values: string[]) => {
-		values.forEach((value, i) => insert.run(category, value, i));
+	const seedCategory = db.transaction((category: string, entries: SeedEntry[]) => {
+		entries.forEach((entry, i) => {
+			const { value, label } = normalizeSeedEntry(entry);
+			insert.run(category, value, label, i);
+		});
 	});
-	for (const [category, values] of Object.entries(SEED_DATA)) {
+	for (const [category, entries] of Object.entries(SEED_DATA)) {
 		const { count } = countByCategory.get(category) as { count: number };
-		if (count === 0) seedCategory(category, values);
+		if (count === 0) seedCategory(category, entries);
 	}
 
 	// Seed naming templates
@@ -247,4 +282,73 @@ export function seedConstrainedValues(db: Database.Database) {
 		});
 		insertAll();
 	}
+}
+
+function normalizeSeedEntry(entry: SeedEntry): { value: string; label: string } {
+	if (typeof entry === 'string') return { value: entry, label: entry };
+	return entry;
+}
+
+/**
+ * Repair categories whose values must match a schema CHECK constraint but
+ * shipped with friendly-name values that the constraint rejects.
+ *
+ * History: `library_type` was seeded with values like "16S amplicon" but the
+ * CHECK on library_plates.library_type / library_preps.library_type wants
+ * "16S_amplicon". Same story for `seq_platform` ("Illumina" vs "ILLUMINA").
+ * The forms were broken end-to-end since day one — submissions failed at the
+ * SQLite layer with a CHECK constraint error, then more loudly at the zod
+ * layer once Phase 2 landed.
+ *
+ * This function:
+ *  - rewrites legacy bad values in `constrained_values` to canonical
+ *  - drops bad values that have no canonical mapping (the operator can pick
+ *    a sensible alternative; "Other" usually fits)
+ *  - leaves any operator-added values alone — only the legacy seeded ones
+ *    are touched
+ *  - is idempotent and cheap to run on every startup
+ */
+function repairSchemaCoupledPicklists(db: Database.Database) {
+	// Map: category → { wrong value → { value, label } | null }. null means
+	// "delete the row, no canonical mapping". Order doesn't matter.
+	const REPAIRS: Record<string, Record<string, { value: string; label: string } | null>> = {
+		library_type: {
+			'16S amplicon': { value: '16S_amplicon', label: '16S amplicon' },
+			'18S amplicon': { value: '18S_amplicon', label: '18S amplicon' },
+			'CO1 amplicon': { value: 'CO1_amplicon', label: 'CO1 amplicon' },
+			'12S amplicon': { value: '12S_amplicon', label: '12S amplicon' },
+			'Nanopore metagenomic': { value: 'nanopore_metagenomic', label: 'Nanopore metagenomic' },
+			'Illumina metagenomic': { value: 'illumina_metagenomic', label: 'Illumina metagenomic' },
+			'RNA-seq': { value: 'rnaseq', label: 'RNA-seq' },
+			'Other': { value: 'other', label: 'Other' },
+			// No canonical mapping — drop. Operator can re-add via /settings.
+			'ITS amplicon': null,
+			'Whole genome': null
+		},
+		seq_platform: {
+			'Illumina': { value: 'ILLUMINA', label: 'Illumina' },
+			'Oxford Nanopore': { value: 'OXFORD_NANOPORE', label: 'Oxford Nanopore' },
+			'PacBio': { value: 'PACBIO', label: 'PacBio' },
+			'Ion Torrent': { value: 'ION_TORRENT', label: 'Ion Torrent' }
+		}
+	};
+
+	const update = db.prepare(
+		'UPDATE constrained_values SET value = ?, label = ? WHERE category = ? AND value = ?'
+	);
+	const drop = db.prepare(
+		'DELETE FROM constrained_values WHERE category = ? AND value = ?'
+	);
+	const tx = db.transaction(() => {
+		for (const [category, mapping] of Object.entries(REPAIRS)) {
+			for (const [oldValue, target] of Object.entries(mapping)) {
+				if (target === null) {
+					drop.run(category, oldValue);
+				} else {
+					update.run(target.value, target.label, category, oldValue);
+				}
+			}
+		}
+	});
+	tx();
 }
