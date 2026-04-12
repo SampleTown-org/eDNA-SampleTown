@@ -46,7 +46,7 @@
 			if (e.date) set.add(Number(e.date.slice(0, 4)));
 		}
 		set.add(new Date().getFullYear());
-		return Array.from(set).sort((a, b) => b - a);
+		return Array.from(set).sort((a, b) => a - b);
 	});
 
 	let selectedYear = $state(new Date().getFullYear());
