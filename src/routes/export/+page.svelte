@@ -1,7 +1,11 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 
 	let { data }: { data: PageData } = $props();
+
+	// People to apply to every imported sample
+	let importPeople = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
 	let mode = $state<'export' | 'import'>('export');
 
@@ -121,6 +125,7 @@
 			fd.append('dryRun', String(dryRun));
 			fd.append('siteMatchKm', String(siteMatchKm));
 			if (colMapJson) fd.append('columnMap', colMapJson);
+			if (!dryRun && importPeople.length > 0) fd.append('people', JSON.stringify(importPeople));
 			res = await fetch('/api/import/mixs', { method: 'POST', body: fd });
 		} else {
 			res = await fetch('/api/import/mixs', {
@@ -131,7 +136,8 @@
 					projectId: importProject,
 					dryRun,
 					siteMatchKm,
-					columnMap: colMapJson ? JSON.parse(colMapJson) : undefined
+					columnMap: colMapJson ? JSON.parse(colMapJson) : undefined,
+					people: !dryRun && importPeople.length > 0 ? importPeople : undefined
 				})
 			});
 		}
@@ -276,8 +282,17 @@
 			<p class="text-xs text-slate-500">File: {importFileName}</p>
 		{/if}
 
+		<!-- People applied to every imported sample -->
+		<PeoplePicker
+			bind:people={importPeople}
+			personnel={data.personnel}
+			roleOptions={data.picklists.person_role}
+			defaultRole="collector"
+			label="Apply people to all imported samples"
+		/>
+
 		{#if importFile && importProject}
-		<div class="flex gap-3">
+		<div class="flex gap-3 items-start flex-wrap">
 			<button onclick={previewImport} disabled={importing} class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
 				{importing ? 'Parsing...' : 'Validate'}
 			</button>
@@ -285,6 +300,35 @@
 			<button onclick={runImport} disabled={importing || hasDuplicates} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 				{importing ? 'Importing...' : `Import ${importPreview.count} Samples`}
 			</button>
+			{/if}
+
+			<!-- Inline status area: success/errors/warnings next to buttons -->
+			{#if importResult}
+				<div class="flex-1 min-w-64 px-3 py-2 rounded-lg text-sm {importResult.imported > 0 ? 'bg-green-900/20 border border-green-800 text-green-300' : 'bg-red-900/20 border border-red-800 text-red-300'}">
+					{#if importResult.imported > 0}
+						<span class="font-medium">{importResult.imported} imported</span>
+						{#if importResult.site_matches}· {importResult.site_matches} matched{/if}
+						{#if importResult.new_sites}· {importResult.new_sites} new sites{/if}
+						{#if importResult.errors.length > 0}· <span class="text-yellow-300">{importResult.errors.length} warnings</span>{/if}
+						<a href="/samples" class="ml-2 text-ocean-400 hover:text-ocean-300">View samples →</a>
+					{:else}
+						{importResult.errors[0] || 'Import failed'}
+					{/if}
+				</div>
+			{:else if importPreview}
+				{#if hasDuplicates}
+					<div class="flex-1 min-w-64 px-3 py-2 rounded-lg text-sm bg-red-900/20 border border-red-800 text-red-300">
+						Fix duplicate target fields before importing
+					</div>
+				{:else if importPreview.errors.length > 0}
+					<div class="flex-1 min-w-64 px-3 py-2 rounded-lg text-sm bg-yellow-900/20 border border-yellow-800 text-yellow-300">
+						{importPreview.errors.length} warning{importPreview.errors.length === 1 ? '' : 's'} — see below
+					</div>
+				{:else}
+					<div class="flex-1 min-w-64 px-3 py-2 rounded-lg text-sm bg-slate-800/50 border border-slate-700 text-slate-400">
+						Ready to import {importPreview.count} sample{importPreview.count === 1 ? '' : 's'}
+					</div>
+				{/if}
 			{/if}
 		</div>
 		{/if}
@@ -448,24 +492,11 @@
 		</div>
 		{/if}
 
-		{#if importResult}
-		<div class="p-4 rounded-lg {importResult.imported > 0 ? 'bg-green-900/20 border border-green-800' : 'bg-red-900/20 border border-red-800'}">
-			{#if importResult.imported > 0}
-				<p class="text-green-300 font-medium">{importResult.imported} samples imported successfully</p>
-				{#if importResult.site_matches && importResult.site_matches > 0}
-					<p class="text-sm text-ocean-300 mt-1">{importResult.site_matches} matched to existing sites (within {siteMatchKm} km)</p>
-				{/if}
-				{#if importResult.new_sites && importResult.new_sites > 0}
-					<p class="text-sm text-green-400 mt-1">{importResult.new_sites} new sites created</p>
-				{/if}
-				<a href="/samples" class="text-sm text-ocean-400 hover:text-ocean-300 mt-1 inline-block">View samples &rarr;</a>
-			{/if}
-			{#if importResult.errors.length > 0}
-				<div class="text-sm text-yellow-300 mt-2 space-y-1">
-					{#each importResult.errors as err}<div>{err}</div>{/each}
-				</div>
-			{/if}
-		</div>
+		{#if importResult && importResult.errors.length > 0}
+			<div class="p-3 rounded-lg bg-yellow-900/20 border border-yellow-800 text-sm space-y-1 text-yellow-300">
+				<div class="font-medium">Warnings:</div>
+				{#each importResult.errors as err}<div>{err}</div>{/each}
+			</div>
 		{/if}
 
 		<!-- NCBI Templates -->

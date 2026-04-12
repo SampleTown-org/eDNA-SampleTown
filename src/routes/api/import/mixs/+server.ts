@@ -6,6 +6,7 @@ import { parseLatLon } from '$lib/mixs/validators';
 import { checkRate } from '$lib/server/rate-limit';
 import { apiError } from '$lib/server/api-errors';
 import { findNearbySites, haversineKm } from '$lib/server/proximity';
+import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_TSV_BYTES = 20 * 1024 * 1024; // post-decompression cap (xlsx is zipped)
@@ -28,6 +29,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	let dryRun: boolean;
 	let columnMap: Record<string, string> | undefined;
 	let siteMatchKm: number = DEFAULT_SITE_MATCH_KM;
+	let people: { personnel_id: string; role?: string | null }[] | undefined;
 
 	try {
 		if (contentType.includes('multipart/form-data')) {
@@ -43,6 +45,11 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			if (kmRaw) {
 				const km = Number(kmRaw);
 				if (!isNaN(km) && km > 0 && km <= 100) siteMatchKm = km;
+			}
+			const peopleRaw = formData.get('people') as string | null;
+			if (peopleRaw) {
+				try { people = JSON.parse(peopleRaw); }
+				catch { return json({ error: 'Invalid people JSON' }, { status: 400 }); }
 			}
 			const file = formData.get('file') as File;
 			if (!file || !projectId) {
@@ -73,6 +80,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				const km = Number(body.siteMatchKm);
 				if (!isNaN(km) && km > 0 && km <= 100) siteMatchKm = km;
 			}
+			if (Array.isArray(body.people)) people = body.people;
 			if (typeof tsv === 'string' && tsv.length > MAX_TSV_BYTES) {
 				return json({ error: 'TSV payload too large' }, { status: 413 });
 			}
@@ -221,13 +229,13 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			samp_name, collection_date, env_medium, samp_taxon_id,
 			depth, elevation, host_taxon_id,
 			temp, salinity, ph, dissolved_oxygen, pressure, turbidity, chlorophyll, nitrate, phosphate,
-			sample_type, volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
+			volume_filtered_ml, filter_type, preservation_method, storage_conditions, collector_name,
 			notes, custom_fields, created_by)
 		VALUES (?, ?, ?, ?,
 			?, ?, ?, ?,
 			?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?,
+			?, ?, ?, ?, ?,
 			?, ?, ?)
 	`);
 
@@ -285,7 +293,6 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 					sample.chlorophyll ?? null,
 					sample.nitrate ?? null,
 					sample.phosphate ?? null,
-					sample.sample_type || null,
 					sample.volume_filtered_ml ?? null,
 					sample.filter_type || null,
 					sample.preservation_method || null,
@@ -295,6 +302,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 					sample.custom_fields || null,
 					userId
 				);
+				// Apply bulk-assigned people to every inserted sample
+				if (people && people.length > 0) {
+					setEntityPersonnel(db, 'sample', id, normalizePeople(people));
+				}
 				inserted.push({
 					id,
 					samp_name: sample.samp_name,
