@@ -25,7 +25,8 @@
 		seq_method: 'Seq Methods',
 		index_i7: 'i7 Indices',
 		index_i5: 'i5 Indices',
-		barcode: 'Barcodes'
+		barcode: 'Barcodes',
+		person_role: 'Person Roles'
 	};
 
 	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback';

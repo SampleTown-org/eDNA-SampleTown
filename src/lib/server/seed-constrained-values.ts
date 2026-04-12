@@ -192,15 +192,26 @@ const NAMING_TEMPLATES = [
 ];
 
 export function seedConstrainedValues(db: Database.Database) {
-	const existing = db.prepare('SELECT COUNT(*) AS count FROM constrained_values').get() as { count: number };
-	if (existing.count === 0) {
-		const insert = db.prepare('INSERT OR IGNORE INTO constrained_values (id, category, value, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?)');
-		const insertAll = db.transaction(() => {
-			for (const [category, values] of Object.entries(SEED_DATA)) {
-				values.forEach((value, i) => insert.run(category, value, i));
-			}
-		});
-		insertAll();
+	// Seed each category independently. The previous all-or-nothing guard
+	// (skip when the whole table was non-empty) meant new SEED_DATA categories
+	// added in later releases never landed on existing prod databases —
+	// e.g. `person_role` shipped empty in the personnel feature.
+	// Per-category back-fill is safe because (a) we only insert when the
+	// category itself is empty, so we won't clobber operator-added values,
+	// and (b) we still won't re-add seed values the operator deactivated,
+	// since deactivation only flips is_active, leaving the row in place.
+	const insert = db.prepare(
+		'INSERT OR IGNORE INTO constrained_values (id, category, value, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?)'
+	);
+	const countByCategory = db.prepare(
+		'SELECT COUNT(*) AS count FROM constrained_values WHERE category = ?'
+	);
+	const seedCategory = db.transaction((category: string, values: string[]) => {
+		values.forEach((value, i) => insert.run(category, value, i));
+	});
+	for (const [category, values] of Object.entries(SEED_DATA)) {
+		const { count } = countByCategory.get(category) as { count: number };
+		if (count === 0) seedCategory(category, values);
 	}
 
 	// Seed naming templates
