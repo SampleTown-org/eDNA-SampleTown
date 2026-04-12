@@ -9,12 +9,12 @@ Tracks the full chain: **Project → Site → Sample → Extract → PCR → Lib
 - **MIxS v6 compliant** — supports the full GSC checklist family (MIMARKS-SU/SP, MIMS, MIMAG, MISAG, MIGS-EU/BA/PL/VI/ORG, MIUViG)
 - **NCBI-ready** — import the official BioSample xlsx templates, export TSV that drops into the SRA submission portal
 - **Plate-based batch entry** — PCR and library prep are organized around plates (not single reactions), with one form to create a whole plate of reactions in a transaction
-- **Constrained vocabularies** — picklist-driven for primers, protocols, kits, instruments, environments, storage locations; managed in-app via the Settings page
+- **Constrained vocabularies** — picklist-driven for target genes, library types, pipelines, primers, protocols, kits, instruments, environments, storage locations, person roles; managed in-app via the Settings page. Only SRA/MIxS-mandated values have schema-level CHECK constraints; everything else is fully operator-managed.
 - **Linked composites** — primer sets (gene + region + F/R primer + sequence + reference) and PCR protocols (polymerase + annealing + cycles + conditions) live in dedicated tables and are selected as a unit
-- **Personnel tracking** — every entity (sample/extract/PCR/library/run) records who did the work, optionally linked to a GitHub-authenticated user
+- **Multi-person attribution** — every entity (sample/extract/PCR plate/library plate/run) can have any number of attributed personnel, each with a role label from the `person_role` picklist (collector, extractor, pcr operator, lab tech, etc.). PeoplePicker on forms, PeopleRoster chips on detail pages, text summary column on list pages.
 - **Hybrid auth + RBAC** — GitHub OAuth (`arctic`) for normal use, local bcrypt accounts as a LAN-only fallback. All `/api/*` mutations require a session; `/api/settings/*`, `/api/personnel`, `/api/db/*`, and the Settings page require `role=admin`. First admin is bootstrapped via a one-time `ADMIN_SETUP_TOKEN`.
-- **Rate limited** — login (5/min/IP), feedback POST (5/h/IP), MIxS import (10/h/IP, 10 MB cap, 10 k row cap)
-- **Map picker** — click a location on a Leaflet map when adding a site; dashboard shows all sites as markers
+- **Rate limited** — login (5/min/IP), feedback POST (5/min/IP), MIxS import (10/h/IP, 10 MB cap, 10 k row cap)
+- **Map picker** — click a location on a Leaflet map when adding a site; sites list shows all sites as markers with color-by support (shift+click a table header to tint both rows and pins)
 - **Feedback form** — single-line form on the bottom of every page captures the current URL for context
 - **GitHub-backed snapshots** — JSON exports of every table can be committed to a configured GitHub repo for version control
 
@@ -75,18 +75,29 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
 src/
 ├── lib/
 │   ├── server/
-│   │   ├── db.ts                       # better-sqlite3 singleton + schema bootstrap
+│   │   ├── db.ts                       # better-sqlite3 singleton + schema bootstrap + migrations
 │   │   ├── schema.sql                  # full DDL (inlined via ?raw import)
-│   │   ├── seed-constrained-values.ts  # picklist + primer set + protocol seeds
+│   │   ├── seed-constrained-values.ts  # picklist + primer set + protocol seeds + backfill
+│   │   ├── schemas/
+│   │   │   ├── auth.ts                 # zod schemas for user/personnel endpoints
+│   │   │   └── lab.ts                  # zod schemas for runs/plates/PCR endpoints
+│   │   ├── validation.ts               # parseBody() zod helper
 │   │   ├── auth.ts                     # sessions, OAuth, bcrypt, sweep
 │   │   ├── guards.ts                   # requireUser / requireAdmin
 │   │   ├── api-errors.ts               # safe SQLite-error wrapper
 │   │   ├── rate-limit.ts               # in-memory sliding window
+│   │   ├── entity-personnel.ts         # set/get/bulk personnel attribution
 │   │   ├── personnel.ts                # active personnel lookup
 │   │   ├── constrained-values.ts       # picklist loader
 │   │   ├── mixs-io.ts                  # MIxS TSV/xlsx import + export
 │   │   └── github.ts                   # Octokit DB-snapshot commits
-│   └── components/                     # DataTable, MapPicker, FeedbackForm, ...
+│   └── components/
+│       ├── DataTable.svelte            # sortable, filterable, color-by table
+│       ├── MapPicker.svelte            # Leaflet map with click-to-place + colored markers
+│       ├── PeoplePicker.svelte         # chip-list for attributing personnel + roles
+│       ├── PeopleRoster.svelte         # read-only chip-list for detail pages
+│       ├── PlateView.svelte            # 8/96/384-well visual layout
+│       └── FeedbackForm.svelte         # persistent form in bottom-right corner
 └── routes/
     ├── projects/  sites/  samples/     # CRUD pages (list, new, edit, [id])
     ├── extracts/  pcr/  libraries/  runs/  analysis/
