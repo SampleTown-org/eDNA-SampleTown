@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 
 /** Fields that live on the sites table (location/environment context). */
 export const SITE_FIELDS = new Set([
-	'lat_lon', 'latitude', 'longitude', 'geo_loc_name',
+	'site_name', 'lat_lon', 'latitude', 'longitude', 'geo_loc_name',
 	'env_broad_scale', 'env_local_scale'
 ]);
 
@@ -132,6 +132,9 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 	}
 	// Common aliases and NCBI BioSample column names (same as before).
 	const aliases: Record<string, string> = {
+		site_name: 'site_name',
+		station: 'site_name',
+		station_name: 'site_name',
 		sample_name: 'samp_name',
 		sample_title: 'samp_name',
 		latitude: 'latitude',
@@ -188,6 +191,8 @@ export function getImportableFields(): { value: string; label: string }[] {
 		...LOGISTICS_FIELDS
 	];
 	for (const f of allFields) fields.add(f.name);
+	// Ensure all SITE_FIELDS are included (site_name etc. aren't in MIxS defs)
+	for (const sf of SITE_FIELDS) fields.add(sf);
 	fields.delete('_skip_');
 	fields.delete('project_name');
 

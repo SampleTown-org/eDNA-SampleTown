@@ -108,7 +108,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
 	// Auto-create sites for unmatched samples, clustered by proximity.
 	// Samples within siteMatchKm of each other share the same new site.
-	type NewSite = { id: string; site_name: string; lat: number; lon: number; lat_lon: string; geo_loc_name: string | null; env_broad_scale: string | null; env_local_scale: string | null };
+	type NewSite = { id: string; site_name: string; lat: number; lon: number; lat_lon: string; geo_loc_name: string | null; env_broad_scale: string | null; env_local_scale: string | null; name_votes: Map<string, number> };
 	const newSites: NewSite[] = [];
 
 	for (const row of matched) {
@@ -135,13 +135,41 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				lat_lon: latLon,
 				geo_loc_name: (row.sample.geo_loc_name as string) || null,
 				env_broad_scale: (row.sample.env_broad_scale as string) || null,
-				env_local_scale: (row.sample.env_local_scale as string) || null
+				env_local_scale: (row.sample.env_local_scale as string) || null,
+				name_votes: new Map()
 			};
 			newSites.push(cluster);
 		}
 
+		// Track site_name votes from the parsed sample data
+		const sampleSiteName = (row.sample.site_name as string)?.trim();
+		if (sampleSiteName) {
+			cluster.name_votes.set(sampleSiteName, (cluster.name_votes.get(sampleSiteName) || 0) + 1);
+		}
+
 		row.matched_site = { id: cluster.id, site_name: cluster.site_name, distance_km: 0 };
 		row.new_site = true;
+	}
+
+	// Resolve site names: pick most frequent vote, warn on conflicts
+	for (const site of newSites) {
+		if (site.name_votes.size === 0) continue;
+		let bestName = '';
+		let bestCount = 0;
+		for (const [name, count] of site.name_votes) {
+			if (count > bestCount) { bestName = name; bestCount = count; }
+		}
+		site.site_name = bestName;
+		if (site.name_votes.size > 1) {
+			const others = Array.from(site.name_votes.keys()).filter(n => n !== bestName);
+			errors.push(`Site "${bestName}": conflicting names in same cluster (${others.join(', ')}), using most frequent`);
+		}
+		// Update matched_site references
+		for (const row of matched) {
+			if (row.matched_site?.id === site.id) {
+				row.matched_site.site_name = site.site_name;
+			}
+		}
 	}
 
 	if (dryRun) {
