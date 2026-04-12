@@ -239,6 +239,12 @@ export function seedConstrainedValues(db: Database.Database) {
 	// category itself is empty, so we won't clobber operator-added values,
 	// and (b) we still won't re-add seed values the operator deactivated,
 	// since deactivation only flips is_active, leaving the row in place.
+	// Also back-fill individual missing entries in categories that already
+	// have rows. This catches the case where SEED_DATA grows (e.g.
+	// ITS_amplicon + whole_genome added to library_type after the CHECK was
+	// dropped) but the category was already seeded in a prior release.
+	backfillMissingEntries(db);
+
 	const insert = db.prepare(
 		'INSERT OR IGNORE INTO constrained_values (id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)'
 	);
@@ -294,6 +300,36 @@ export function seedConstrainedValues(db: Database.Database) {
 function normalizeSeedEntry(entry: SeedEntry): { value: string; label: string } {
 	if (typeof entry === 'string') return { value: entry, label: entry };
 	return entry;
+}
+
+/**
+ * For categories that already have rows (so the empty-category seed won't
+ * run), insert any SEED_DATA entries that are missing. Uses INSERT OR IGNORE
+ * keyed on (category, value) so it never duplicates. Handles the case where
+ * SEED_DATA grows between releases (e.g. ITS_amplicon + whole_genome added
+ * after library_type's CHECK was dropped).
+ */
+function backfillMissingEntries(db: Database.Database) {
+	const exists = db.prepare(
+		'SELECT 1 FROM constrained_values WHERE category = ? AND value = ? LIMIT 1'
+	);
+	const insert = db.prepare(
+		'INSERT INTO constrained_values (id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)'
+	);
+	const maxOrder = db.prepare(
+		'SELECT COALESCE(MAX(sort_order), -1) AS m FROM constrained_values WHERE category = ?'
+	);
+	for (const [category, entries] of Object.entries(SEED_DATA)) {
+		let nextOrder: number | null = null;
+		for (const entry of entries) {
+			const { value, label } = normalizeSeedEntry(entry);
+			if (exists.get(category, value)) continue;
+			if (nextOrder === null) {
+				nextOrder = ((maxOrder.get(category) as { m: number }).m) + 1;
+			}
+			insert.run(category, value, label, nextOrder++);
+		}
+	}
 }
 
 /**
