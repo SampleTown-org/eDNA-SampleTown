@@ -11,6 +11,7 @@
  */
 import { getDb } from './db';
 import { allSlotNames, getSlot, getClass, getCombinationClass } from '$lib/mixs/schema-index';
+import { SRA_TO_MIXS } from '$lib/mixs/sra-mapping';
 import * as XLSX from 'xlsx';
 
 /** Fields that live on the sites table, not the samples table. */
@@ -206,18 +207,20 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		}
 	}
 
-	// SampleTown-specific aliases
+	// SRA / BioSample column name translation (canonical list in sra-mapping.ts).
+	for (const [sraCol, mixsSlot] of Object.entries(SRA_TO_MIXS)) {
+		if (isKnownColumn(mixsSlot) || mixsSlot === 'collector_name' || mixsSlot === 'site_name' || mixsSlot === 'notes') {
+			map[sraCol.toLowerCase()] = mixsSlot;
+		}
+	}
+
+	// SampleTown-local aliases not covered by the SRA mapping.
 	const local: Record<string, string> = {
 		site_name: 'site_name',
 		station: 'site_name',
 		station_name: 'site_name',
-		sample_name: 'samp_name',
-		sample_title: 'samp_name',
 		latitude: 'latitude',
 		longitude: 'longitude',
-		organism: 'samp_taxon_id',
-		host: 'host_taxid',
-		alt: 'elev',
 		description: 'notes'
 	};
 	for (const [k, v] of Object.entries(local)) map[k] = v;
