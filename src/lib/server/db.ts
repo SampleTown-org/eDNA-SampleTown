@@ -140,9 +140,9 @@ function relaxSequencingRunsNotNull(db: Database.Database) {
 /**
  * For each table, strip CHECK constraints from ONLY the named columns,
  * preserving CHECKs on other columns (e.g. platform, status). Reads the
- * existing DDL from sqlite_master, does line-by-line surgery, and rebuilds
- * the table if anything changed. Table-level CHECK constraints are always
- * preserved.
+ * existing DDL from sqlite_master, strips the CHECK clause (including
+ * multi-line ones where the IN list wraps across lines), and rebuilds the
+ * table if anything changed.
  *
  * Idempotent: if the target columns already have no CHECK, the table is
  * skipped. Foreign keys are temporarily disabled during each rebuild.
@@ -157,66 +157,56 @@ function dropColumnChecks(
 		).get(table) as { sql: string } | undefined;
 		if (!row) continue;
 
-		const original = row.sql;
-		const targets = new Set(targetColumns);
+		let sql = row.sql;
+		let changed = false;
 
-		const lines = original.split('\n');
-		const newLines = lines.map((line) => {
-			const trimmed = line.trimStart();
-			// Table-level CHECK — always preserve
-			if (trimmed.startsWith('CHECK')) return line;
-			// Only strip if the line is for one of the target columns
-			if (!/CHECK\s*\(/i.test(line)) return line;
-			const colMatch = trimmed.match(/^(\w+)\s+/);
-			if (!colMatch || !targets.has(colMatch[1])) return line;
+		// For each target column, find its CHECK clause and strip it.
+		// The CHECK can span multiple lines (e.g., a long IN list).
+		// Strategy: find `<column_name> ... CHECK (` in the full DDL string,
+		// then strip from CHECK through the balanced closing paren.
+		for (const col of targetColumns) {
+			// Match the column definition line up to and including CHECK (
+			const pattern = new RegExp(
+				`(${col}\\s+TEXT[^,\\n]*?)\\s*CHECK\\s*\\(`,
+				'i'
+			);
+			const match = pattern.exec(sql);
+			if (!match) continue; // Already stripped or doesn't exist
 
-			// Strip the CHECK(...) including nested parens
-			let result = '';
-			let depth = 0;
-			let inCheck = false;
-			let i = 0;
-			while (i < line.length) {
-				if (!inCheck && line.substring(i).match(/^CHECK\s*\(/i)) {
-					inCheck = true;
-					const match = line.substring(i).match(/^CHECK\s*\(/i)!;
-					i += match[0].length;
-					depth = 1;
-					continue;
-				}
-				if (inCheck) {
-					if (line[i] === '(') depth++;
-					else if (line[i] === ')') {
-						depth--;
-						if (depth === 0) { inCheck = false; i++; continue; }
-					}
-					i++;
-					continue;
-				}
-				result += line[i];
+			// Found a CHECK — now find the balanced closing paren
+			const checkStart = match.index + match[1].length;
+			const afterCheck = sql.indexOf('(', checkStart);
+			let depth = 1;
+			let i = afterCheck + 1;
+			while (i < sql.length && depth > 0) {
+				if (sql[i] === '(') depth++;
+				else if (sql[i] === ')') depth--;
 				i++;
 			}
-			return result.replace(/\s+,/, ',').replace(/\s+$/, '');
-		});
+			// i now points just past the closing paren of CHECK(...)
+			// Strip from checkStart to i, clean up whitespace
+			sql = sql.substring(0, checkStart) + sql.substring(i);
+			changed = true;
+		}
 
-		const newSql = newLines.join('\n');
-		if (newSql === original) continue;
+		if (!changed) continue;
 
-		const newTableSql = newSql.replace(
-			`CREATE TABLE ${table}`,
-			`CREATE TABLE ${table}_new`
-		).replace(
-			`CREATE TABLE IF NOT EXISTS ${table}`,
-			`CREATE TABLE ${table}_new`
-		);
+		// Clean up: remove blank lines and trailing whitespace before commas
+		sql = sql.replace(/\n\s*\n/g, '\n').replace(/\s+,/g, ',');
+
+		const newTableSql = sql
+			.replace(`CREATE TABLE "${table}"`, `CREATE TABLE "${table}_new"`)
+			.replace(`CREATE TABLE ${table}`, `CREATE TABLE ${table}_new`)
+			.replace(`CREATE TABLE IF NOT EXISTS ${table}`, `CREATE TABLE ${table}_new`);
 
 		db.pragma('foreign_keys = OFF');
 		try {
 			db.exec(`
 				BEGIN;
 				${newTableSql};
-				INSERT INTO ${table}_new SELECT * FROM ${table};
-				DROP TABLE ${table};
-				ALTER TABLE ${table}_new RENAME TO ${table};
+				INSERT INTO "${table}_new" SELECT * FROM "${table}";
+				DROP TABLE "${table}";
+				ALTER TABLE "${table}_new" RENAME TO "${table}";
 				COMMIT;
 			`);
 			console.log(`[migration] Dropped CHECK on [${targetColumns.join(', ')}] from ${table}`);
