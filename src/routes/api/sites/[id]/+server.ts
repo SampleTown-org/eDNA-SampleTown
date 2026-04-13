@@ -29,7 +29,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				lat_lon = ?, latitude = ?, longitude = ?,
 				geo_loc_name = ?, locality = ?,
 				env_broad_scale = ?, env_local_scale = ?,
-				habitat_type = ?, access_notes = ?,
+				access_notes = ?,
 				notes = ?, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
@@ -42,7 +42,6 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			nn(data.locality),
 			nn(data.env_broad_scale),
 			nn(data.env_local_scale),
-			nn(data.habitat_type),
 			nn(data.access_notes),
 			nn(data.notes),
 			params.id
