@@ -31,9 +31,6 @@
 		if (site && !form.project_id && site.project_id) form.project_id = site.project_id;
 	}
 
-	// Reactive organization — rebuckets slots whenever (checklist, extension) changes.
-	// picklists are passed through so MIxS enum ranges and SampleTown-local
-	// picklists both resolve to inline <select> options on each SlotConfig.
 	let organized = $derived(
 		organizeForm(form.mixs_checklist as string, (form.extension as string) || null, data.picklists)
 	);
@@ -62,6 +59,9 @@
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 	const selectCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';
 	const legendCls = 'text-sm font-semibold text-slate-300 uppercase tracking-wider';
+
+	const PROJECT_DESCRIPTION = 'SampleTown project this sample belongs to. On MIxS export, the project name is emitted from the project record.';
+	const SITE_DESCRIPTION = 'SampleTown site where this sample was collected. Sites own the MIxS location slots (lat_lon, geo_loc_name, env_broad_scale, env_local_scale) and pass them through to the sample on export.';
 </script>
 
 <div class="max-w-3xl space-y-6">
@@ -80,13 +80,46 @@
 	{/if}
 
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-8">
-		<!-- Where: project + site. Site carries lat_lon / geo_loc_name /
-		     env_broad_scale / env_local_scale at export time. -->
+		<!-- Top: checklist + extension drive every bucket below. -->
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/40">
+			<div>
+				<label for="mixs_checklist" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Checklist</a>
+				</label>
+				<select id="mixs_checklist" bind:value={form.mixs_checklist} class={selectCls}>
+					{#each CHECKLIST_OPTIONS as opt}
+						<option value={opt.value}>{opt.label}</option>
+					{/each}
+				</select>
+				<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find(o => o.value === form.mixs_checklist)?.description}</p>
+			</div>
+			<div>
+				<label for="extension" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Extension</a>
+				</label>
+				<select id="extension" bind:value={form.extension} class={selectCls}>
+					<option value="">None</option>
+					{#each EXTENSION_OPTIONS as opt}
+						<option value={opt.value}>{opt.label}</option>
+					{/each}
+				</select>
+				<p class="text-xs text-slate-500 mt-1">{EXTENSION_OPTIONS.find(o => o.value === form.extension)?.description ?? ''}</p>
+			</div>
+		</div>
+
+		<!-- Required: project + site + samp_name + date + env_medium, plus every
+		     MIxS-required slot the active combination class lists. -->
 		<fieldset class="space-y-4">
-			<legend class={legendCls}>Where</legend>
+			<legend class={legendCls}>
+				Required
+				<span class="text-rose-400 normal-case tracking-normal font-normal text-xs">
+					({5 + organized.required.length})
+				</span>
+			</legend>
+
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="project_id" class="block text-sm font-medium text-slate-300 mb-1">Project</label>
+					<FieldLabel slot="project_id" label="Project" required description={PROJECT_DESCRIPTION} />
 					<select id="project_id" bind:value={form.project_id} class={selectCls}>
 						<option value="">Select project...</option>
 						{#each data.projects as project}
@@ -95,7 +128,7 @@
 					</select>
 				</div>
 				<div>
-					<label for="site_id" class="block text-sm font-medium text-slate-300 mb-1">Site</label>
+					<FieldLabel slot="site_id" label="Site" required description={SITE_DESCRIPTION} />
 					<select id="site_id" bind:value={form.site_id} onchange={onSiteChange} class={selectCls}>
 						<option value="">Select site...</option>
 						{#each availableSites as site}
@@ -113,14 +146,7 @@
 						{/if}
 					{/if}
 				</div>
-			</div>
-		</fieldset>
 
-		<!-- Identity: checklist + extension + the three always-present MIxS core slots. -->
-		<fieldset class="space-y-4">
-			<legend class={legendCls}>Identity</legend>
-
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
 					<FieldLabel slot="samp_name" required />
 					<input id="samp_name" type="text" bind:value={form.samp_name}
@@ -130,69 +156,29 @@
 					<FieldLabel slot="collection_date" required />
 					<input id="collection_date" type="date" bind:value={form.collection_date} class={inputCls} />
 				</div>
-			</div>
 
-			<div>
-				<FieldLabel slot="env_medium" required />
-				<select id="env_medium" bind:value={form.env_medium} class={selectCls}>
-					<option value="">Select...</option>
-					{#each data.picklists.env_medium as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select>
-			</div>
+				<div class="sm:col-span-2">
+					<FieldLabel slot="env_medium" required />
+					<select id="env_medium" bind:value={form.env_medium} class={selectCls}>
+						<option value="">Select...</option>
+						{#each data.picklists.env_medium as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select>
+				</div>
 
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
-				<div>
-					<label for="mixs_checklist" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Checklist</a>
-					</label>
-					<select id="mixs_checklist" bind:value={form.mixs_checklist} class={selectCls}>
-						{#each CHECKLIST_OPTIONS as opt}
-							<option value={opt.value}>{opt.label}</option>
-						{/each}
-					</select>
-					<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find(o => o.value === form.mixs_checklist)?.description}</p>
-				</div>
-				<div>
-					<label for="extension" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Extension</a>
-					</label>
-					<select id="extension" bind:value={form.extension} class={selectCls}>
-						<option value="">None</option>
-						{#each EXTENSION_OPTIONS as opt}
-							<option value={opt.value}>{opt.label}</option>
-						{/each}
-					</select>
-					<p class="text-xs text-slate-500 mt-1">{EXTENSION_OPTIONS.find(o => o.value === form.extension)?.description ?? ''}</p>
-				</div>
+				{#each organized.required as field (field.slot)}
+					<SlotInput
+						slot={field.slot}
+						type={field.type}
+						bind:value={form[field.slot]}
+						placeholder={field.placeholder}
+						required={true}
+						options={field.options ?? []}
+					/>
+				{/each}
 			</div>
 		</fieldset>
 
-		<!-- Required — every sample-owned slot the active combination class marks required. -->
-		{#if organized.required.length > 0}
-			<fieldset class="space-y-4">
-				<legend class={legendCls}>
-					Required
-					<span class="text-rose-400 normal-case tracking-normal font-normal text-xs">
-						({organized.required.length})
-					</span>
-				</legend>
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-					{#each organized.required as field (field.slot)}
-						<SlotInput
-							slot={field.slot}
-							type={field.type}
-							bind:value={form[field.slot]}
-							placeholder={field.placeholder}
-							required={true}
-							options={field.options ?? []}
-						/>
-					{/each}
-				</div>
-			</fieldset>
-		{/if}
-
-		<!-- Required but on another SampleTown tab. Purely informational —
-		     the user goes to that tab to fill these in. -->
+		<!-- Required but on another SampleTown tab. Purely informational. -->
 		{#if organized.requiredOffSample.length > 0}
 			<div class="rounded-lg border border-amber-800 bg-amber-900/10 p-3 text-sm text-amber-200">
 				<p class="font-medium mb-1">Also required by {form.mixs_checklist}{form.extension ? ` + ${form.extension}` : ''}:</p>
@@ -209,31 +195,7 @@
 			</div>
 		{/if}
 
-		<!-- Recommended — every sample-owned slot the class marks recommended. -->
-		{#if organized.recommended.length > 0}
-			<details class="group space-y-4" open>
-				<summary class="{legendCls} cursor-pointer flex items-center gap-2">
-					<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
-					Recommended
-					<span class="normal-case tracking-normal font-normal text-xs text-slate-500">
-						({organized.recommended.length})
-					</span>
-				</summary>
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-					{#each organized.recommended as field (field.slot)}
-						<SlotInput
-							slot={field.slot}
-							type={field.type}
-							bind:value={form[field.slot]}
-							placeholder={field.placeholder}
-							options={field.options ?? []}
-						/>
-					{/each}
-				</div>
-			</details>
-		{/if}
-
-		<!-- Optional — grouped by MIxS subset. -->
+		<!-- Optional buckets — recommended slots appear here with an amber `*`. -->
 		{#each orderedOptionalBuckets(organized.optional) as [bucket, fields] (bucket)}
 			{#if fields.length > 0}
 				<details class="group space-y-4">
@@ -251,6 +213,7 @@
 								type={field.type}
 								bind:value={form[field.slot]}
 								placeholder={field.placeholder}
+								recommended={field.recommended ?? false}
 								options={field.options ?? []}
 							/>
 						{/each}
@@ -259,7 +222,6 @@
 			{/if}
 		{/each}
 
-		<!-- People -->
 		<PeoplePicker
 			bind:people
 			personnel={data.personnel}
@@ -267,7 +229,6 @@
 			label="People"
 		/>
 
-		<!-- Notes (SampleTown-local) -->
 		<div>
 			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>

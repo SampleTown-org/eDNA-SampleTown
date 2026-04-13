@@ -14,6 +14,7 @@
 		unit?: string;
 		placeholder?: string;
 		required?: boolean;
+		recommended?: boolean;
 		/** Options for select type. Each item `{value, label}`. */
 		options?: { value: string; label: string }[];
 		/** Optional override label — falls back to slot.title via FieldLabel. */
@@ -27,6 +28,7 @@
 		unit,
 		placeholder,
 		required = false,
+		recommended = false,
 		options = [],
 		label,
 		colSpan = 1
@@ -41,6 +43,7 @@
 		{slot}
 		{label}
 		{required}
+		{recommended}
 		suffix={unit ? `(${unit})` : ''}
 		for={slot}
 	/>

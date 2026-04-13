@@ -27,6 +27,9 @@ export interface SlotConfig {
 	options?: SlotOption[];
 	/** Placeholder — falls back to slot.examples[0]. */
 	placeholder?: string;
+	/** MIxS-recommended for the active (checklist, extension). Surfaces as
+	 *  an amber `*` when rendered outside the Required section. */
+	recommended?: boolean;
 }
 
 /**
@@ -47,8 +50,8 @@ export const HEADER_SLOTS = new Set(['samp_name', 'collection_date', 'env_medium
 
 export interface OrganizedForm {
 	required: SlotConfig[];
-	recommended: SlotConfig[];
-	/** Optional slots grouped by MIxS `in_subset`. Buckets with zero entries stay empty. */
+	/** Non-required slots grouped by bucket. Recommended ones carry
+	 *  `recommended: true` and render with an amber `*` marker. */
 	optional: Record<string, SlotConfig[]>;
 	/** Required slots that live on a different SampleTown table — surfaced for UI hints. */
 	requiredOffSample: Array<{ slot: string; table: string }>;
@@ -80,7 +83,6 @@ export function organizeForm(
 
 	const out: OrganizedForm = {
 		required: [],
-		recommended: [],
 		optional: {},
 		requiredOffSample: []
 	};
@@ -95,9 +97,10 @@ export function organizeForm(
 		}
 
 		const config = resolveSlotConfig(slot, picklists);
-		if (required.has(slot)) out.required.push(config);
-		else if (recommended.has(slot)) out.recommended.push(config);
-		else {
+		if (required.has(slot)) {
+			out.required.push(config);
+		} else {
+			if (recommended.has(slot)) config.recommended = true;
 			const bucket = subsetOfSlot(slot);
 			(out.optional[bucket] ??= []).push(config);
 		}
@@ -159,26 +162,56 @@ function resolveSlotConfig(slot: string, picklists: Picklists): SlotConfig {
  * lives on extracts/pcr now anyway.
  */
 const BUCKET_OVERRIDES: Record<string, string> = {
+	// Storage — all samp_store_* plus MIxS store_cond
 	samp_store_sol: 'Storage',
 	samp_store_temp: 'Storage',
 	samp_store_dur: 'Storage',
 	samp_store_loc: 'Storage',
 	store_cond: 'Storage',
 
+	// Sampling — absorbs MIxS NASS-subset slots that are really about the
+	// physical collection
 	samp_collect_device: 'Sampling',
 	samp_collect_method: 'Sampling',
 	samp_mat_process: 'Sampling',
 	samp_size: 'Sampling',
 	size_frac: 'Sampling',
 	source_mat_id: 'Sampling',
-	filter_type: 'Sampling'
+	filter_type: 'Sampling',
+
+	// Environment — organism-environment relationships (MIxS classifies as NASS)
+	rel_to_oxygen: 'Environment',
+	oxy_stat_samp: 'Environment',
+	biotic_relationship: 'Environment',
+	trophic_level: 'Environment',
+	pathogenicity: 'Environment',
+	tidal_stage: 'Environment',
+
+	// Investigation — culture / isolate / reference metadata
+	isol_growth_condt: 'Investigation',
+	ref_biomaterial: 'Investigation',
+	encoded_traits: 'Investigation',
+	estimated_size: 'Investigation',
+	propagation: 'Investigation',
+	ploidy: 'Investigation',
+	subspecf_gen_lin: 'Investigation',
+	host_disease_stat: 'Investigation',
+	host_spec_range: 'Investigation',
+	tax_ident: 'Investigation'
 };
 
-/** Group Optional slots by bucket (SampleTown overrides, else MIxS in_subset, else Other). */
+/**
+ * Group Optional slots by bucket. Priority:
+ *   1. BUCKET_OVERRIDES (SampleTown-specific grouping)
+ *   2. MIxS `in_subset` — capitalized
+ * Exception: MIxS "nucleic acid sequence source" never surfaces as a bucket
+ * — everything in NASS is either moved to another table, routed via
+ * BUCKET_OVERRIDES, or falls through to `Other`.
+ */
 function subsetOfSlot(slot: string): string {
 	if (BUCKET_OVERRIDES[slot]) return BUCKET_OVERRIDES[slot];
 	const sub = getSlot(slot)?.in_subset?.[0];
-	if (!sub) return 'Other';
+	if (!sub || sub === 'nucleic acid sequence source') return 'Other';
 	return sub.replace(/^[a-z]/, (c) => c.toUpperCase());
 }
 
