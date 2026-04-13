@@ -5,16 +5,16 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const locationFields = [
-		['Lat/Lon', data.site.lat_lon],
-		['Geographic Location', data.site.geo_loc_name],
+	const locationFields: [string, unknown, string?][] = ([
+		['Lat/Lon', data.site.lat_lon, 'lat_lon'],
+		['Geographic Location', data.site.geo_loc_name, 'geo_loc_name'],
 		['Locality', data.site.locality]
-	].filter(([_, v]) => v);
+	] as [string, unknown, string?][]).filter(([_, v]) => v);
 
-	const envFields = [
-		['Broad-scale Env', data.site.env_broad_scale],
-		['Local Env', data.site.env_local_scale]
-	].filter(([_, v]) => v);
+	const envFields: [string, unknown, string?][] = ([
+		['Broad-scale Env', data.site.env_broad_scale, 'env_broad_scale'],
+		['Local Env', data.site.env_local_scale, 'env_local_scale']
+	] as [string, unknown, string?][]).filter(([_, v]) => v);
 
 	const sampleColumns = [
 		{ key: 'samp_name', label: 'Sample', sortable: true },
@@ -49,9 +49,11 @@
 	<div class="rounded-lg border border-slate-800 p-5 space-y-3">
 		<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Location</h2>
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-			{#each locationFields as [label, value]}
+			{#each locationFields as [label, value, slot]}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">{label}</dt>
+					<dt class="text-slate-400">
+						{#if slot}<a href="/glossary#{slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{label}</a>{:else}{label}{/if}
+					</dt>
 					<dd class="text-slate-200">{value}</dd>
 				</div>
 			{/each}
@@ -63,9 +65,11 @@
 	<div class="rounded-lg border border-slate-800 p-5 space-y-3">
 		<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Environment</h2>
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-			{#each envFields as [label, value]}
+			{#each envFields as [label, value, slot]}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">{label}</dt>
+					<dt class="text-slate-400">
+						{#if slot}<a href="/glossary#{slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{label}</a>{:else}{label}{/if}
+					</dt>
 					<dd class="text-slate-200">{value}</dd>
 				</div>
 			{/each}

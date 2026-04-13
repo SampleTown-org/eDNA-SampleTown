@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { formatLatLon } from '$lib/mixs/validators';
 	import MapPicker from '$lib/components/MapPicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -109,9 +110,7 @@
 			</div>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="geo_loc_name" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Geographic Location</a>
-					</label>
+					<FieldLabel slot="geo_loc_name" />
 					<select id="geo_loc_name" bind:value={form.geo_loc_name} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.geo_loc_name as opt}<option value={opt.value}>{opt.label}</option>{/each}
@@ -132,18 +131,14 @@
 		<fieldset class="space-y-4">
 			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Environment</legend>
 			<div>
-				<label for="env_broad_scale" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Broad-scale Environment</a>
-				</label>
+				<FieldLabel slot="env_broad_scale" />
 				<select id="env_broad_scale" bind:value={form.env_broad_scale} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.env_broad_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 			<div>
-				<label for="env_local_scale" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Local Environment</a>
-				</label>
+				<FieldLabel slot="env_local_scale" />
 				<select id="env_local_scale" bind:value={form.env_local_scale} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.env_local_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}

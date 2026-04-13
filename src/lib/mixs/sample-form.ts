@@ -103,20 +103,29 @@ export interface OrganizedForm {
 }
 
 /**
- * Bucket SAMPLE_FORM_SLOTS into required/recommended/optional for the active
- * (checklist, extension). A slot is only surfaced if the combination class
- * actually contains it (so e.g. MigsBa-specific slots vanish on MimarksS) —
- * UNLESS the slot is in the universal "always-show" set (measurements,
- * storage, sampling), which every form carries regardless.
+ * Bucket slots into Required / Recommended / Optional[subset] for the active
+ * (checklist, extension). Emits:
+ *
+ *   - Required: every slot the combination class marks required (MIxS-
+ *     authoritative), looked up against SAMPLE_FORM_SLOTS for UI hints and
+ *     falling back to a plain text input when no config is curated.
+ *   - Recommended: every slot the combination class marks recommended.
+ *   - Optional[subset]: SampleTown's curated always-visible slots (measurements,
+ *     sampling, storage, taxonomy) that aren't already required/recommended
+ *     for this combo, grouped by subset.
+ *
+ * Reactivity comes from the caller's `$derived(organizeForm(...))` — every
+ * time checklist or extension changes, this re-runs and the form re-renders.
  */
 export function organizeForm(checklist: string, extension: string | null): OrganizedForm {
 	const required = requiredSlotSet(checklist, extension);
 	const recommended = recommendedSlotSet(checklist, extension);
+	const configBySlot = new Map(SAMPLE_FORM_SLOTS.map((s) => [s.slot, s] as const));
 
-	// Slots that we surface on every sample form regardless of combination class.
-	// These are SampleTown's opinionated baseline — any operator can use them
-	// even when the active MIxS class doesn't list them.
-	const universal = new Set<string>([
+	// Always-visible baseline so operators can enter these regardless of the
+	// active class. Their contents shift between buckets as the class changes
+	// (e.g. `depth` jumps Required↔Optional when switching Water↔BuiltEnvironment).
+	const UNIVERSAL_OPTIONAL = new Set<string>([
 		'depth', 'elev',
 		'temp', 'salinity', 'ph', 'diss_oxygen', 'pressure', 'turbidity', 'chlorophyll', 'nitrate', 'phosphate',
 		'samp_collect_device', 'samp_collect_method', 'samp_mat_process', 'samp_size',
@@ -131,29 +140,44 @@ export function organizeForm(checklist: string, extension: string | null): Organ
 		optional: { environment: [], sampling: [], storage: [], investigation: [], taxonomy: [], other: [] }
 	};
 
+	// 1. Required — every slot the combination class requires, in declared order.
+	for (const slot of required) {
+		if (HEADER_SLOTS.has(slot)) continue;
+		out.required.push(configBySlot.get(slot) ?? defaultConfig(slot));
+	}
+
+	// 2. Recommended — every slot the combination class recommends.
+	for (const slot of recommended) {
+		if (HEADER_SLOTS.has(slot) || required.has(slot)) continue;
+		out.recommended.push(configBySlot.get(slot) ?? defaultConfig(slot));
+	}
+
+	// 3. Optional — SampleTown's curated universal slots that aren't already
+	//    above, grouped by subset.
 	for (const entry of SAMPLE_FORM_SLOTS) {
 		if (HEADER_SLOTS.has(entry.slot)) continue;
-
-		const inUniversal = universal.has(entry.slot);
-		// schema-index properties list for the active class — drives whether
-		// non-universal slots (host_taxid, ref_biomaterial, isol_growth_condt) show
-		const inClass = required.has(entry.slot) || recommended.has(entry.slot);
-		if (!inUniversal && !inClass) continue;
-
-		if (required.has(entry.slot)) out.required.push(entry);
-		else if (recommended.has(entry.slot)) out.recommended.push(entry);
-		else {
-			const bucket = entry.subset ?? subsetOfSlot(entry.slot) ?? 'other';
-			out.optional[bucket].push(entry);
-		}
+		if (required.has(entry.slot) || recommended.has(entry.slot)) continue;
+		if (!UNIVERSAL_OPTIONAL.has(entry.slot)) continue;
+		const bucket = entry.subset ?? subsetOfSlot(entry.slot);
+		out.optional[bucket].push(entry);
 	}
 	return out;
 }
 
-function subsetOfSlot(slot: string): OrganizedForm['optional'] extends infer O ? keyof O : never {
+/** Fallback config for an MIxS slot not in our curated SAMPLE_FORM_SLOTS. */
+function defaultConfig(slot: string): SampleFormSlot {
+	const meta = getSlot(slot);
+	// MIxS ranges like `float`/`double`/`integer` → number input
+	const isNumeric = meta?.range && /^(float|double|integer|decimal)$/i.test(meta.range);
+	// Don't set subset on required/recommended entries — subset is only used
+	// by the Optional bucket grouping.
+	return { slot, type: isNumeric ? 'number' : 'text' };
+}
+
+function subsetOfSlot(slot: string): keyof OrganizedForm['optional'] {
 	const meta = getSlot(slot);
 	const subset = meta?.in_subset?.[0];
 	if (subset === 'environment') return 'environment';
-	if (subset === 'investigation') return 'investigation';
-	return 'other' as const;
+	if (subset === 'investigation' || subset === 'sequencing') return 'investigation';
+	return 'other';
 }

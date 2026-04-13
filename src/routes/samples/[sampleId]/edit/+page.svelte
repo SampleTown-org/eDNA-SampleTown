@@ -51,10 +51,13 @@
 		requiredSlotSet(form.mixs_checklist as string, (form.extension as string) || null)
 	);
 
-	// All slots rendered by this form — for the MixsCompleteness "not on form" pill.
+	// All slots the form currently renders — for MixsCompleteness's "not on
+	// form" pill. Recomputes when buckets shift with (checklist, extension).
 	let formSlots = $derived(new Set<string>([
-		...Array.from(Object.keys(form)),
-		...SAMPLE_FORM_SLOTS.map((f) => f.slot)
+		'samp_name', 'collection_date', 'env_medium',
+		...organized.required.map((f) => f.slot),
+		...organized.recommended.map((f) => f.slot),
+		...Object.values(organized.optional).flat().map((f) => f.slot)
 	]));
 
 	async function submit() {

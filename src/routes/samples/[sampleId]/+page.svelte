@@ -12,27 +12,27 @@
 		{ key: 'extraction_date', label: 'Date', sortable: true }
 	];
 
-	const coreFields = [
-		['Collection Date', data.sample.collection_date],
-		['Lat/Lon', data.sample.lat_lon],
-		['Location', data.sample.geo_loc_name],
-		['Broad-scale Env', data.sample.env_broad_scale],
-		['Local Env', data.sample.env_local_scale],
-		['Env Medium', data.sample.env_medium],
-		['Taxon ID', data.sample.samp_taxon_id]
+	const coreFields: [string, unknown, string?][] = [
+		['Collection Date', data.sample.collection_date, 'collection_date'],
+		['Lat/Lon', data.sample.lat_lon, 'lat_lon'],
+		['Location', data.sample.geo_loc_name, 'geo_loc_name'],
+		['Broad-scale Env', data.sample.env_broad_scale, 'env_broad_scale'],
+		['Local Env', data.sample.env_local_scale, 'env_local_scale'],
+		['Env Medium', data.sample.env_medium, 'env_medium'],
+		['Taxon ID', data.sample.samp_taxon_id, 'samp_taxon_id']
 	];
 
-	const measurements = [
-		['Temperature', data.sample.temp, '°C'],
-		['Salinity', data.sample.salinity, 'PSU'],
-		['pH', data.sample.ph, ''],
-		['Dissolved O₂', data.sample.diss_oxygen, 'mg/L'],
-		['Pressure', data.sample.pressure, 'atm'],
-		['Turbidity', data.sample.turbidity, 'NTU'],
-		['Chlorophyll', data.sample.chlorophyll, 'µg/L'],
-		['Nitrate', data.sample.nitrate, 'µmol/L'],
-		['Phosphate', data.sample.phosphate, 'µmol/L']
-	].filter(([_, v]) => v != null);
+	const measurements: [string, unknown, string, string?][] = ([
+		['Temperature', data.sample.temp, '°C', 'temp'],
+		['Salinity', data.sample.salinity, 'PSU', 'salinity'],
+		['pH', data.sample.ph, '', 'ph'],
+		['Dissolved O₂', data.sample.diss_oxygen, 'mg/L', 'diss_oxygen'],
+		['Pressure', data.sample.pressure, 'atm', 'pressure'],
+		['Turbidity', data.sample.turbidity, 'NTU', 'turbidity'],
+		['Chlorophyll', data.sample.chlorophyll, 'µg/L', 'chlorophyll'],
+		['Nitrate', data.sample.nitrate, 'µmol/L', 'nitrate'],
+		['Phosphate', data.sample.phosphate, 'µmol/L', 'phosphate']
+	] as [string, unknown, string, string?][]).filter(([_, v]) => v != null);
 </script>
 
 <div class="space-y-6">
@@ -57,9 +57,11 @@
 	<div class="rounded-lg border border-slate-800 p-5 space-y-3">
 		<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">MIxS Core</h2>
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-			{#each coreFields as [label, value]}
+			{#each coreFields as [label, value, slot]}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">{label}</dt>
+					<dt class="text-slate-400">
+						{#if slot}<a href="/glossary#{slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{label}</a>{:else}{label}{/if}
+					</dt>
 					<dd class="text-slate-200">{value || '—'}</dd>
 				</div>
 			{/each}
@@ -71,9 +73,11 @@
 		<div class="rounded-lg border border-slate-800 p-5 space-y-3">
 			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Measurements</h2>
 			<dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
-				{#each measurements as [label, value, unit]}
+				{#each measurements as [label, value, unit, slot]}
 					<div class="flex justify-between py-1 border-b border-slate-800/50">
-						<dt class="text-slate-400">{label}</dt>
+						<dt class="text-slate-400">
+							{#if slot}<a href="/glossary#{slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{label}</a>{:else}{label}{/if}
+						</dt>
 						<dd class="text-slate-200">{value} {unit}</dd>
 					</div>
 				{/each}
