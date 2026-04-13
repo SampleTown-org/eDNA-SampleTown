@@ -157,7 +157,7 @@
 				<a href="/sites/{sample.site_id}" class="text-xs text-ocean-400 hover:text-ocean-300">{sample.site_name} →</a>
 			</div>
 			<p class="text-xs text-slate-500">
-				These MIxS slots live on the site record and pass through to the sample on export.
+				These MIxS parameters live on the site record and pass through to the sample on export.
 				Edit them on the <a href="/sites/{sample.site_id}/edit" class="text-ocean-400 hover:text-ocean-300">site page</a>.
 			</p>
 			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -190,11 +190,11 @@
 		</div>
 	{/if}
 
-	<!-- Other MIxS slots (sample_values EAV) -->
+	<!-- Other MIxS parameters (sample_values EAV) -->
 	{#if mixsExtras.length > 0}
 		<div class="rounded-lg border border-slate-800 p-5 space-y-3">
 			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">
-				Other MIxS slots
+				Other MIxS parameters
 				<span class="text-xs text-slate-500 normal-case tracking-normal font-normal">({mixsExtras.length})</span>
 			</h2>
 			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -211,18 +211,18 @@
 		</div>
 	{/if}
 
-	<!-- Custom tags (misc_param:*) -->
+	<!-- Additional parameters (misc_param:*) -->
 	{#if customTags.length > 0}
-		<div class="rounded-lg border border-amber-900/50 bg-amber-950/10 p-5 space-y-3">
-			<h2 class="text-sm font-semibold text-amber-300 uppercase tracking-wider">
-				Custom tags
-				<span class="text-xs text-amber-300/60 normal-case tracking-normal font-normal">(off-schema)</span>
+		<div class="rounded-lg border border-slate-800 p-5 space-y-3">
+			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+				Additional parameters
+				<span class="text-xs text-slate-500 normal-case tracking-normal font-normal">({customTags.length})</span>
 			</h2>
 			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 				{#each customTags as e}
 					<div class={fieldRowCls}>
 						<dt class={labelCls}>
-							<a href="/glossary#misc_param" target="_blank" rel="noopener" class="text-amber-400 hover:text-amber-300 font-mono text-xs">misc_param:</a><span class="font-mono text-xs text-slate-200">{e.title}</span>
+							<a href="/glossary#misc_param" target="_blank" rel="noopener" class="hover:text-ocean-400 font-mono text-xs">misc_param:</a><span class="font-mono text-xs text-slate-200">{e.title}</span>
 						</dt>
 						<dd class={valueCls}>{e.value}</dd>
 					</div>

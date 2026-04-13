@@ -68,7 +68,7 @@
 			categories: ['library_strategy', 'library_source', 'library_selection', 'seq_platform', 'seq_instrument']
 		},
 		{
-			label: 'Custom',
+			label: 'SampleTown',
 			description: 'Lab-specific vocabulary — storage, kits, roles',
 			categories: ['pipeline', 'filter_type', 'storage_room', 'storage_box', 'extraction_method', 'library_prep_kit', 'barcode', 'person_role']
 		}
@@ -543,13 +543,13 @@
 		{/if}
 	</div>
 
-	<!-- Search filter — applies to whichever list-based tab is active. -->
-	{#if tabType !== 'naming'}
+	<!-- Search filter — applies to list-based tabs (skipped on Naming + Picklists, which have their own navigation). -->
+	{#if tabType !== 'naming' && tabType !== 'category'}
 		<div class="flex">
 			<input
 				type="text"
 				bind:value={searchQuery}
-				placeholder="Filter {tabType === 'category' ? 'values' : tabType === 'primers' ? 'primer sets' : tabType === 'protocols' ? 'protocols' : tabType === 'people' ? 'users + personnel' : tabType === 'feedback' ? 'feedback' : 'entries'}..."
+				placeholder="Filter {tabType === 'primers' ? 'primer sets' : tabType === 'protocols' ? 'protocols' : tabType === 'people' ? 'users + personnel' : tabType === 'feedback' ? 'feedback' : 'entries'}..."
 				class="flex-1 max-w-sm px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500 text-sm"
 			/>
 		</div>

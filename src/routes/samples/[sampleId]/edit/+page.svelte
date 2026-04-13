@@ -297,13 +297,13 @@
 					>
 						<option value="">+ Add parameter...</option>
 						{#if otherRestHidden.length > 0}
-							<optgroup label="MIxS optional slots">
+							<optgroup label="MIxS optional parameters">
 								{#each otherRestHidden as f (f.slot)}
 									<option value={f.slot}>{f.slot}</option>
 								{/each}
 							</optgroup>
 						{/if}
-						<option value="__custom__">custom tag (misc_param:…)</option>
+						<option value="__custom__">additional parameter (misc_param:…)</option>
 					</select>
 
 					{#if addSlotValue === '__custom__'}
