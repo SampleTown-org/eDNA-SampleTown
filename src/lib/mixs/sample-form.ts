@@ -161,31 +161,35 @@ function resolveSlotConfig(slot: string, picklists: Picklists): SlotConfig {
  * label was confusing operators, and every remaining slot in that subset
  * lives on extracts/pcr now anyway.
  */
+/**
+ * Route sample-owned slots to SampleTown-native buckets that cut across MIxS
+ * subsets. Sampling & Storage groups collection + preservation in one div;
+ * Environment is folded into Other (MIxS environmental measurements and
+ * organism-environment relationships share one catch-all section).
+ * Investigation keeps culture/isolate/reference context.
+ */
 const BUCKET_OVERRIDES: Record<string, string> = {
-	// Storage — all samp_store_* plus MIxS store_cond
-	samp_store_sol: 'Storage',
-	samp_store_temp: 'Storage',
-	samp_store_dur: 'Storage',
-	samp_store_loc: 'Storage',
-	store_cond: 'Storage',
+	// Sampling & Storage — collection + preservation
+	samp_store_sol: 'Sampling & Storage',
+	samp_store_temp: 'Sampling & Storage',
+	samp_store_dur: 'Sampling & Storage',
+	samp_store_loc: 'Sampling & Storage',
+	store_cond: 'Sampling & Storage',
+	samp_collect_device: 'Sampling & Storage',
+	samp_collect_method: 'Sampling & Storage',
+	samp_mat_process: 'Sampling & Storage',
+	samp_size: 'Sampling & Storage',
+	size_frac: 'Sampling & Storage',
+	source_mat_id: 'Sampling & Storage',
+	filter_type: 'Sampling & Storage',
 
-	// Sampling — absorbs MIxS NASS-subset slots that are really about the
-	// physical collection
-	samp_collect_device: 'Sampling',
-	samp_collect_method: 'Sampling',
-	samp_mat_process: 'Sampling',
-	samp_size: 'Sampling',
-	size_frac: 'Sampling',
-	source_mat_id: 'Sampling',
-	filter_type: 'Sampling',
-
-	// Environment — organism-environment relationships (MIxS classifies as NASS)
-	rel_to_oxygen: 'Environment',
-	oxy_stat_samp: 'Environment',
-	biotic_relationship: 'Environment',
-	trophic_level: 'Environment',
-	pathogenicity: 'Environment',
-	tidal_stage: 'Environment',
+	// Organism-environment relationships (MIxS classifies as NASS — route to Other)
+	rel_to_oxygen: 'Other',
+	oxy_stat_samp: 'Other',
+	biotic_relationship: 'Other',
+	trophic_level: 'Other',
+	pathogenicity: 'Other',
+	tidal_stage: 'Other',
 
 	// Investigation — culture / isolate / reference metadata
 	isol_growth_condt: 'Investigation',
@@ -204,26 +208,46 @@ const BUCKET_OVERRIDES: Record<string, string> = {
  * Group Optional slots by bucket. Priority:
  *   1. BUCKET_OVERRIDES (SampleTown-specific grouping)
  *   2. MIxS `in_subset` — capitalized
- * Exception: MIxS "nucleic acid sequence source" never surfaces as a bucket
- * — everything in NASS is either moved to another table, routed via
- * BUCKET_OVERRIDES, or falls through to `Other`.
+ * Exceptions:
+ *   - MIxS "environment" subset folds into Other (the user's directive —
+ *     Environment alone was dominating the visual space; it sits fine under
+ *     a catch-all Other with recommended slots bubbling to the top).
+ *   - MIxS "nucleic acid sequence source" never surfaces as a bucket;
+ *     everything in NASS is either on another table, routed via
+ *     BUCKET_OVERRIDES, or falls through to Other.
  */
 function subsetOfSlot(slot: string): string {
 	if (BUCKET_OVERRIDES[slot]) return BUCKET_OVERRIDES[slot];
 	const sub = getSlot(slot)?.in_subset?.[0];
-	if (!sub || sub === 'nucleic acid sequence source') return 'Other';
+	if (!sub || sub === 'nucleic acid sequence source' || sub === 'environment') return 'Other';
 	return sub.replace(/^[a-z]/, (c) => c.toUpperCase());
 }
 
-/** Order the optional-bucket keys sensibly for display. */
+/**
+ * Order optional-bucket keys for display and sort each bucket's entries:
+ *   - Recommended slots (amber-starred) first, then non-recommended
+ *   - Alphabetical by slot name within each group
+ * Sampling & Storage surfaces right after Required; Other absorbs the
+ * environmental measurements (formerly a separate div).
+ */
 export function orderedOptionalBuckets(optional: Record<string, SlotConfig[]>): [string, SlotConfig[]][] {
 	const priority: Record<string, number> = {
-		Environment: 0,
-		Sampling: 1,
-		Storage: 2,
-		Investigation: 3,
-		Sequencing: 4,
-		Other: 99
+		'Sampling & Storage': 0,
+		Other: 1,
+		Investigation: 2,
+		Sequencing: 3
 	};
-	return Object.entries(optional).sort(([a], [b]) => (priority[a] ?? 50) - (priority[b] ?? 50));
+	return Object.entries(optional)
+		.sort(([a], [b]) => (priority[a] ?? 50) - (priority[b] ?? 50))
+		.map(([bucket, fields]) => [bucket, sortBucket(fields)] as [string, SlotConfig[]]);
+}
+
+/** Sort a bucket: recommended first, then alphabetical by slot name. */
+function sortBucket(fields: SlotConfig[]): SlotConfig[] {
+	return [...fields].sort((a, b) => {
+		const ra = a.recommended ? 0 : 1;
+		const rb = b.recommended ? 0 : 1;
+		if (ra !== rb) return ra - rb;
+		return a.slot.localeCompare(b.slot);
+	});
 }
