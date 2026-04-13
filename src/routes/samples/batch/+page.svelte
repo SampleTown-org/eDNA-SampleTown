@@ -3,7 +3,7 @@
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { getSlot } from '$lib/mixs/schema-index';
+	import { allSlotsFor, getSlot } from '$lib/mixs/schema-index';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
@@ -40,27 +40,45 @@
 		{ key: 'notes', label: 'Notes' }
 	];
 
-	const ADDITIONAL_COLUMNS: ColumnDef[] = [
-		{ key: 'env_medium', label: 'Env medium', width: 'w-40' },
-		{ key: 'depth', label: 'Depth (m)', width: 'w-24' },
-		{ key: 'elev', label: 'Elevation (m)', width: 'w-24' },
-		{ key: 'temp', label: 'Temp (°C)', width: 'w-24' },
-		{ key: 'salinity', label: 'Salinity', width: 'w-24' },
-		{ key: 'ph', label: 'pH', width: 'w-20' },
-		{ key: 'filter_type', label: 'Filter type', width: 'w-32' },
-		{ key: 'samp_store_sol', label: 'Preservation', width: 'w-32' }
-	];
+	/** Shortcut labels/widths/placeholders for a handful of common slots —
+	 *  everything else falls back to the MIxS schema title and default sizing. */
+	const COLUMN_HINTS: Record<string, Partial<ColumnDef>> = {
+		env_medium: { label: 'Env medium', width: 'w-40' },
+		depth: { label: 'Depth (m)', width: 'w-24' },
+		elev: { label: 'Elevation (m)', width: 'w-24' },
+		temp: { label: 'Temp (°C)', width: 'w-24' },
+		salinity: { label: 'Salinity', width: 'w-24' },
+		ph: { label: 'pH', width: 'w-20' },
+		filter_type: { label: 'Filter type', width: 'w-32' },
+		samp_store_sol: { label: 'Preservation', width: 'w-32' }
+	};
+
+	/** Build a ColumnDef for an arbitrary MIxS slot, using COLUMN_HINTS for
+	 *  friendly labels and slotLabel() as fallback. */
+	function columnDefForSlot(key: string): ColumnDef {
+		const hint = COLUMN_HINTS[key] ?? {};
+		return {
+			key,
+			label: hint.label ?? slotLabel(key, key),
+			width: hint.width,
+			placeholder: hint.placeholder,
+			required: hint.required
+		};
+	}
 
 	let extraColumnKeys = $state<string[]>([]);
 	let columns = $derived<ColumnDef[]>([
 		...CORE_COLUMNS,
-		...extraColumnKeys
-			.map((k) => ADDITIONAL_COLUMNS.find((c) => c.key === k))
-			.filter((c): c is ColumnDef => Boolean(c))
+		...extraColumnKeys.map(columnDefForSlot)
 	]);
-	let availableExtras = $derived(
-		ADDITIONAL_COLUMNS.filter((c) => !extraColumnKeys.includes(c.key))
-	);
+
+	/** Slots valid for the selected (checklist, extension) — drives the
+	 *  searchable +Add column picker. Drops anything already in the table. */
+	let availableExtraSlots = $derived.by<string[]>(() => {
+		const inTable = new Set<string>([...CORE_COLUMNS.map((c) => c.key), ...extraColumnKeys]);
+		const all = allSlotsFor(batchChecklist, batchExtension);
+		return all.filter((s) => !inTable.has(s)).sort();
+	});
 
 	function emptyRow(): Row {
 		return Object.fromEntries(columns.map((c) => [c.key, '']));
@@ -147,8 +165,28 @@
 	function onTemplateKeydown(e: KeyboardEvent, field: string) {
 		if (e.key !== 'Enter') return;
 		e.preventDefault();
+		fillColumnFromTemplate(field);
+	}
+
+	/** Copy the template row's value for a field into every other row. Used by
+	 *  the Enter key in text inputs and by onchange for the dropdown columns
+	 *  (project/site) — selects don't produce a useful Enter event. */
+	function fillColumnFromTemplate(field: string) {
 		const value = rows[0][field];
-		rows = rows.map((row, i) => (i === 0 ? row : { ...row, [field]: value }));
+		rows = rows.map((row, i) => {
+			if (i === 0) return row;
+			const next = { ...row, [field]: value };
+			// If project_id changed and the current site_id isn't in the new
+			// project, blank the site so the row doesn't end up referencing a
+			// site from a different project.
+			if (field === 'project_id' && next.site_id) {
+				const ok = (data.sites as any[]).some(
+					(s: any) => s.id === next.site_id && s.project_id === value
+				);
+				if (!ok) next.site_id = '';
+			}
+			return next;
+		});
 	}
 
 	async function submit() {
@@ -288,18 +326,25 @@
 		</a>
 
 		<div class="ml-auto flex items-center gap-2">
-			{#if availableExtras.length > 0}
-				<select
+			{#if availableExtraSlots.length > 0}
+				<input
+					type="text"
+					list="batch-add-column-slots"
 					bind:value={extraToAdd}
-					class="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500"
-				>
-					<option value="">+ Add column…</option>
-					{#each availableExtras as col}<option value={col.key}>{col.label}</option>{/each}
-				</select>
+					placeholder="+ Add column — search {availableExtraSlots.length} slots…"
+					class="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500 min-w-60"
+					onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addColumn(); } }}
+				/>
+				<datalist id="batch-add-column-slots">
+					{#each availableExtraSlots as slot}
+						{@const title = getSlot(slot)?.title}
+						<option value={slot} label={title ? `${slot} — ${title}` : slot}></option>
+					{/each}
+				</datalist>
 				<button
 					type="button"
 					onclick={addColumn}
-					disabled={!extraToAdd}
+					disabled={!extraToAdd || !availableExtraSlots.includes(extraToAdd)}
 					class="px-2 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 disabled:opacity-40 transition-colors text-sm"
 				>Add</button>
 			{/if}
@@ -382,6 +427,7 @@
 								{#if col.widget === 'select-project'}
 									<select
 										bind:value={rows[i][col.key]}
+										onchange={isTpl ? () => fillColumnFromTemplate(col.key) : undefined}
 										class="{selectCls} {!isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
 									>
 										<option value="">Select...</option>
@@ -390,6 +436,7 @@
 								{:else if col.widget === 'select-site'}
 									<select
 										bind:value={rows[i][col.key]}
+										onchange={isTpl ? () => fillColumnFromTemplate(col.key) : undefined}
 										class={selectCls}
 									>
 										<option value="">Select...</option>
