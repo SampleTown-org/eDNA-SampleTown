@@ -38,17 +38,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		if (data.libraries && data.libraries.length > 0) {
 			const insert = db.prepare(`
-				INSERT INTO library_preps (id, library_plate_id, pcr_id, extract_id, library_name, library_type,
+				INSERT INTO library_preps (id, library_plate_id, pcr_id, extract_id, library_name, well_label, library_type,
 					library_source, library_selection,
 					library_prep_kit, library_prep_date, platform, instrument_model,
 					index_sequence_i7, index_sequence_i5, barcode, fragment_size_bp,
 					final_concentration_ng_ul, notes, created_by)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`);
 			const insertAll = db.transaction((libs: typeof data.libraries) => {
 				for (const l of libs!) {
 					insert.run(generateId(), plateId, l.pcr_id ?? null, l.extract_id ?? null,
-						l.library_name, data.library_type,
+						l.library_name, l.well_label ?? null, data.library_type,
 						data.library_source ?? null, data.library_selection ?? null,
 						data.library_prep_kit ?? null, data.library_prep_date ?? null,
 						data.platform ?? null, data.instrument_model ?? null,

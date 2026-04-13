@@ -161,6 +161,7 @@ export const RunUpdateBody = z.object({
 const pcrReaction = z.object({
 	extract_id: idString,
 	pcr_name: z.string().trim().min(1).max(200),
+	well_label: optionalShortText,
 	band_observed: optionalBoolish,
 	concentration_ng_ul: optionalNumber,
 	notes: optionalLongText
@@ -203,6 +204,7 @@ const libraryPrepRow = z.object({
 	pcr_id: optionalId,
 	extract_id: optionalId,
 	library_name: z.string().trim().min(1).max(200),
+	well_label: optionalShortText,
 	index_sequence_i7: optionalShortText,
 	index_sequence_i5: optionalShortText,
 	barcode: optionalShortText,

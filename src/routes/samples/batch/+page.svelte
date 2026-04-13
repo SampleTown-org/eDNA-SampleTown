@@ -395,6 +395,14 @@
 										<option value="">Select...</option>
 										{#each sitesForProject(rows[i].project_id) as s}<option value={s.id}>{s.site_name}</option>{/each}
 									</select>
+								{:else if col.key === 'collection_date'}
+									<input
+										type="date"
+										bind:value={rows[i][col.key]}
+										onpaste={(e) => handlePaste(e, i, col.key)}
+										onkeydown={isTpl ? (e) => onTemplateKeydown(e, col.key) : undefined}
+										class="{inputCls} {col.required && !isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
+									/>
 								{:else}
 									<input
 										type="text"

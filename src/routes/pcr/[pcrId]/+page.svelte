@@ -5,6 +5,7 @@
 	let { data }: { data: PageData } = $props();
 
 	const reactionColumns = [
+		{ key: 'well_label', label: 'Well', sortable: true },
 		{ key: 'pcr_name', label: 'Reaction', sortable: true },
 		{ key: 'extract_name', label: 'Extract', sortable: true },
 		{ key: 'samp_name', label: 'Sample', sortable: true },
@@ -105,6 +106,7 @@
 	<div class="rounded-lg border border-slate-800 p-5">
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 			{#each [
+				['Well', data.pcr.well_label],
 				['Target Gene', data.pcr.target_gene],
 				['Region', data.pcr.target_subfragment],
 				['Forward Primer', data.pcr.forward_primer_name ? `${data.pcr.forward_primer_name} (${data.pcr.forward_primer_seq})` : data.pcr.forward_primer_seq],

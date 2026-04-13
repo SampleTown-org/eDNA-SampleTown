@@ -286,6 +286,9 @@ CREATE TABLE IF NOT EXISTS pcr_amplifications (
     extract_id TEXT NOT NULL REFERENCES extracts(id) ON DELETE CASCADE,
 
     pcr_name TEXT NOT NULL,
+    -- Plate well position (e.g. 'A1', 'H12') — set when the reaction was placed
+    -- on a plate in /pcr/new. Nullable for reactions created without a layout.
+    well_label TEXT,
     -- Per-reaction fields (primers inherited from plate if plate_id set)
     primer_set_id TEXT REFERENCES primer_sets(id),
     target_subfragment TEXT,
@@ -352,6 +355,9 @@ CREATE TABLE IF NOT EXISTS library_preps (
     extract_id TEXT REFERENCES extracts(id) ON DELETE SET NULL,
 
     library_name TEXT NOT NULL,
+    -- Plate well position (e.g. 'A1', 'H12') — set when the library was placed
+    -- on a plate in /libraries/new. Nullable for libraries created without a layout.
+    well_label TEXT,
     library_type TEXT NOT NULL,
     library_source TEXT,                    -- SRA library_source
     library_selection TEXT,                 -- SRA library_selection

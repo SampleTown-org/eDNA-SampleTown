@@ -136,6 +136,12 @@
 		if (rows.length === 0) { errorMsg = 'Select at least one extract'; return; }
 		saving = true; errorMsg = '';
 
+		// Invert wellAssignments (well → extract_id) so we can look up the well
+		// for each row by its extract_id when building the POST body.
+		const wellByExtract: Record<string, string> = {};
+		for (const [well, extractId] of Object.entries(wellAssignments)) {
+			wellByExtract[extractId] = well;
+		}
 		const body = {
 			...plate,
 			people,
@@ -143,6 +149,7 @@
 			num_cycles: plate.num_cycles ? +plate.num_cycles : null,
 			reactions: rows.map(r => ({
 				extract_id: r.extract_id, pcr_name: r.pcr_name,
+				well_label: wellByExtract[r.extract_id] || null,
 				concentration_ng_ul: r.concentration_ng_ul ? +r.concentration_ng_ul : null,
 			}))
 		};

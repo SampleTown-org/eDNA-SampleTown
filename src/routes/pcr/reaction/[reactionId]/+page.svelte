@@ -10,6 +10,7 @@
 	];
 
 	const fields = [
+		['Well', data.pcr.well_label],
 		['Target Gene', data.pcr.target_gene],
 		['Region', data.pcr.target_subfragment],
 		['Forward Primer', data.pcr.forward_primer_name ? `${data.pcr.forward_primer_name} (${data.pcr.forward_primer_seq})` : data.pcr.forward_primer_seq],

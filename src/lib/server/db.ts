@@ -18,10 +18,34 @@ export function getDb(): Database.Database {
 		_db.pragma('journal_mode = WAL');
 		_db.pragma('foreign_keys = ON');
 		_db.exec(schema);
+		runMigrations(_db);
 		seedConstrainedValues(_db);
 		seedDefaultAdmin(_db);
 	}
 	return _db;
+}
+
+/**
+ * Idempotent ADD-COLUMN migrations. schema.sql uses CREATE TABLE IF NOT EXISTS,
+ * so existing tables aren't upgraded when we add a column to the schema. Each
+ * migration here is wrapped in try/catch — SQLite errors with "duplicate column
+ * name" if the column is already present, which we treat as already-applied.
+ *
+ * Rule: columns added here must also be added to schema.sql so fresh installs
+ * get the column from the CREATE TABLE. Never drop, rename, or change types;
+ * the prod DB at sampletown.reric.org has live beta-tester data.
+ */
+function runMigrations(db: Database.Database) {
+	const addColumn = (table: string, def: string) => {
+		try {
+			db.exec(`ALTER TABLE ${table} ADD COLUMN ${def}`);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			if (!msg.includes('duplicate column')) throw err;
+		}
+	};
+	addColumn('pcr_amplifications', 'well_label TEXT');
+	addColumn('library_preps', 'well_label TEXT');
 }
 
 export function generateId(): string {

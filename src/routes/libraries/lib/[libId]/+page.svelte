@@ -10,6 +10,7 @@
 	];
 
 	const fields = [
+		['Well', data.library.well_label],
 		['Type', data.library.library_type],
 		['Platform', data.library.platform],
 		['Instrument', data.library.instrument_model],

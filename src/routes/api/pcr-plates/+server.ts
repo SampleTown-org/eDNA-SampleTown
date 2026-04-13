@@ -42,15 +42,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Create individual reactions
 		if (data.reactions && data.reactions.length > 0) {
 			const insertReaction = db.prepare(`
-				INSERT INTO pcr_amplifications (id, plate_id, extract_id, pcr_name, primer_set_id, target_subfragment,
+				INSERT INTO pcr_amplifications (id, plate_id, extract_id, pcr_name, well_label, primer_set_id, target_subfragment,
 					forward_primer_name, forward_primer_seq, reverse_primer_name, reverse_primer_seq,
 					pcr_conditions, annealing_temp_c, num_cycles, polymerase, pcr_date,
 					band_observed, concentration_ng_ul, notes, created_by)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`);
 			const insertAll = db.transaction((reactions: typeof data.reactions) => {
 				for (const r of reactions!) {
-					insertReaction.run(generateId(), plateId, r.extract_id, r.pcr_name,
+					insertReaction.run(generateId(), plateId, r.extract_id, r.pcr_name, r.well_label ?? null,
 						data.primer_set_id ?? null, data.target_subfragment ?? null,
 						data.forward_primer_name ?? null, data.forward_primer_seq ?? null,
 						data.reverse_primer_name ?? null, data.reverse_primer_seq ?? null,

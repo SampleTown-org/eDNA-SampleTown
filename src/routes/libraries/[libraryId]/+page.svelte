@@ -5,6 +5,7 @@
 	let { data }: { data: PageData } = $props();
 
 	const libColumns = [
+		{ key: 'well_label', label: 'Well', sortable: true },
 		{ key: 'library_name', label: 'Library', sortable: true },
 		{ key: 'source_name', label: 'Source', sortable: true },
 		{ key: 'index_sequence_i7', label: 'i7', sortable: true },
@@ -101,6 +102,7 @@
 	<div class="rounded-lg border border-slate-800 p-5">
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 			{#each [
+				['Well', data.library.well_label],
 				['Type', data.library.library_type],
 				['Platform', data.library.platform],
 				['Instrument', data.library.instrument_model],

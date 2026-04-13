@@ -178,6 +178,12 @@
 		if (rows.some(r => !r.library_name.trim())) { errorMsg = 'All library names are required'; return; }
 		saving = true; errorMsg = '';
 
+		// Invert wellAssignments (well → source_id) so we can look up the well
+		// for each row by its source_id when building the POST body.
+		const wellBySource: Record<string, string> = {};
+		for (const [well, sourceId] of Object.entries(wellAssignments)) {
+			wellBySource[sourceId] = well;
+		}
 		const body = {
 			...plate,
 			people,
@@ -186,6 +192,7 @@
 				pcr_id: r.source_type === 'pcr' ? r.source_id : null,
 				extract_id: r.source_type === 'extract' ? r.source_id : null,
 				library_name: r.library_name,
+				well_label: wellBySource[r.source_id] || null,
 				index_sequence_i7: r.index_sequence_i7 || null,
 				index_sequence_i5: r.index_sequence_i5 || null,
 				barcode: r.barcode || null,
