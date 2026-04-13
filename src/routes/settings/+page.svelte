@@ -27,7 +27,8 @@
 		seq_instrument: 'Instruments',
 		barcode: 'Barcodes',
 		person_role: 'Person Roles',
-		pipeline: 'Pipelines'
+		pipeline: 'Pipelines',
+		samp_taxon_id: 'Sample Taxon IDs'
 	};
 
 	/** Map picklist categories to their SRA vocabulary section for validation. */
@@ -60,7 +61,7 @@
 		{
 			label: 'MIxS',
 			description: 'Minimum Information about any (x) Sequence — standardized environment descriptors',
-			categories: ['geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale', 'env_medium', 'samp_store_sol', 'samp_store_temp', 'samp_store_loc', 'store_cond', 'samp_collect_device', 'samp_collect_method']
+			categories: ['geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale', 'env_medium', 'samp_taxon_id', 'samp_store_sol', 'samp_store_temp', 'samp_store_loc', 'store_cond', 'samp_collect_device', 'samp_collect_method']
 		},
 		{
 			label: 'SRA / ENA',
@@ -222,7 +223,18 @@
 	}
 
 	// --- Personnel CRUD ---
-	const ROLES = ['PI', 'Co-PI', 'Lab Manager', 'Postdoc', 'PhD Student', 'MSc Student', 'Undergrad', 'Field Tech', 'Lab Tech', 'Bioinformatician', 'Collaborator', 'Other'];
+	/** Options for the Personnel role dropdown. Pulled from the person_role
+	 *  picklist (managed via the Picklists tab) + any role value that an
+	 *  existing person already has — so editing legacy rows doesn't silently
+	 *  blank out a role that isn't in the picklist yet. */
+	const personRoleOptions = $derived.by<string[]>(() => {
+		const picklist = (data.categories?.person_role ?? []).map((v: any) => v.value);
+		const used = new Set<string>();
+		for (const p of personnelList) if (p?.role) used.add(p.role as string);
+		const merged = [...picklist];
+		for (const u of used) if (!merged.some((v) => v.toLowerCase() === u.toLowerCase())) merged.push(u);
+		return merged;
+	});
 	const emptyPerson = () => ({ full_name: '', email: '', role: '', institution: '', orcid: '', user_id: '' });
 	let newPerson = $state(emptyPerson());
 	let editingPersonId = $state('');
@@ -944,7 +956,7 @@
 				<div><label class="block text-xs text-slate-400 mb-1">Role</label>
 					<select bind:value={editPerson.role} class="w-full {selectCls} text-sm">
 						<option value="">Select...</option>
-						{#each ROLES as r}<option>{r}</option>{/each}
+						{#each personRoleOptions as r}<option>{r}</option>{/each}
 					</select></div>
 				<div><label class="block text-xs text-slate-400 mb-1">Email</label><input type="email" bind:value={editPerson.email} class="w-full {inputCls} text-sm" /></div>
 				<div><label class="block text-xs text-slate-400 mb-1">Institution</label><input type="text" bind:value={editPerson.institution} class="w-full {inputCls} text-sm" /></div>
@@ -969,7 +981,7 @@
 					<div><label class="block text-xs text-slate-400 mb-1">Role</label>
 						<select bind:value={newPerson.role} class="w-full {selectCls} text-sm">
 							<option value="">Select...</option>
-							{#each ROLES as r}<option>{r}</option>{/each}
+							{#each personRoleOptions as r}<option>{r}</option>{/each}
 						</select></div>
 					<div><label class="block text-xs text-slate-400 mb-1">Email</label><input type="email" bind:value={newPerson.email} class="w-full {inputCls} text-sm" /></div>
 					<div><label class="block text-xs text-slate-400 mb-1">Institution</label><input type="text" bind:value={newPerson.institution} class="w-full {inputCls} text-sm" /></div>

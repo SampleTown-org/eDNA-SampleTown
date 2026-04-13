@@ -199,6 +199,25 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'BC17', 'BC18', 'BC19', 'BC20', 'BC21', 'BC22', 'BC23', 'BC24',
 		'RB01', 'RB02', 'RB03', 'RB04', 'RB05', 'RB06', 'RB07', 'RB08',
 		'RB09', 'RB10', 'RB11', 'RB12'
+	],
+	// Common NCBI Taxonomy taxids for environmental metagenome / eDNA samples.
+	// Values are bare taxids (what MIxS samp_taxon_id + SRA metadata want);
+	// labels pair the id with its NCBI taxon name for operator clarity.
+	samp_taxon_id: [
+		{ value: '256318', label: '256318 — metagenome' },
+		{ value: '408172', label: '408172 — marine metagenome' },
+		{ value: '662107', label: '662107 — seawater metagenome' },
+		{ value: '410658', label: '410658 — soil metagenome' },
+		{ value: '410659', label: '410659 — aquatic metagenome' },
+		{ value: '533693', label: '533693 — sediment metagenome' },
+		{ value: '1000570', label: '1000570 — freshwater metagenome' },
+		{ value: '1176745', label: '1176745 — marine sediment metagenome' },
+		{ value: '408170', label: '408170 — gut metagenome' },
+		{ value: '749906', label: '749906 — ice metagenome' },
+		{ value: '939928', label: '939928 — sea ice metagenome' },
+		{ value: '749907', label: '749907 — hot springs metagenome' },
+		{ value: '410661', label: '410661 — bioreactor metagenome' },
+		{ value: '410662', label: '410662 — wastewater metagenome' }
 	]
 };
 

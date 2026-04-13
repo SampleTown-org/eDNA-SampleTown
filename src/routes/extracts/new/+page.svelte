@@ -188,9 +188,15 @@
 		</div>
 		<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 			<div>
-				<FieldLabel slot="samp_taxon_id" for="samp_taxon_id" />
+				<FieldLabel slot="samp_taxon_id" for="samp_taxon_id" picklistCategory="samp_taxon_id" />
 				<input id="samp_taxon_id" type="text" bind:value={form.samp_taxon_id} class={inputCls}
+					list="samp_taxon_id_options"
 					placeholder="NCBI taxid, e.g. 408172" />
+				<datalist id="samp_taxon_id_options">
+					{#each data.picklists.samp_taxon_id as opt}
+						<option value={opt.value} label={opt.label}></option>
+					{/each}
+				</datalist>
 			</div>
 			<div>
 				<FieldLabel slot="samp_vol_we_dna_ext" for="samp_vol_we_dna_ext" />

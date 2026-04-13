@@ -46,6 +46,36 @@ function runMigrations(db: Database.Database) {
 	};
 	addColumn('pcr_amplifications', 'well_label TEXT');
 	addColumn('library_preps', 'well_label TEXT');
+
+	// Merge the lab-position roles (PI, Postdoc, etc.) that used to be a
+	// hardcoded list on the Personnel dropdown into the person_role picklist,
+	// so all role sources live in constrained_values. Case-insensitive dedup
+	// against existing entries — nothing is overwritten or removed.
+	mergeIntoPicklist(db, 'person_role', [
+		'PI', 'Co-PI', 'Lab Manager', 'Postdoc',
+		'PhD Student', 'MSc Student', 'Undergrad',
+		'Field Tech', 'Lab Tech', 'Bioinformatician',
+		'Collaborator', 'Other'
+	]);
+}
+
+function mergeIntoPicklist(db: Database.Database, category: string, values: string[]) {
+	const existsStmt = db.prepare(
+		'SELECT 1 FROM constrained_values WHERE category = ? AND LOWER(value) = LOWER(?)'
+	);
+	const insertStmt = db.prepare(
+		`INSERT INTO constrained_values (category, value, label, sort_order, is_active)
+		 VALUES (?, ?, ?, ?, 1)`
+	);
+	const maxSortStmt = db.prepare(
+		'SELECT COALESCE(MAX(sort_order), 0) AS m FROM constrained_values WHERE category = ?'
+	);
+	let sort = (maxSortStmt.get(category) as { m: number }).m;
+	for (const v of values) {
+		if (existsStmt.get(category, v)) continue;
+		sort += 10;
+		insertStmt.run(category, v, v, sort);
+	}
 }
 
 export function generateId(): string {
