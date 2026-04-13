@@ -24,6 +24,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		db.prepare(
 			`UPDATE extracts SET
 				extract_name = ?, extraction_date = ?, extraction_method = ?, extraction_kit = ?,
+				nucl_acid_ext = ?,
 				concentration_ng_ul = ?, total_volume_ul = ?, a260_280 = ?, a260_230 = ?,
 				quantification_method = ?, storage_location = ?, storage_room = ?, storage_box = ?,
 				notes = ?, custom_fields = ?,
@@ -34,6 +35,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			nn(data.extraction_date),
 			nn(data.extraction_method),
 			nn(data.extraction_kit),
+			nn(data.nucl_acid_ext),
 			data.concentration_ng_ul ?? null,
 			data.total_volume_ul ?? null,
 			data.a260_280 ?? null,

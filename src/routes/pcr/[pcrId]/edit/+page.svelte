@@ -27,6 +27,7 @@
 					annealing_temp_c: (data.plate as any).annealing_temp_c ?? '',
 					num_cycles: (data.plate as any).num_cycles ?? '',
 					polymerase: (data.plate as any).polymerase || '',
+					nucl_acid_amp: (data.plate as any).nucl_acid_amp || '',
 					notes: (data.plate as any).notes || ''
 				}
 			: ({} as any)
@@ -217,6 +218,14 @@
 				{#if plateForm.pcr_conditions}
 					<div class="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400 font-mono">{plateForm.pcr_conditions}</div>
 				{/if}
+			</div>
+
+			<div>
+				<label for="nucl_acid_amp" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/glossary#nucl_acid_amp" target="_blank" class="hover:text-ocean-400">Amplification Protocol (MIxS)</a>
+				</label>
+				<input id="nucl_acid_amp" type="text" bind:value={plateForm.nucl_acid_amp} class={inputCls}
+					placeholder="DOI or protocol URL" />
 			</div>
 
 			<div>

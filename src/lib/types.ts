@@ -73,7 +73,6 @@ export interface Sample {
 	collection_date: string;
 	env_medium: string;
 	samp_taxon_id: string | null;
-	project_name: string | null;
 
 	// Extension-specific location context
 	depth: string | null;
@@ -109,10 +108,6 @@ export interface Sample {
 	samp_store_dur: string | null;
 	samp_store_loc: string | null;
 
-	// Extraction / amplification protocol references
-	nucl_acid_ext: string | null;
-	nucl_acid_amp: string | null;
-
 	// MIGS/MIMAG/MISAG context
 	ref_biomaterial: string | null;
 	isol_growth_condt: string | null;
@@ -143,6 +138,7 @@ export interface Extract {
 	extraction_date: string | null;
 	extraction_method: string | null;
 	extraction_kit: string | null;
+	nucl_acid_ext: string | null;
 	concentration_ng_ul: number | null;
 	total_volume_ul: number | null;
 	a260_280: number | null;
@@ -172,6 +168,7 @@ export interface PcrPlate {
 	annealing_temp_c: number | null;
 	num_cycles: number | null;
 	polymerase: string | null;
+	nucl_acid_amp: string | null;
 	notes: string | null;
 	custom_fields: string | null;
 	sync_version: number;

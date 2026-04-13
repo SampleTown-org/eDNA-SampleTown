@@ -123,7 +123,8 @@ CREATE TABLE IF NOT EXISTS samples (
     collection_date TEXT NOT NULL,        -- ISO 8601
     env_medium TEXT NOT NULL,             -- ENVO material term (per-sample: water/ice/sediment at same site)
     samp_taxon_id TEXT,                   -- NCBI taxonomy ID of the sampled material
-    project_name TEXT,                    -- MIxS project name (for MIxS export; distinct from projects.project_name)
+    -- MIxS project_name is sourced from the joined projects.project_name at
+    -- export time rather than stored redundantly on each sample.
 
     -- Extension-specific location context
     depth TEXT,                           -- required for water/sediment
@@ -159,9 +160,9 @@ CREATE TABLE IF NOT EXISTS samples (
     samp_store_dur TEXT,                  -- duration
     samp_store_loc TEXT,                  -- storage location
 
-    -- Extraction / amplification protocol references (URLs or PIDs per MIxS)
-    nucl_acid_ext TEXT,
-    nucl_acid_amp TEXT,
+    -- MIxS nucl_acid_ext lives on extracts (it's an extraction protocol),
+    -- nucl_acid_amp lives on pcr_plates (it's an amplification protocol).
+    -- Both are joined in at MIxS export time.
 
     -- MIGS/MIMAG/MISAG genome context
     ref_biomaterial TEXT,
@@ -205,6 +206,7 @@ CREATE TABLE IF NOT EXISTS extracts (
     extraction_date TEXT,
     extraction_method TEXT,
     extraction_kit TEXT,
+    nucl_acid_ext TEXT,                   -- MIxS nucleic acid extraction protocol (URL / DOI / PID)
     concentration_ng_ul REAL,
     total_volume_ul REAL,
     a260_280 REAL,
@@ -244,6 +246,7 @@ CREATE TABLE IF NOT EXISTS pcr_plates (
     annealing_temp_c REAL,
     num_cycles INTEGER,
     polymerase TEXT,
+    nucl_acid_amp TEXT,                   -- MIxS nucleic acid amplification protocol (URL / DOI / PID)
 
     notes TEXT,
     custom_fields TEXT,

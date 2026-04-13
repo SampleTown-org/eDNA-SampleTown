@@ -24,7 +24,7 @@ export const SITE_FIELDS = new Set([
  *  MIxS slots. Kept explicit so we don't accidentally expose sync internals. */
 const SAMPLE_SLOT_COLUMNS = [
 	// MIxS core
-	'samp_name', 'collection_date', 'env_medium', 'samp_taxon_id', 'project_name',
+	'samp_name', 'collection_date', 'env_medium', 'samp_taxon_id',
 	// Extension-specific location
 	'depth', 'elev',
 	// Host-associated
@@ -36,10 +36,10 @@ const SAMPLE_SLOT_COLUMNS = [
 	'samp_vol_we_dna_ext', 'size_frac', 'source_mat_id',
 	// Storage
 	'samp_store_sol', 'samp_store_temp', 'samp_store_dur', 'samp_store_loc',
-	// Protocol references
-	'nucl_acid_ext', 'nucl_acid_amp',
 	// MIGS/MIMAG context
 	'ref_biomaterial', 'isol_growth_condt', 'tax_ident'
+	// nucl_acid_ext lives on extracts, nucl_acid_amp on pcr_plates —
+	// joined in at export time (see chooseExportColumns below).
 ] as const;
 
 /** Site columns that are MIxS slots. */
@@ -81,7 +81,20 @@ export function exportMixsTsv(options: {
 } = {}): string {
 	const db = getDb();
 	const siteSelect = SITE_SLOT_COLUMNS.map((c) => `st.${c} AS site_${c}`).join(', ');
-	let query = `SELECT s.*, ${siteSelect}, p.project_name AS proj_project_name
+	// project_name comes from the joined projects table (no duplicate column
+	// on samples). nucl_acid_ext / nucl_acid_amp come from the most recent
+	// extract + pcr_plate via correlated subqueries so the emitted TSV carries
+	// canonical values even though they live on downstream tables.
+	let query = `SELECT s.*, ${siteSelect},
+		p.project_name AS proj_project_name,
+		(SELECT e.nucl_acid_ext FROM extracts e
+		  WHERE e.sample_id = s.id AND e.is_deleted = 0 AND e.nucl_acid_ext IS NOT NULL
+		  ORDER BY e.created_at DESC LIMIT 1) AS sample_nucl_acid_ext,
+		(SELECT pp.nucl_acid_amp FROM pcr_plates pp
+		  JOIN pcr_amplifications pa ON pa.plate_id = pp.id
+		  JOIN extracts e ON e.id = pa.extract_id
+		  WHERE e.sample_id = s.id AND pp.is_deleted = 0 AND pp.nucl_acid_amp IS NOT NULL
+		  ORDER BY pp.created_at DESC LIMIT 1) AS sample_nucl_acid_amp
 		FROM samples s
 		JOIN sites st ON st.id = s.site_id
 		JOIN projects p ON p.id = s.project_id
@@ -95,10 +108,11 @@ export function exportMixsTsv(options: {
 	const columns = chooseExportColumns(options.checklist, options.extension);
 	const headers = columns.map((c) => c.header);
 	const lines = rows.map((row) => {
-		const projectName = (row.project_name as string | null) ?? (row.proj_project_name as string | null);
 		return columns
 			.map((c) => {
-				if (c.source === '__project_name__') return escTsv(projectName);
+				if (c.source === '__project_name__') return escTsv(row.proj_project_name);
+				if (c.source === '__nucl_acid_ext__') return escTsv(row.sample_nucl_acid_ext);
+				if (c.source === '__nucl_acid_amp__') return escTsv(row.sample_nucl_acid_amp);
 				return escTsv(row[c.source]);
 			})
 			.join('\t');
@@ -126,7 +140,14 @@ export function chooseExportColumns(
 		];
 		for (const slot of ordered) {
 			const isRequired = required.has(slot);
-			const source = SITE_SLOT_SET.has(slot) ? `site_${slot}` : slot;
+			// project_name / nucl_acid_ext / nucl_acid_amp live off-table; route to
+			// their subquery alias so export still emits them per MIxS template.
+			let source: string;
+			if (slot === 'project_name') source = '__project_name__';
+			else if (slot === 'nucl_acid_ext') source = '__nucl_acid_ext__';
+			else if (slot === 'nucl_acid_amp') source = '__nucl_acid_amp__';
+			else if (SITE_SLOT_SET.has(slot)) source = `site_${slot}`;
+			else source = slot;
 			baseColumns.push({
 				header: (isRequired ? '*' : '') + slot,
 				source,

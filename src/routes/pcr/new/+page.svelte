@@ -33,7 +33,7 @@
 	let plate = $state({
 		plate_name: '', pcr_date: '', primer_set_id: '', target_subfragment: '',
 		forward_primer_name: '', forward_primer_seq: '', reverse_primer_name: '', reverse_primer_seq: '',
-		pcr_conditions: '', annealing_temp_c: '', num_cycles: '', polymerase: '', notes: ''
+		pcr_conditions: '', annealing_temp_c: '', num_cycles: '', polymerase: '', nucl_acid_amp: '', notes: ''
 	});
 
 	// Primer set selector — selecting a primer set sets primer_set_id + copies
@@ -256,6 +256,12 @@
 					{/if}
 				{/if}
 			</div>
+
+			<div><label class="block text-xs font-medium text-slate-400 mb-1">
+					<a href="/glossary#nucl_acid_amp" target="_blank" class="hover:text-ocean-400">Amplification Protocol (MIxS)</a>
+				</label>
+				<input type="text" bind:value={plate.nucl_acid_amp} class={inputCls}
+					placeholder="DOI or protocol URL" /></div>
 
 			<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
 				<input type="text" bind:value={plate.notes} class={inputCls} /></div>

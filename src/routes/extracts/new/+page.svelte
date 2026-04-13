@@ -21,7 +21,7 @@
 	// Single mode
 	let form = $state({
 		sample_id: data.preselectedSampleId ?? '',
-		extract_name: '', extraction_date: '', extraction_method: '',
+		extract_name: '', extraction_date: '', extraction_method: '', nucl_acid_ext: '',
 		concentration_ng_ul: '', total_volume_ul: '', a260_280: '', a260_230: '',
 		quantification_method: '', storage_room: '', storage_box: '', notes: ''
 	});
@@ -174,6 +174,13 @@
 				<option value="">Select...</option>
 				{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
 			</select>
+		</div>
+		<div>
+			<label for="nucl_acid_ext" class="block text-sm font-medium text-slate-300 mb-1">
+				<a href="/glossary#nucl_acid_ext" target="_blank" class="hover:text-ocean-400">Nucleic Acid Extraction Protocol</a>
+			</label>
+			<input id="nucl_acid_ext" type="text" bind:value={form.nucl_acid_ext} class={inputCls}
+				placeholder="DOI or protocol URL (MIxS nucl_acid_ext)" />
 		</div>
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
 			<div><label for="concentration_ng_ul" class="block text-sm font-medium text-slate-300 mb-1">Conc. (ng/µL)</label>

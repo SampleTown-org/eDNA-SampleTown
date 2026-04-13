@@ -1,124 +1,76 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS, requiredSlotSet } from '$lib/mixs/checklists';
-	import { EXTENSION_FIELDS, MEASUREMENT_FIELDS, LOGISTICS_FIELDS } from '$lib/mixs/fields';
+	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
+	import { organizeForm, SAMPLE_FORM_SLOTS } from '$lib/mixs/sample-form';
+	import { requiredSlotSet } from '$lib/mixs/checklists';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import MixsCompleteness from '$lib/components/MixsCompleteness.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
+	import SlotInput from '$lib/components/SlotInput.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
+	// Seed every MIxS slot this form can render, plus the core/identity fields,
+	// from the existing sample row. Dropped columns (project_name, nucl_acid_ext,
+	// nucl_acid_amp, tax_ident) are intentionally omitted.
+	const slotSeed: Record<string, unknown> = {};
+	for (const f of SAMPLE_FORM_SLOTS) {
+		slotSeed[f.slot] = (data.sample as any)[f.slot] ?? '';
+	}
+
 	let form = $state<Record<string, unknown>>({
-		project_id: data.sample.project_id || '',
-		site_id: data.sample.site_id || '',
-		mixs_checklist: data.sample.mixs_checklist || 'MimarksS',
+		...slotSeed,
+		project_id: (data.sample as any).project_id || '',
+		site_id: (data.sample as any).site_id || '',
+		mixs_checklist: (data.sample as any).mixs_checklist || 'MimarksS',
 		extension: (data.sample as any).extension || 'Water',
-		samp_name: data.sample.samp_name || '',
-		collection_date: data.sample.collection_date || '',
-		env_medium: data.sample.env_medium || '',
-		notes: data.sample.notes || ''
+		samp_name: (data.sample as any).samp_name || '',
+		collection_date: (data.sample as any).collection_date || '',
+		env_medium: (data.sample as any).env_medium || '',
+		notes: (data.sample as any).notes || ''
 	});
-
-	// Pre-populate extension + measurement + logistics + new MIxS 6.3 fields
-	// from the sample row so the operator can edit whatever's already set.
-	const EXTRA_MIXS_KEYS = [
-		'project_name',
-		'specific_host',
-		'samp_collect_device',
-		'samp_collect_method',
-		'samp_mat_process',
-		'samp_size',
-		'size_frac',
-		'source_mat_id',
-		'samp_store_dur',
-		'samp_store_loc',
-		'nucl_acid_ext',
-		'nucl_acid_amp',
-		'ref_biomaterial',
-		'isol_growth_condt',
-		'tax_ident'
-	];
-
-	const PRESERVED_KEYS = [
-		...Object.values(EXTENSION_FIELDS).flat().map((f) => f.name),
-		...MEASUREMENT_FIELDS.map((f) => f.name),
-		...LOGISTICS_FIELDS.map((f) => f.name),
-		...EXTRA_MIXS_KEYS
-	];
-	for (const key of PRESERVED_KEYS) {
-		if (form[key] === undefined && (data.sample as any)[key] != null) {
-			form[key] = (data.sample as any)[key];
-		}
-	}
-
-	let people = $state<{ personnel_id: string; role?: string | null }[]>(data.people ?? []);
-
-	let availableSites = $derived(
-		(data.sites as any[]).filter((s: any) => !form.project_id || s.project_id === form.project_id)
+	let people = $state<{ personnel_id: string; role?: string | null }[]>(
+		((data as any).people ?? []) as { personnel_id: string; role?: string | null }[]
 	);
-
-	function onSiteChange() {
-		const site = (data.sites as any[]).find((s: any) => s.id === form.site_id);
-		if (site && !form.project_id && site.project_id) {
-			form.project_id = site.project_id;
-		}
-	}
-
 	let saving = $state(false);
 	let errorMsg = $state('');
 
-	let extensionFields = $derived(EXTENSION_FIELDS[form.extension as string] || []);
+	// Sites filtered by selected project; auto-fill project from chosen site.
+	let availableSites = $derived(
+		(data.sites as any[]).filter((s: any) => !form.project_id || s.project_id === form.project_id)
+	);
+	function onSiteChange() {
+		const site = (data.sites as any[]).find((s: any) => s.id === form.site_id);
+		if (site && !form.project_id && site.project_id) form.project_id = site.project_id;
+	}
 
-	/** MIxS-required slots for the currently-selected (checklist, extension) pair.
-	 *  Reactive — changes as the user picks different combinations. */
+	// Reactive MIxS organization — re-buckets fields as (checklist, extension) changes.
+	let organized = $derived(organizeForm(form.mixs_checklist as string, (form.extension as string) || null));
 	let requiredSet = $derived(
 		requiredSlotSet(form.mixs_checklist as string, (form.extension as string) || null)
 	);
-	/** `*` asterisk helper for any form label whose slot is MIxS-required. */
-	const req = (slot: string) => requiredSet.has(slot) ? '*' : '';
 
-	/** The set of MIxS slot names that this form surfaces as input fields.
-	 *  Used by MixsCompleteness to flag required slots that aren't on the form. */
-	const formSlots = new Set<string>([
-		'samp_name', 'collection_date', 'env_medium', 'project_name',
-		'depth', 'elev', 'host_taxid', 'specific_host',
-		'temp', 'salinity', 'ph', 'diss_oxygen', 'pressure', 'turbidity', 'chlorophyll', 'nitrate', 'phosphate',
-		'samp_collect_device', 'samp_collect_method', 'samp_mat_process', 'samp_size',
-		'samp_vol_we_dna_ext', 'size_frac', 'source_mat_id',
-		'samp_store_sol', 'samp_store_temp', 'samp_store_dur', 'samp_store_loc',
-		'nucl_acid_ext', 'nucl_acid_amp',
-		'ref_biomaterial', 'isol_growth_condt', 'tax_ident',
-		'filter_type'
-	]);
+	// All slots rendered by this form — for the MixsCompleteness "not on form" pill.
+	let formSlots = $derived(new Set<string>([
+		...Array.from(Object.keys(form)),
+		...SAMPLE_FORM_SLOTS.map((f) => f.slot)
+	]));
 
 	async function submit() {
-		if (!form.project_id) {
-			errorMsg = 'Please select a project';
-			return;
-		}
-		if (!form.site_id) {
-			errorMsg = 'Please select a site';
-			return;
-		}
-		if (!(form.samp_name as string)?.trim()) {
-			errorMsg = 'Sample name is required';
-			return;
-		}
+		if (!form.project_id) { errorMsg = 'Please select a project'; return; }
+		if (!form.site_id) { errorMsg = 'Please select a site'; return; }
+		if (!(form.samp_name as string)?.trim()) { errorMsg = 'Sample name is required'; return; }
 
 		saving = true;
 		errorMsg = '';
-
-		const body = {
-			...form,
-			people
-		};
-		const res = await fetch(`/api/samples/${data.sample.id}`, {
+		const res = await fetch(`/api/samples/${(data.sample as any).id}`, {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
+			body: JSON.stringify({ ...form, people })
 		});
 		if (res.ok) {
-			goto(`/samples/${data.sample.id}`);
+			goto(`/samples/${(data.sample as any).id}`);
 		} else {
 			const err = await res.json().catch(() => null);
 			if (err?.issues?.length) {
@@ -132,11 +84,22 @@
 
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 	const selectCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';
+	const legendCls = 'text-sm font-semibold text-slate-300 uppercase tracking-wider';
+
+	const BUCKET_LABELS: Record<string, string> = {
+		environment: 'Environmental Measurements',
+		sampling: 'Sampling',
+		storage: 'Storage',
+		investigation: 'Investigation / Reference',
+		taxonomy: 'Taxonomy',
+		other: 'Other'
+	};
+	const bucketLabel = (k: string) => BUCKET_LABELS[k] ?? k;
 </script>
 
 <div class="max-w-3xl space-y-6">
 	<div>
-		<a href="/samples/{data.sample.id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.sample.samp_name}</a>
+		<a href="/samples/{(data.sample as any).id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {(data.sample as any).samp_name}</a>
 		<h1 class="text-2xl font-bold text-white mt-1">Edit Sample</h1>
 	</div>
 
@@ -145,10 +108,10 @@
 	{/if}
 
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-8">
-		<!-- Where: project + site -->
+		<!-- Where: project + site. Location metadata (lat_lon, geo_loc_name,
+		     env_broad/local_scale) is inherited from the chosen site at save. -->
 		<fieldset class="space-y-4">
-			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Where</legend>
-
+			<legend class={legendCls}>Where</legend>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
 					<label for="project_id" class="block text-sm font-medium text-slate-300 mb-1">Project</label>
@@ -181,71 +144,59 @@
 			</div>
 		</fieldset>
 
-		<!-- Sample core: name + date + env_medium -->
+		<!-- Identity: what/when + MIxS checklist + extension. Everything else
+		     (required/recommended/optional) is bucketed dynamically below. -->
 		<fieldset class="space-y-4">
-			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Sample</legend>
+			<legend class={legendCls}>Identity</legend>
 
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="samp_name" class="block text-sm font-medium text-slate-300 mb-1">Sample Name<span class="text-rose-400 ml-0.5">*</span></label>
-					<input id="samp_name" type="text" bind:value={form.samp_name} class="{inputCls} border-slate-700" />
+					<FieldLabel slot="samp_name" required />
+					<input id="samp_name" type="text" bind:value={form.samp_name}
+						class={inputCls} placeholder={(data as any).namingTemplates?.sample_name || 'e.g., eDNA_River_2026_001'} />
 				</div>
 				<div>
-					<label for="collection_date" class="block text-sm font-medium text-slate-300 mb-1">Collection Date<span class="text-rose-400 ml-0.5">{req('collection_date')}</span></label>
-					<input id="collection_date" type="date" bind:value={form.collection_date} class="{inputCls} border-slate-700" />
+					<FieldLabel slot="collection_date" required />
+					<input id="collection_date" type="date" bind:value={form.collection_date} class={inputCls} />
 				</div>
 			</div>
 
 			<div>
-				<label for="env_medium" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Environmental Medium</a><span class="text-rose-400 ml-0.5">{req('env_medium')}</span>
-				</label>
-				<select id="env_medium" bind:value={form.env_medium} class="{selectCls} border-slate-700">
+				<FieldLabel slot="env_medium" required />
+				<select id="env_medium" bind:value={form.env_medium} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.env_medium as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 
-			<div>
-				<label for="project_name" class="block text-sm font-medium text-slate-300 mb-1">Project Name (MIxS)<span class="text-rose-400 ml-0.5">{req('project_name')}</span></label>
-				<input id="project_name" type="text" bind:value={form.project_name} class="{inputCls} border-slate-700" placeholder="Free-text project label for MIxS export" />
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-800">
+				<div>
+					<label for="mixs_checklist" class="block text-sm font-medium text-slate-300 mb-1">
+						<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Checklist</a>
+					</label>
+					<select id="mixs_checklist" bind:value={form.mixs_checklist} class={selectCls}>
+						{#each CHECKLIST_OPTIONS as opt}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</select>
+					<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find(o => o.value === form.mixs_checklist)?.description}</p>
+				</div>
+				<div>
+					<label for="extension" class="block text-sm font-medium text-slate-300 mb-1">
+						<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Extension</a>
+					</label>
+					<select id="extension" bind:value={form.extension} class={selectCls}>
+						<option value="">None</option>
+						{#each EXTENSION_OPTIONS as opt}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</select>
+					<p class="text-xs text-slate-500 mt-1">{EXTENSION_OPTIONS.find(o => o.value === form.extension)?.description ?? ''}</p>
+				</div>
 			</div>
 		</fieldset>
 
-		<!-- Add MIxS metadata (collapsed) -->
-		<details class="group rounded-lg border border-slate-800 bg-slate-900/40">
-			<summary class="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white cursor-pointer flex items-center gap-2">
-				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
-				Add MIxS metadata
-				<span class="text-xs text-slate-500 font-normal">
-					(checklist, extension, extension-specific fields)
-				</span>
-			</summary>
-			<div class="p-4 space-y-4 border-t border-slate-800">
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-					<div>
-						<label for="mixs_checklist" class="block text-sm font-medium text-slate-300 mb-1">MIxS Checklist</label>
-						<select id="mixs_checklist" bind:value={form.mixs_checklist} class={selectCls}>
-							{#each CHECKLIST_OPTIONS as opt}
-								<option value={opt.value}>{opt.label}</option>
-							{/each}
-						</select>
-						<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find((o) => o.value === form.mixs_checklist)?.description}</p>
-					</div>
-					<div>
-						<label for="extension" class="block text-sm font-medium text-slate-300 mb-1">MIxS Extension</label>
-						<select id="extension" bind:value={form.extension} class={selectCls}>
-							{#each EXTENSION_OPTIONS as opt}
-								<option value={opt.value}>{opt.label}</option>
-							{/each}
-						</select>
-						<p class="text-xs text-slate-500 mt-1">{EXTENSION_OPTIONS.find((o) => o.value === form.extension)?.description}</p>
-					</div>
-				</div>
-			</div>
-		</details>
-
-		<!-- MIxS completeness banner — recomputes reactively from form state. -->
+		<!-- MIxS completeness banner — reactive to form state. -->
 		<MixsCompleteness
 			checklist={form.mixs_checklist as string}
 			extension={(form.extension as string) || null}
@@ -254,173 +205,107 @@
 			{formSlots}
 		/>
 
-		<!-- Extension-specific fields -->
-		{#if extensionFields.length > 0}
+		<!-- Required (beyond Identity) -->
+		{#if organized.required.length > 0}
 			<fieldset class="space-y-4">
-				<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">{form.extension} Extension Fields</legend>
-				{#each extensionFields as field}
-					<div>
-						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">
-							{field.label ?? field.name} {field.unit ? `(${field.unit})` : ''}<span class="text-rose-400 ml-0.5">{req(field.name)}</span>
-						</label>
-						<input id={field.name} type="text" bind:value={form[field.name]} class="{inputCls} border-slate-700" placeholder={field.placeholder} />
-					</div>
-				{/each}
+				<legend class={legendCls}>
+					Required by MIxS
+					<span class="text-rose-400 normal-case tracking-normal font-normal text-xs">
+						({organized.required.length} slot{organized.required.length === 1 ? '' : 's'})
+					</span>
+				</legend>
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+					{#each organized.required as field (field.slot)}
+						<SlotInput
+							slot={field.slot}
+							type={field.type}
+							bind:value={form[field.slot]}
+							unit={field.unit}
+							placeholder={field.placeholder}
+							required={true}
+							colSpan={field.colSpan}
+							options={field.constrainedCategory ? data.picklists[field.constrainedCategory] : []}
+						/>
+					{/each}
+				</div>
 			</fieldset>
 		{/if}
+
+		<!-- Recommended -->
+		{#if organized.recommended.length > 0}
+			<details class="group space-y-4" open>
+				<summary class="{legendCls} cursor-pointer flex items-center gap-2">
+					<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
+					Recommended
+					<span class="normal-case tracking-normal font-normal text-xs text-slate-500">
+						({organized.recommended.length} slot{organized.recommended.length === 1 ? '' : 's'})
+					</span>
+				</summary>
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+					{#each organized.recommended as field (field.slot)}
+						<SlotInput
+							slot={field.slot}
+							type={field.type}
+							bind:value={form[field.slot]}
+							unit={field.unit}
+							placeholder={field.placeholder}
+							colSpan={field.colSpan}
+							options={field.constrainedCategory ? data.picklists[field.constrainedCategory] : []}
+						/>
+					{/each}
+				</div>
+			</details>
+		{/if}
+
+		<!-- Optional — grouped by MIxS subset. Collapsible by group. -->
+		{#each Object.entries(organized.optional) as [bucket, fields] (bucket)}
+			{#if fields.length > 0}
+				<details class="group space-y-4">
+					<summary class="{legendCls} cursor-pointer flex items-center gap-2">
+						<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
+						{bucketLabel(bucket)}
+						<span class="normal-case tracking-normal font-normal text-xs text-slate-500">
+							({fields.length})
+						</span>
+					</summary>
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+						{#each fields as field (field.slot)}
+							<SlotInput
+								slot={field.slot}
+								type={field.type}
+								bind:value={form[field.slot]}
+								unit={field.unit}
+								placeholder={field.placeholder}
+								colSpan={field.colSpan}
+								options={field.constrainedCategory ? data.picklists[field.constrainedCategory] : []}
+							/>
+						{/each}
+					</div>
+				</details>
+			{/if}
+		{/each}
 
 		<!-- People -->
 		<PeoplePicker
 			bind:people
 			personnel={data.personnel}
 			roleOptions={data.picklists.person_role}
-			defaultRole="collector"
 			label="People"
 		/>
 
-		<!-- Measurements (collapsible) -->
-		<details class="group">
-			<summary class="text-sm font-semibold text-slate-300 uppercase tracking-wider cursor-pointer flex items-center gap-2">
-				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
-				Environmental Measurements
-			</summary>
-			<div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
-				{#each MEASUREMENT_FIELDS as field}
-					<div>
-						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">
-							{field.label ?? field.name} {field.unit ? `(${field.unit})` : ''}
-						</label>
-						<input id={field.name} type="number" step="any" bind:value={form[field.name]} class="{inputCls} border-slate-700" />
-					</div>
-				{/each}
-			</div>
-		</details>
-
-		<!-- Sampling (MIxS 6.3 fields) -->
-		<details class="group">
-			<summary class="text-sm font-semibold text-slate-300 uppercase tracking-wider cursor-pointer flex items-center gap-2">
-				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
-				Sampling
-			</summary>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-				<div>
-					<label for="samp_collect_device" class="block text-sm font-medium text-slate-300 mb-1">Collection Device</label>
-					<input id="samp_collect_device" type="text" bind:value={form.samp_collect_device} class="{inputCls} border-slate-700" placeholder="e.g., Niskin bottle, sterile swab" />
-				</div>
-				<div>
-					<label for="samp_collect_method" class="block text-sm font-medium text-slate-300 mb-1">Collection Method</label>
-					<input id="samp_collect_method" type="text" bind:value={form.samp_collect_method} class="{inputCls} border-slate-700" />
-				</div>
-				<div class="sm:col-span-2">
-					<label for="samp_mat_process" class="block text-sm font-medium text-slate-300 mb-1">Material Processing</label>
-					<input id="samp_mat_process" type="text" bind:value={form.samp_mat_process} class="{inputCls} border-slate-700" placeholder="e.g., filtration on 0.22 µm" />
-				</div>
-				<div>
-					<label for="samp_size" class="block text-sm font-medium text-slate-300 mb-1">Sample Size</label>
-					<input id="samp_size" type="text" bind:value={form.samp_size} class="{inputCls} border-slate-700" placeholder="e.g., 2 L" />
-				</div>
-				<div>
-					<label for="size_frac" class="block text-sm font-medium text-slate-300 mb-1">Size Fraction</label>
-					<input id="size_frac" type="text" bind:value={form.size_frac} class="{inputCls} border-slate-700" placeholder="e.g., 0.22-3 µm" />
-				</div>
-				<div class="sm:col-span-2">
-					<label for="source_mat_id" class="block text-sm font-medium text-slate-300 mb-1">Source Material ID</label>
-					<input id="source_mat_id" type="text" bind:value={form.source_mat_id} class="{inputCls} border-slate-700" />
-				</div>
-			</div>
-		</details>
-
-		<!-- Logistics (collapsible) -->
-		<details class="group">
-			<summary class="text-sm font-semibold text-slate-300 uppercase tracking-wider cursor-pointer flex items-center gap-2">
-				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
-				Sample Logistics
-			</summary>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-				{#each LOGISTICS_FIELDS as field}
-					<div>
-						<label for={field.name} class="block text-sm font-medium text-slate-300 mb-1">{field.label ?? field.name}</label>
-						{#if field.constrainedCategory && data.picklists[field.constrainedCategory]}
-							<select id={field.name} bind:value={form[field.name]} class={selectCls}>
-								<option value="">Select...</option>
-								{#each data.picklists[field.constrainedCategory] as opt}
-									<option value={opt.value}>{opt.label}</option>
-								{/each}
-							</select>
-						{:else if field.type === 'number'}
-							<input id={field.name} type="number" step="any" bind:value={form[field.name]} class="{inputCls} border-slate-700" placeholder={field.placeholder} />
-						{:else}
-							<input id={field.name} type="text" bind:value={form[field.name]} class="{inputCls} border-slate-700" placeholder={field.placeholder} />
-						{/if}
-					</div>
-				{/each}
-				<div>
-					<label for="samp_store_dur" class="block text-sm font-medium text-slate-300 mb-1">Storage Duration</label>
-					<input id="samp_store_dur" type="text" bind:value={form.samp_store_dur} class="{inputCls} border-slate-700" placeholder="e.g., P30D" />
-				</div>
-				<div>
-					<label for="samp_store_loc" class="block text-sm font-medium text-slate-300 mb-1">Storage Location</label>
-					<input id="samp_store_loc" type="text" bind:value={form.samp_store_loc} class="{inputCls} border-slate-700" placeholder="e.g., -80 freezer, Rack 3" />
-				</div>
-			</div>
-		</details>
-
-		<!-- Protocols -->
-		<details class="group">
-			<summary class="text-sm font-semibold text-slate-300 uppercase tracking-wider cursor-pointer flex items-center gap-2">
-				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
-				Protocols
-			</summary>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-				<div>
-					<label for="nucl_acid_ext" class="block text-sm font-medium text-slate-300 mb-1">Nucleic Acid Extraction</label>
-					<input id="nucl_acid_ext" type="text" bind:value={form.nucl_acid_ext} class="{inputCls} border-slate-700" placeholder="DOI or protocol URL" />
-				</div>
-				<div>
-					<label for="nucl_acid_amp" class="block text-sm font-medium text-slate-300 mb-1">Nucleic Acid Amplification</label>
-					<input id="nucl_acid_amp" type="text" bind:value={form.nucl_acid_amp} class="{inputCls} border-slate-700" placeholder="DOI or protocol URL" />
-				</div>
-			</div>
-		</details>
-
-		<!-- Taxonomy / reference -->
-		<details class="group">
-			<summary class="text-sm font-semibold text-slate-300 uppercase tracking-wider cursor-pointer flex items-center gap-2">
-				<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
-				Taxonomy / Reference
-			</summary>
-			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-				<div>
-					<label for="specific_host" class="block text-sm font-medium text-slate-300 mb-1">Specific Host</label>
-					<input id="specific_host" type="text" bind:value={form.specific_host} class="{inputCls} border-slate-700" placeholder="e.g., Mus musculus C57BL/6J" />
-				</div>
-				<div>
-					<label for="tax_ident" class="block text-sm font-medium text-slate-300 mb-1">Taxonomic Identification</label>
-					<input id="tax_ident" type="text" bind:value={form.tax_ident} class="{inputCls} border-slate-700" placeholder="e.g., 16S rRNA, other (other single locus)" />
-				</div>
-				<div class="sm:col-span-2">
-					<label for="ref_biomaterial" class="block text-sm font-medium text-slate-300 mb-1">Reference Biomaterial</label>
-					<input id="ref_biomaterial" type="text" bind:value={form.ref_biomaterial} class="{inputCls} border-slate-700" placeholder="DOI / accession of published reference" />
-				</div>
-				<div class="sm:col-span-2">
-					<label for="isol_growth_condt" class="block text-sm font-medium text-slate-300 mb-1">Isolation &amp; Growth Conditions</label>
-					<input id="isol_growth_condt" type="text" bind:value={form.isol_growth_condt} class="{inputCls} border-slate-700" placeholder="DOI or protocol URL" />
-				</div>
-			</div>
-		</details>
-
-		<!-- Notes -->
+		<!-- Notes (SampleTown-local, not a MIxS slot) -->
 		<div>
 			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
-			<textarea id="notes" bind:value={form.notes} rows="2" class="{inputCls} border-slate-700"></textarea>
+			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>
 		</div>
 
 		<!-- Submit -->
 		<div class="flex gap-3 pt-2">
-			<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
-				{saving ? 'Saving...' : 'Save'}
+			<button type="submit" disabled={saving}
+				class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
+				{saving ? 'Updating...' : 'Update Sample'}
 			</button>
-			<a href="/samples/{data.sample.id}" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">
+			<a href="/samples/{(data.sample as any).id}" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">
 				Cancel
 			</a>
 		</div>

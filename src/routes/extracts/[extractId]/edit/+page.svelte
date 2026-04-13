@@ -10,6 +10,7 @@
 		extract_name: data.extract.extract_name || '',
 		extraction_date: data.extract.extraction_date || '',
 		extraction_method: data.extract.extraction_method || '',
+		nucl_acid_ext: data.extract.nucl_acid_ext || '',
 		concentration_ng_ul: data.extract.concentration_ng_ul ?? '',
 		total_volume_ul: data.extract.total_volume_ul ?? '',
 		a260_280: data.extract.a260_280 ?? '',
@@ -91,15 +92,22 @@
 			label="People"
 		/>
 
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			<div>
 				<label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Method</a>
+					<a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Method</a>
 				</label>
 				<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
+			</div>
+			<div>
+				<label for="nucl_acid_ext" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/glossary#nucl_acid_ext" target="_blank" class="hover:text-ocean-400">Nucleic Acid Extraction Protocol</a>
+				</label>
+				<input id="nucl_acid_ext" type="text" bind:value={form.nucl_acid_ext} class={inputCls}
+					placeholder="DOI or protocol URL (MIxS nucl_acid_ext)" />
 			</div>
 		</div>
 
