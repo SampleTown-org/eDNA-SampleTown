@@ -8,6 +8,7 @@ import { apiError } from '$lib/server/api-errors';
 import { findNearbySites, haversineKm } from '$lib/server/proximity';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { validateRow } from '$lib/server/mixs-validator';
+import { insertSampleValues } from '$lib/server/sample-body';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_TSV_BYTES = 20 * 1024 * 1024; // post-decompression cap (xlsx is zipped)
@@ -31,6 +32,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	let columnMap: Record<string, string> | undefined;
 	let siteMatchKm: number = DEFAULT_SITE_MATCH_KM;
 	let people: { personnel_id: string; role?: string | null }[] | undefined;
+	/** Fallback checklist/extension for rows that don't declare their own —
+	 *  used for per-row MIxS validation and as sample defaults on insert. */
+	let defaultChecklist = 'MimarksS';
+	let defaultExtension: string | null = null;
 
 	try {
 		if (contentType.includes('multipart/form-data')) {
@@ -52,6 +57,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				try { people = JSON.parse(peopleRaw); }
 				catch { return json({ error: 'Invalid people JSON' }, { status: 400 }); }
 			}
+			const dcl = formData.get('defaultChecklist') as string | null;
+			if (dcl) defaultChecklist = dcl;
+			const dex = formData.get('defaultExtension') as string | null;
+			if (dex) defaultExtension = dex;
 			const file = formData.get('file') as File;
 			if (!file || !projectId) {
 				return json({ error: 'File and project_id are required' }, { status: 400 });
@@ -82,6 +91,8 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				if (!isNaN(km) && km > 0 && km <= 100) siteMatchKm = km;
 			}
 			if (Array.isArray(body.people)) people = body.people;
+			if (typeof body.defaultChecklist === 'string') defaultChecklist = body.defaultChecklist;
+			if (typeof body.defaultExtension === 'string') defaultExtension = body.defaultExtension;
 			if (typeof tsv === 'string' && tsv.length > MAX_TSV_BYTES) {
 				return json({ error: 'TSV payload too large' }, { status: 413 });
 			}
@@ -185,8 +196,8 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	// flow back to the dry-run UI so the user sees required/pattern/enum issues
 	// inline before committing the import.
 	const mixsValidation = matched.map((m) => {
-		const checklist = (m.sample.mixs_checklist as string) || 'MimarksS';
-		const extension = (m.sample.extension as string) || null;
+		const checklist = (m.sample.mixs_checklist as string) || defaultChecklist;
+		const extension = (m.sample.extension as string) || defaultExtension;
 		const rowErrors = validateRow(m.sample, checklist, extension);
 		return {
 			samp_name: m.sample.samp_name,
@@ -251,7 +262,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			samp_store_sol, samp_store_temp, samp_store_dur, samp_store_loc, store_cond,
 			ref_biomaterial, isol_growth_condt, tax_ident,
 			filter_type, collector_name,
-			notes, custom_fields, created_by)
+			notes, created_by)
 		VALUES (?, ?, ?, ?, ?,
 			?, ?, ?,
 			?, ?, ?, ?,
@@ -261,7 +272,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			?, ?, ?, ?, ?,
 			?, ?, ?,
 			?, ?,
-			?, ?, ?)
+			?, ?)
 	`);
 
 	const insertAll = db.transaction((rows: typeof matched) => {
@@ -301,8 +312,8 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 					id,
 					projectId,
 					siteId,
-					sample.mixs_checklist || 'MimarksS',
-					sample.extension || null,
+					sample.mixs_checklist || defaultChecklist,
+					sample.extension || defaultExtension || null,
 					sample.samp_name,
 					sample.collection_date || 'not collected',
 					sample.env_medium || 'not collected',
@@ -336,9 +347,19 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 					sample.filter_type || null,
 					sample.collector_name || null,
 					sample.notes || null,
-					sample.custom_fields || null,
 					userId
 				);
+				// Spill fields (non-column MIxS slots, misc_param:* tags)
+				// routed by parseMixsTsv into sample._values — insert each as
+				// a sample_values row so they're queryable first-class.
+				const extras = sample._values as Record<string, string> | undefined;
+				if (extras && Object.keys(extras).length > 0) {
+					const cleaned: Record<string, string> = {};
+					for (const [k, v] of Object.entries(extras)) {
+						if (v != null && v !== '') cleaned[k] = String(v);
+					}
+					insertSampleValues(db, id, cleaned);
+				}
 				// Apply bulk-assigned people to every inserted sample
 				if (people && people.length > 0) {
 					setEntityPersonnel(db, 'sample', id, normalizePeople(people));

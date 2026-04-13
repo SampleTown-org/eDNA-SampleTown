@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { organizeForm, orderedOptionalBuckets, parseCustomFields, sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
+	import { organizeForm, orderedOptionalBuckets, sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import SlotInput from '$lib/components/SlotInput.svelte';
@@ -9,15 +9,12 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// Seed form state from the existing sample row + any spill fields in
-	// custom_fields. Spread order matters: custom_fields entries (plain
-	// MIxS slots and misc_param:* tags) overlay the column values so a
-	// user-edited slot stored in JSON wins on display.
+	// Seed form state from the existing sample row. The server already
+	// spreads sample_values onto the sample object, so every EAV-stored
+	// slot (silicate, ammonium, misc_param:*, …) arrives as a plain key.
 	const sample = data.sample as Record<string, unknown>;
-	const customFieldSeed = parseCustomFields(sample.custom_fields as string | null);
 	let form = $state<Record<string, unknown>>({
 		...sample,
-		...customFieldSeed,
 		mixs_checklist: (sample.mixs_checklist as string) || 'MimarksS',
 		extension: (sample.extension as string) || '',
 		samp_name: (sample.samp_name as string) || '',
@@ -88,7 +85,7 @@
 		saving = true;
 		errorMsg = '';
 		// Server splits known columns from spill (custom MIxS slots +
-		// misc_param:* tags) into custom_fields JSON.
+		// misc_param:* tags) into sample_values EAV rows.
 		const res = await fetch(`/api/samples/${(data.sample as any).id}`, {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },

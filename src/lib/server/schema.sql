@@ -174,9 +174,10 @@ CREATE TABLE IF NOT EXISTS samples (
     filter_type TEXT,                     -- filter pore/type; MIxS has filter_type slot
     collector_name TEXT,                  -- free-text; primary attribution lives in entity_personnel
 
-    -- Metadata
+    -- Notes — plain-text scratch; every other "extra" MIxS slot or custom
+    -- misc_param:<tag> is stored in the sample_values EAV table so each slot
+    -- is a first-class queryable row rather than a JSON blob.
     notes TEXT,
-    custom_fields TEXT,                   -- JSON for arbitrary extra fields not in the active MIxS version
 
     -- Sync tracking
     client_id TEXT,
@@ -195,6 +196,23 @@ CREATE INDEX IF NOT EXISTS idx_samples_project ON samples(project_id);
 CREATE INDEX IF NOT EXISTS idx_samples_site ON samples(site_id);
 CREATE INDEX IF NOT EXISTS idx_samples_collection_date ON samples(collection_date);
 CREATE INDEX IF NOT EXISTS idx_samples_checklist ON samples(mixs_checklist, extension);
+
+-- EAV table for MIxS slots SampleTown doesn't have a dedicated column for.
+-- Covers ~500+ MIxS environmental / chemical / context slots that the
+-- samples table would otherwise need individual columns for (alkalinity,
+-- ammonium, bromide, silicate, size_frac_*, isol_growth_condt, …). Also
+-- holds user-typed misc_param:<tag> annotations, which use the full
+-- `misc_param:<name>` string as their slot identifier so they self-identify
+-- as off-schema tags. Each value queryable and indexable; no JSON parsing
+-- at read time.
+CREATE TABLE IF NOT EXISTS sample_values (
+    sample_id TEXT NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
+    slot      TEXT NOT NULL,
+    value     TEXT,
+    PRIMARY KEY (sample_id, slot)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sample_values_slot ON sample_values(slot);
 
 -- ============================================================
 -- DNA EXTRACTS

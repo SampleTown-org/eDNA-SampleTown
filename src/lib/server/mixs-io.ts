@@ -11,6 +11,7 @@
  */
 import { getDb } from './db';
 import { allSlotNames, getSlot, getClass, getCombinationClass } from '$lib/mixs/schema-index';
+import { slotTable } from '$lib/mixs/slot-ownership';
 import { SRA_TO_MIXS } from '$lib/mixs/sra-mapping';
 import { sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 import * as XLSX from 'xlsx';
@@ -117,9 +118,26 @@ export function exportMixsTsv(options: {
 	query += ' ORDER BY s.samp_name';
 	const rows = db.prepare(query).all(...params) as Record<string, unknown>[];
 
+	// Pre-load sample_values for every sample in one query, keyed by sample_id.
+	// Using a single query instead of one-per-slot subquery keeps the export
+	// cheap even when a class emits 100+ columns.
+	const sampleIds = rows.map((r) => r.id as string);
+	const valuesBySample: Record<string, Record<string, string>> = {};
+	if (sampleIds.length > 0) {
+		const placeholders = sampleIds.map(() => '?').join(',');
+		const valRows = db
+			.prepare(`SELECT sample_id, slot, value FROM sample_values WHERE sample_id IN (${placeholders})`)
+			.all(...sampleIds) as { sample_id: string; slot: string; value: string | null }[];
+		for (const r of valRows) {
+			if (r.value == null) continue;
+			(valuesBySample[r.sample_id] ??= {})[r.slot] = r.value;
+		}
+	}
+
 	const columns = chooseExportColumns(options.checklist, options.extension);
 	const headers = columns.map((c) => c.header);
 	const lines = rows.map((row) => {
+		const values = valuesBySample[row.id as string] ?? {};
 		return columns
 			.map((c) => {
 				if (c.source === '__project_name__') return escTsv(row.proj_project_name);
@@ -128,6 +146,10 @@ export function exportMixsTsv(options: {
 				if (c.source === '__samp_taxon_id__') return escTsv(row.sample_samp_taxon_id);
 				if (c.source === '__samp_vol_we_dna_ext__') return escTsv(row.sample_samp_vol_we_dna_ext);
 				if (c.source === '__pool_dna_extracts__') return escTsv(row.sample_pool_dna_extracts);
+				// Sample_values EAV — any slot the samples table doesn't have a
+				// column for is looked up here by slot name.
+				const eavValue = values[c.source];
+				if (eavValue != null) return escTsv(eavValue);
 				return escTsv(row[c.source]);
 			})
 			.join('\t');
@@ -272,16 +294,55 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 	return map;
 }
 
-/** Fields available as column-mapper targets, labeled with their table. */
-export function getImportableFields(): { value: string; label: string }[] {
-	const out: { value: string; label: string }[] = [];
-	for (const f of SITE_SLOT_COLUMNS) out.push({ value: f, label: `site: ${f}` });
-	out.push({ value: 'site_name', label: 'site: site_name' });
-	for (const f of SAMPLE_SLOT_COLUMNS) out.push({ value: f, label: `sample: ${f}` });
-	out.push({ value: 'mixs_checklist', label: 'sample: mixs_checklist' });
-	out.push({ value: 'extension', label: 'sample: extension' });
-	out.push({ value: 'notes', label: 'sample: notes' });
-	return out.sort((a, b) => a.label.localeCompare(b.label));
+/**
+ * Every valid column-mapper target. Each entry is
+ *   { value: <form/column key>, table: <owning table>, title?: <slot title> }
+ * Used by the mapper UI as the autocomplete universe. Covers:
+ *   - Every MIxS slot (~786), with its owning SampleTown table
+ *   - SampleTown-local sample/site fields (site_name, notes, collector_name)
+ *   - SampleTown routing columns (mixs_checklist, extension)
+ */
+export function getImportableFields(): { value: string; table: string; title?: string }[] {
+	const out: { value: string; table: string; title?: string }[] = [];
+	const seen = new Set<string>();
+
+	const push = (value: string, table: string, title?: string) => {
+		if (seen.has(value)) return;
+		seen.add(value);
+		out.push(title ? { value, table, title } : { value, table });
+	};
+
+	// SampleTown-local fields without a MIxS slot.
+	push('site_name', 'site');
+	push('latitude', 'site');
+	push('longitude', 'site');
+	push('notes', 'sample');
+	push('collector_name', 'sample');
+	push('mixs_checklist', 'sample');
+	push('extension', 'sample');
+
+	// Every MIxS slot, mapped to its owning table via slot-ownership.
+	// Imports against keys not in SAMPLE_CORE_KEYS get routed to sample_values.
+	for (const slotName of allSlotNames()) {
+		const table = slotTable(slotName);
+		const title = getSlot(slotName)?.title;
+		push(slotName, tableName(table), title);
+	}
+
+	return out.sort((a, b) => a.value.localeCompare(b.value));
+}
+
+function tableName(t: string): string {
+	// Display as lowercase singular for consistency with the UI labels.
+	if (t === 'samples') return 'sample';
+	if (t === 'sites') return 'site';
+	if (t === 'projects') return 'project';
+	if (t === 'extracts') return 'extract';
+	if (t === 'pcr_plates') return 'pcr';
+	if (t === 'library_preps') return 'library';
+	if (t === 'sequencing_runs') return 'run';
+	if (t === 'analyses') return 'analyses (not yet supported)';
+	return t;
 }
 
 /** Parse a MIxS TSV into per-row sample objects ready for insertion.
@@ -366,8 +427,11 @@ export function parseMixsTsv(
 			customFields[field] = val;
 		}
 
+		// Spill fields (non-column MIxS slots + misc_param:<tag> user tags) go
+		// into the sample_values EAV table — the import endpoint picks them up
+		// via the _values key. Keeping them as a Record here, not a JSON blob.
 		if (Object.keys(customFields).length > 0) {
-			sample.custom_fields = JSON.stringify(customFields);
+			sample._values = customFields;
 		}
 
 		if (!sample.samp_name) {

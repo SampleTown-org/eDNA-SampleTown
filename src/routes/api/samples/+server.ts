@@ -3,14 +3,12 @@ import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
-import { splitSampleBody, mergeCustomFields } from '$lib/server/sample-body';
+import { splitSampleBody, insertSampleValues, loadSampleValues } from '$lib/server/sample-body';
 
 /** Coerce empty / missing strings to null. */
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
 
-/** MIxS missing-value sentinel for required fields the user hasn't filled in
- *  yet. The export pipeline round-trips these on output, so storing them in
- *  the DB stays semantically honest. */
+/** MIxS missing-value sentinel for required fields the user hasn't filled in yet. */
 const MIXS_MISSING = 'not collected';
 const orMissing = (v: unknown): string => {
 	const cleaned = nn(v);
@@ -20,19 +18,13 @@ const orMissing = (v: unknown): string => {
 export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
 	const projectId = url.searchParams.get('project_id');
-
 	let query = `SELECT s.*, st.lat_lon, st.latitude, st.longitude, st.geo_loc_name,
 		st.env_broad_scale, st.env_local_scale, st.site_name
 		FROM samples s
 		JOIN sites st ON st.id = s.site_id
 		WHERE s.is_deleted = 0`;
 	const params: string[] = [];
-
-	if (projectId) {
-		query += ' AND s.project_id = ?';
-		params.push(projectId);
-	}
-
+	if (projectId) { query += ' AND s.project_id = ?'; params.push(projectId); }
 	query += ' ORDER BY s.created_at DESC';
 	const samples = db.prepare(query).all(...params);
 	return json(samples);
@@ -41,11 +33,10 @@ export const GET: RequestHandler = async ({ url }) => {
 export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
 		const raw = await request.json();
-		// Route any non-column keys (spill — typically unrecognized MIxS slots
-		// like silicate, ammonium, or `misc_param:*` user tags) into
-		// custom_fields JSON so they round-trip on the sample row.
-		const { core: data, customFields: spill } = splitSampleBody(raw);
-		const mergedCustom = mergeCustomFields(data.custom_fields, spill);
+		// Split out any non-column keys (MIxS slots without a column — silicate,
+		// ammonium, etc. — plus misc_param:<tag> entries). They land in
+		// sample_values, not a JSON blob.
+		const { core: data, values } = splitSampleBody(raw);
 
 		if (!data?.project_id) return json({ error: 'project_id is required' }, { status: 400 });
 		if (!(data?.samp_name as string)?.trim?.()) return json({ error: 'samp_name is required' }, { status: 400 });
@@ -66,7 +57,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				samp_store_sol, samp_store_temp, samp_store_dur, samp_store_loc, store_cond,
 				ref_biomaterial, isol_growth_condt, tax_ident,
 				filter_type, collector_name,
-				notes, custom_fields, created_by
+				notes, created_by
 			) VALUES (
 				?, ?, ?, ?, ?,
 				?, ?, ?,
@@ -78,7 +69,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				?, ?, ?, ?, ?,
 				?, ?, ?,
 				?, ?,
-				?, ?, ?
+				?, ?
 			)`
 		).run(
 			id,
@@ -119,14 +110,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			nn(data.filter_type),
 			nn(data.collector_name),
 			nn(data.notes),
-			mergedCustom,
 			locals.user?.id ?? null
 		);
 
+		insertSampleValues(db, id, values);
 		setEntityPersonnel(db, 'sample', id, normalizePeople(data.people));
 
-		const sample = db.prepare('SELECT * FROM samples WHERE id = ?').get(id);
-		return json(sample, { status: 201 });
+		const sample = db.prepare('SELECT * FROM samples WHERE id = ?').get(id) as Record<string, unknown>;
+		const vals = loadSampleValues(db, id);
+		return json({ ...sample, ...vals }, { status: 201 });
 	} catch (err) {
 		return apiError(err);
 	}

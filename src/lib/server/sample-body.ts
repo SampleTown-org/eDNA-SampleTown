@@ -1,22 +1,17 @@
 /**
  * Split a POST/PUT body on the samples API into its real-column fields and
- * its "spill" fields that land in samples.custom_fields JSON.
- *
- * Any key the client sends that isn't a samples-table column gets routed
- * into custom_fields. This covers:
- *   - MIxS slots SampleTown doesn't have a dedicated column for (silicate,
- *     ammonium, bromide, size_frac_low, …) — ~100s of slots across the
- *     MIxS env/chem vocab. They land in custom_fields keyed by their
- *     canonical slot name, no prefix.
- *   - misc_param:<tag> custom user tags — kept verbatim (with prefix) so
- *     the form re-renders them as misc_param chips.
- *
- * On the way back out, the samples GET spreads custom_fields JSON into form
- * state — the form's organizeForm picks up bare-slot keys as MIxS-slot
- * inputs automatically.
+ * its "spill" fields that land in the sample_values EAV table (one row per
+ * slot, no JSON blob). Any key the client sends that isn't a samples-table
+ * column is treated as spill — covers:
+ *   - MIxS slots SampleTown doesn't have a column for (silicate, ammonium,
+ *     bromide, size_frac_low, isol_growth_condt, …) — stored with the
+ *     canonical slot name as the row key.
+ *   - misc_param:<tag> user tags — keep the prefix verbatim so the form
+ *     re-renders them as misc_param chips.
  */
+import type Database from 'better-sqlite3';
 
-/** Every non-custom key the samples API will accept on a POST/PUT body. */
+/** Every non-spill key the samples API will accept on a POST/PUT body. */
 export const SAMPLE_CORE_KEYS = new Set<string>([
 	// Routing / identity
 	'id', 'project_id', 'site_id', 'mixs_checklist', 'extension',
@@ -37,45 +32,77 @@ export const SAMPLE_CORE_KEYS = new Set<string>([
 	// MIGS/MIMAG context
 	'ref_biomaterial', 'isol_growth_condt', 'tax_ident',
 	// SampleTown-local
-	'filter_type', 'collector_name', 'notes', 'custom_fields',
-	// Relationships / metadata the server interprets but doesn't write as a column
+	'filter_type', 'collector_name', 'notes',
+	// Not persisted as a sample column but consumed by the API layer
 	'people', 'client_id', 'local_created_at'
 ]);
 
 export function splitSampleBody(body: Record<string, unknown>): {
 	core: Record<string, unknown>;
-	customFields: Record<string, unknown>;
+	values: Record<string, string>;
 } {
 	const core: Record<string, unknown> = {};
-	const customFields: Record<string, unknown> = {};
+	const values: Record<string, string> = {};
 	for (const [k, v] of Object.entries(body)) {
 		if (SAMPLE_CORE_KEYS.has(k)) {
 			core[k] = v;
-		} else if (v != null && v !== '') {
-			customFields[k] = v;
+			continue;
 		}
+		if (v == null || v === '') continue;
+		values[k] = typeof v === 'string' ? v : String(v);
 	}
-	return { core, customFields };
+	return { core, values };
 }
 
 /**
- * Merge spill-fields into the existing custom_fields payload. Client may
- * send `custom_fields` as a JSON string (legacy path) or omit it and let
- * the spill carry the load — handle both.
+ * Replace the sample_values rows for a sample with `values`. Any slot NOT
+ * in `values` gets deleted from sample_values; each entry in `values` is
+ * upserted.
  */
-export function mergeCustomFields(
-	existing: unknown,
-	spill: Record<string, unknown>
-): string | null {
-	let base: Record<string, unknown> = {};
-	if (typeof existing === 'string' && existing.trim()) {
-		try {
-			const parsed = JSON.parse(existing);
-			if (parsed && typeof parsed === 'object') base = parsed as Record<string, unknown>;
-		} catch {
-			/* ignore — existing was corrupt, spill wins */
+export function replaceSampleValues(
+	db: Database.Database,
+	sampleId: string,
+	values: Record<string, string>
+): void {
+	const keep = Object.keys(values);
+	const run = db.transaction(() => {
+		// Delete rows not in `values`
+		if (keep.length === 0) {
+			db.prepare('DELETE FROM sample_values WHERE sample_id = ?').run(sampleId);
+		} else {
+			const placeholders = keep.map(() => '?').join(',');
+			db.prepare(`DELETE FROM sample_values WHERE sample_id = ? AND slot NOT IN (${placeholders})`)
+				.run(sampleId, ...keep);
 		}
+		const upsert = db.prepare(
+			`INSERT INTO sample_values (sample_id, slot, value) VALUES (?, ?, ?)
+			 ON CONFLICT (sample_id, slot) DO UPDATE SET value = excluded.value`
+		);
+		for (const [slot, value] of Object.entries(values)) upsert.run(sampleId, slot, value);
+	});
+	run();
+}
+
+/** Insert all `values` for a new sample (no reconciliation needed). */
+export function insertSampleValues(
+	db: Database.Database,
+	sampleId: string,
+	values: Record<string, string>
+): void {
+	if (Object.keys(values).length === 0) return;
+	const insert = db.prepare('INSERT INTO sample_values (sample_id, slot, value) VALUES (?, ?, ?)');
+	const run = db.transaction(() => {
+		for (const [slot, value] of Object.entries(values)) insert.run(sampleId, slot, value);
+	});
+	run();
+}
+
+/** Read all sample_values for a sample as a Record<slot, value>. */
+export function loadSampleValues(db: Database.Database, sampleId: string): Record<string, string> {
+	const rows = db.prepare('SELECT slot, value FROM sample_values WHERE sample_id = ?').all(sampleId) as { slot: string; value: string | null }[];
+	const out: Record<string, string> = {};
+	for (const r of rows) {
+		if (r.value != null) out[r.slot] = r.value;
 	}
-	const merged = { ...base, ...spill };
-	return Object.keys(merged).length ? JSON.stringify(merged) : null;
+	return out;
 }

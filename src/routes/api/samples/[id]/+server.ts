@@ -3,12 +3,11 @@ import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
-import { splitSampleBody, mergeCustomFields } from '$lib/server/sample-body';
+import { splitSampleBody, replaceSampleValues, loadSampleValues } from '$lib/server/sample-body';
 
 /** Coerce empty strings to null (CHECK constraints reject ''). */
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
 
-/** MIxS missing-value sentinel — same as the POST handler. */
 const MIXS_MISSING = 'not collected';
 const orMissing = (v: unknown): string => {
 	const cleaned = nn(v);
@@ -23,23 +22,20 @@ export const GET: RequestHandler = async ({ params }) => {
 		FROM samples s
 		JOIN sites st ON st.id = s.site_id
 		WHERE s.id = ? AND s.is_deleted = 0
-	`).get(params.id);
+	`).get(params.id) as Record<string, unknown> | undefined;
 	if (!sample) throw error(404, 'Sample not found');
 	const people = getEntityPersonnel('sample', params.id!);
-	return json({ ...sample, people });
+	const values = loadSampleValues(db, params.id!);
+	return json({ ...sample, ...values, people });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
 	try {
 		const raw = await request.json();
-		const { core: data, customFields: spill } = splitSampleBody(raw);
+		const { core: data, values } = splitSampleBody(raw);
 		const db = getDb();
-		const existing = db.prepare('SELECT id, custom_fields FROM samples WHERE id = ? AND is_deleted = 0').get(params.id) as { id: string; custom_fields: string | null } | undefined;
+		const existing = db.prepare('SELECT id FROM samples WHERE id = ? AND is_deleted = 0').get(params.id);
 		if (!existing) throw error(404, 'Sample not found');
-
-		// Merge spill into any supplied custom_fields; fall back to the existing
-		// row's custom_fields so unrelated tags aren't wiped on update.
-		const mergedCustom = mergeCustomFields(data.custom_fields ?? existing.custom_fields, spill);
 
 		if (!(data?.samp_name as string)?.trim?.()) {
 			return json({ error: 'samp_name is required' }, { status: 400 });
@@ -60,7 +56,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				samp_store_sol = ?, samp_store_temp = ?, samp_store_dur = ?, samp_store_loc = ?, store_cond = ?,
 				ref_biomaterial = ?, isol_growth_condt = ?, tax_ident = ?,
 				filter_type = ?, collector_name = ?,
-				notes = ?, custom_fields = ?,
+				notes = ?,
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
@@ -100,9 +96,12 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			nn(data.filter_type),
 			nn(data.collector_name),
 			nn(data.notes),
-			mergedCustom,
 			params.id
 		);
+
+		// Reconcile sample_values: any slot not in `values` is deleted;
+		// each entry in `values` is upserted.
+		replaceSampleValues(db, params.id!, values);
 
 		if (data.people !== undefined) {
 			setEntityPersonnel(db, 'sample', params.id!, normalizePeople(data.people));
@@ -110,7 +109,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 		const updated = db.prepare('SELECT * FROM samples WHERE id = ?').get(params.id) as Record<string, unknown>;
 		const people = getEntityPersonnel('sample', params.id!);
-		return json({ ...updated, people });
+		const vals = loadSampleValues(db, params.id!);
+		return json({ ...updated, ...vals, people });
 	} catch (err) {
 		return apiError(err);
 	}

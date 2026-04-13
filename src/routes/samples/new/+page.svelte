@@ -79,7 +79,7 @@
 
 		// Send the whole form as-is. The server splits known columns from
 		// everything else; extras (unrecognized MIxS slots + misc_param:*
-		// tags) spill into the sample's custom_fields JSON.
+		// tags) spill into sample_values EAV rows.
 		const res = await fetch('/api/samples', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },

@@ -55,6 +55,11 @@
 	let importTsv = $state('');
 	let importFileName = $state('');
 	let siteMatchKm = $state(1);
+	/** Default MIxS checklist + extension applied to rows whose TSV doesn't
+	 *  carry mixs_checklist / extension columns. Drives import-side validation
+	 *  and the default combination class for required-slot resolution. */
+	let importChecklist = $state('MimarksS');
+	let importExtension = $state('Water');
 	type SiteMatch = { samp_name: string; new_site: boolean; site: { id: string; site_name: string; distance_km: number } | null };
 	type NewSite = { id: string; site_name: string; lat_lon: string; geo_loc_name: string | null };
 	type MixsRowValidation = {
@@ -71,10 +76,25 @@
 		site_matches?: SiteMatch[];
 		new_sites?: NewSite[];
 		column_map?: Record<string, string>;
-		available_fields?: { value: string; label: string }[];
+		available_fields?: { value: string; table: string; title?: string }[];
 		site_fields?: string[];
 		mixs_validation?: MixsRowValidation[];
 	} | null = $state(null);
+
+	/** Quick lookup: target value → owning table for the → tab column. */
+	let targetTable = $derived.by(() => {
+		const m = new Map<string, string>();
+		for (const f of importPreview?.available_fields ?? []) m.set(f.value, f.table);
+		return m;
+	});
+
+	/** Resolve what "→ <tab>" to show for a given target value, handling
+	 *  misc_param:* tags (always → sample) and skip/blank. */
+	function tabFor(target: string | undefined): string {
+		if (!target || target === '_skip_') return '';
+		if (target.startsWith('misc_param:')) return 'sample (custom tag)';
+		return targetTable.get(target) ?? 'sample (unknown — will spill)';
+	}
 	let importing = $state(false);
 	let importResult: { imported: number; errors: string[]; site_matches?: number; new_sites?: number } | null = $state(null);
 
@@ -140,6 +160,8 @@
 			fd.append('projectId', importProject);
 			fd.append('dryRun', String(dryRun));
 			fd.append('siteMatchKm', String(siteMatchKm));
+			fd.append('defaultChecklist', importChecklist);
+			if (importExtension) fd.append('defaultExtension', importExtension);
 			if (colMapJson) fd.append('columnMap', colMapJson);
 			if (!dryRun && importPeople.length > 0) fd.append('people', JSON.stringify(importPeople));
 			res = await fetch('/api/import/mixs', { method: 'POST', body: fd });
@@ -152,6 +174,8 @@
 					projectId: importProject,
 					dryRun,
 					siteMatchKm,
+					defaultChecklist: importChecklist,
+					defaultExtension: importExtension || undefined,
 					columnMap: colMapJson ? JSON.parse(colMapJson) : undefined,
 					people: !dryRun && importPeople.length > 0 ? importPeople : undefined
 				})
@@ -281,6 +305,19 @@
 					class="text-sm text-slate-400 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-700 file:text-white file:text-sm file:cursor-pointer hover:file:bg-slate-600" />
 			</div>
 			<div>
+				<label class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
+				<select bind:value={importChecklist} class={selectCls}>
+					{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
+				</select>
+			</div>
+			<div>
+				<label class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
+				<select bind:value={importExtension} class={selectCls}>
+					<option value="">(none)</option>
+					{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
+				</select>
+			</div>
+			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">Site match radius</label>
 				<div class="flex items-center gap-2">
 					<input type="range" min="0.001" max="10" step="0.001" bind:value={siteMatchKm}
@@ -291,6 +328,10 @@
 				</div>
 			</div>
 		</div>
+		<p class="text-xs text-slate-500">
+			Rows without <code>mixs_checklist</code> / <code>extension</code> columns default to
+			<code class="text-ocean-400">{importChecklist}{importExtension ? ' + ' + importExtension : ''}</code> for required-slot validation.
+		</p>
 
 		{#if importFileName}
 			<p class="text-xs text-slate-500">File: {importFileName}</p>
@@ -369,33 +410,45 @@
 					{#if showMapper}
 						<div class="p-4 pt-0 space-y-2">
 							<p class="text-xs text-slate-500">
-								Override SampleTown's auto-detection. Skipped columns are ignored on import.
-								Fields prefixed with <code class="text-ocean-400">site:</code> populate the site record;
-								<code class="text-green-400">sample:</code> fields go on the sample.
+								Override SampleTown's auto-detection. Type to search — matches against every MIxS slot
+								(~786) plus SampleTown-local fields. Leave blank to skip. Type <code class="text-amber-400">misc_param:&lt;name&gt;</code>
+								to add a truly custom tag. The <em>goes to</em> column shows which SampleTown tab the value lands on.
 							</p>
+
+							<!-- Autocomplete dataset — one <datalist> shared across all input rows. -->
+							<datalist id="mapper-targets">
+								{#each importPreview.available_fields ?? [] as f (f.value)}
+									<option value={f.value}>{f.value} — {f.table}{f.title ? ' · ' + f.title : ''}</option>
+								{/each}
+							</datalist>
+
 							<div class="max-h-72 overflow-y-auto">
 								<table class="w-full text-xs">
 									<thead class="sticky top-0 bg-slate-900/80 backdrop-blur">
 										<tr class="text-slate-400 border-b border-slate-800">
 											<th class="px-2 py-1.5 text-left font-medium">File column</th>
 											<th class="px-2 py-1.5 text-left font-medium">Target field</th>
+											<th class="px-2 py-1.5 text-left font-medium">Goes to</th>
 										</tr>
 									</thead>
 									<tbody>
 										{#each Object.keys(importPreview.column_map) as header}
 											<tr class="border-b border-slate-800/40">
-												<td class="px-2 py-1.5 font-mono text-slate-300">{header}</td>
+												<td class="px-2 py-1.5 font-mono text-slate-300 align-top">{header}</td>
 												<td class="px-2 py-1.5">
-													<select
+													<input
+														type="text"
+														list="mapper-targets"
 														bind:value={columnMap[header]}
-														class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500"
-													>
-														<option value="">(skip)</option>
-														<option value="misc_param:{header}">(add as misc_param:{header})</option>
-														{#each importPreview.available_fields ?? [] as f}
-															<option value={f.value} class="{siteFieldSet.has(f.value) ? 'text-ocean-400' : 'text-green-400'}">{f.label}</option>
-														{/each}
-													</select>
+														placeholder="(skip)"
+														class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs font-mono focus:outline-none focus:border-ocean-500"
+													/>
+												</td>
+												<td class="px-2 py-1.5 text-xs text-slate-400 align-top">
+													{#if tabFor(columnMap[header])}
+														<span class="text-slate-500">→</span>
+														<span class="{columnMap[header]?.startsWith('misc_param:') ? 'text-amber-300' : 'text-ocean-400'}">{tabFor(columnMap[header])}</span>
+													{/if}
 												</td>
 											</tr>
 										{/each}
