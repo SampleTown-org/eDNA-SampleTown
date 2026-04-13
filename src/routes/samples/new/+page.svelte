@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { organizeForm, SAMPLE_FORM_SLOTS } from '$lib/mixs/sample-form';
-	import { requiredSlotSet } from '$lib/mixs/checklists';
+	import { organizeForm, orderedOptionalBuckets } from '$lib/mixs/sample-form';
+	import { tableLabel } from '$lib/mixs/slot-ownership';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
-	import MixsCompleteness from '$lib/components/MixsCompleteness.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import SlotInput from '$lib/components/SlotInput.svelte';
 	import type { PageData } from './$types';
@@ -24,7 +23,6 @@
 	let saving = $state(false);
 	let errorMsg = $state('');
 
-	// Sites filtered by selected project; auto-fill project from chosen site.
 	let availableSites = $derived(
 		(data.sites as any[]).filter((s: any) => !form.project_id || s.project_id === form.project_id)
 	);
@@ -33,20 +31,10 @@
 		if (site && !form.project_id && site.project_id) form.project_id = site.project_id;
 	}
 
-	// Reactive MIxS organization — re-buckets fields as (checklist, extension) changes.
-	let organized = $derived(organizeForm(form.mixs_checklist as string, (form.extension as string) || null));
-	let requiredSet = $derived(
-		requiredSlotSet(form.mixs_checklist as string, (form.extension as string) || null)
+	// Reactive organization — rebuckets slots whenever (checklist, extension) changes.
+	let organized = $derived(
+		organizeForm(form.mixs_checklist as string, (form.extension as string) || null)
 	);
-
-	// All slots the form currently renders — for MixsCompleteness's "not on
-	// form" pill. Recomputes when buckets shift with (checklist, extension).
-	let formSlots = $derived(new Set<string>([
-		'samp_name', 'collection_date', 'env_medium',
-		...organized.required.map((f) => f.slot),
-		...organized.recommended.map((f) => f.slot),
-		...Object.values(organized.optional).flat().map((f) => f.slot)
-	]));
 
 	async function submit() {
 		if (!form.project_id) { errorMsg = 'Please select a project'; return; }
@@ -72,16 +60,6 @@
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 	const selectCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';
 	const legendCls = 'text-sm font-semibold text-slate-300 uppercase tracking-wider';
-
-	const BUCKET_LABELS: Record<string, string> = {
-		environment: 'Environmental Measurements',
-		sampling: 'Sampling',
-		storage: 'Storage',
-		investigation: 'Investigation / Reference',
-		taxonomy: 'Taxonomy',
-		other: 'Other'
-	};
-	const bucketLabel = (k: string) => BUCKET_LABELS[k] ?? k;
 </script>
 
 <div class="max-w-3xl space-y-6">
@@ -90,7 +68,6 @@
 		<h1 class="text-2xl font-bold text-white mt-1">New Sample</h1>
 	</div>
 
-	<!-- Single / Batch toggle -->
 	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
 		<span class="px-4 py-1.5 rounded text-sm font-medium bg-ocean-600 text-white">Single</span>
 		<a href="/samples/batch" class="px-4 py-1.5 rounded text-sm font-medium text-slate-400 hover:text-white transition-colors">Batch</a>
@@ -101,8 +78,8 @@
 	{/if}
 
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-8">
-		<!-- Where: project + site. Location metadata (lat_lon, geo_loc_name,
-		     env_broad/local_scale) is inherited from the chosen site at save. -->
+		<!-- Where: project + site. Site carries lat_lon / geo_loc_name /
+		     env_broad_scale / env_local_scale at export time. -->
 		<fieldset class="space-y-4">
 			<legend class={legendCls}>Where</legend>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -137,8 +114,7 @@
 			</div>
 		</fieldset>
 
-		<!-- Identity: what/when + MIxS checklist + extension. Everything else
-		     (required/recommended/optional) is bucketed dynamically below. -->
+		<!-- Identity: checklist + extension + the three always-present MIxS core slots. -->
 		<fieldset class="space-y-4">
 			<legend class={legendCls}>Identity</legend>
 
@@ -189,22 +165,13 @@
 			</div>
 		</fieldset>
 
-		<!-- MIxS completeness banner — reactive to form state. -->
-		<MixsCompleteness
-			checklist={form.mixs_checklist as string}
-			extension={(form.extension as string) || null}
-			requiredSlots={requiredSet}
-			values={form}
-			{formSlots}
-		/>
-
-		<!-- Required (beyond Identity) -->
+		<!-- Required — every sample-owned slot the active combination class marks required. -->
 		{#if organized.required.length > 0}
 			<fieldset class="space-y-4">
 				<legend class={legendCls}>
-					Required by MIxS
+					Required
 					<span class="text-rose-400 normal-case tracking-normal font-normal text-xs">
-						({organized.required.length} slot{organized.required.length === 1 ? '' : 's'})
+						({organized.required.length})
 					</span>
 				</legend>
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -213,25 +180,41 @@
 							slot={field.slot}
 							type={field.type}
 							bind:value={form[field.slot]}
-							unit={field.unit}
 							placeholder={field.placeholder}
 							required={true}
-							colSpan={field.colSpan}
-							options={field.constrainedCategory ? data.picklists[field.constrainedCategory] : []}
+							options={field.picklist ? data.picklists[field.picklist] : []}
 						/>
 					{/each}
 				</div>
 			</fieldset>
 		{/if}
 
-		<!-- Recommended -->
+		<!-- Required but on another SampleTown tab. Purely informational —
+		     the user goes to that tab to fill these in. -->
+		{#if organized.requiredOffSample.length > 0}
+			<div class="rounded-lg border border-amber-800 bg-amber-900/10 p-3 text-sm text-amber-200">
+				<p class="font-medium mb-1">Also required by {form.mixs_checklist}{form.extension ? ` + ${form.extension}` : ''}:</p>
+				<ul class="space-y-0.5 text-xs">
+					{#each organized.requiredOffSample as { slot, table }}
+						<li>
+							<a href="/glossary#{slot}" target="_blank" class="hover:text-amber-100">
+								<code class="text-amber-300">{slot}</code>
+							</a>
+							<span class="text-amber-200/60"> → {tableLabel(table as any)}</span>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
+
+		<!-- Recommended — every sample-owned slot the class marks recommended. -->
 		{#if organized.recommended.length > 0}
 			<details class="group space-y-4" open>
 				<summary class="{legendCls} cursor-pointer flex items-center gap-2">
 					<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
 					Recommended
 					<span class="normal-case tracking-normal font-normal text-xs text-slate-500">
-						({organized.recommended.length} slot{organized.recommended.length === 1 ? '' : 's'})
+						({organized.recommended.length})
 					</span>
 				</summary>
 				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
@@ -240,23 +223,21 @@
 							slot={field.slot}
 							type={field.type}
 							bind:value={form[field.slot]}
-							unit={field.unit}
 							placeholder={field.placeholder}
-							colSpan={field.colSpan}
-							options={field.constrainedCategory ? data.picklists[field.constrainedCategory] : []}
+							options={field.picklist ? data.picklists[field.picklist] : []}
 						/>
 					{/each}
 				</div>
 			</details>
 		{/if}
 
-		<!-- Optional — grouped by MIxS subset. Collapsible by group. -->
-		{#each Object.entries(organized.optional) as [bucket, fields] (bucket)}
+		<!-- Optional — grouped by MIxS subset. -->
+		{#each orderedOptionalBuckets(organized.optional) as [bucket, fields] (bucket)}
 			{#if fields.length > 0}
 				<details class="group space-y-4">
 					<summary class="{legendCls} cursor-pointer flex items-center gap-2">
 						<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
-						{bucketLabel(bucket)}
+						{bucket}
 						<span class="normal-case tracking-normal font-normal text-xs text-slate-500">
 							({fields.length})
 						</span>
@@ -267,10 +248,8 @@
 								slot={field.slot}
 								type={field.type}
 								bind:value={form[field.slot]}
-								unit={field.unit}
 								placeholder={field.placeholder}
-								colSpan={field.colSpan}
-								options={field.constrainedCategory ? data.picklists[field.constrainedCategory] : []}
+								options={field.picklist ? data.picklists[field.picklist] : []}
 							/>
 						{/each}
 					</div>
@@ -286,13 +265,12 @@
 			label="People"
 		/>
 
-		<!-- Notes (SampleTown-local, not a MIxS slot) -->
+		<!-- Notes (SampleTown-local) -->
 		<div>
 			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>
 		</div>
 
-		<!-- Submit -->
 		<div class="flex gap-3 pt-2">
 			<button type="submit" disabled={saving}
 				class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">

@@ -1,183 +1,132 @@
 /**
- * Single source of truth for which MIxS slots the sample form surfaces,
- * and how each one should render. Consumed by samples/new + samples/[id]/edit
- * so they stay in lockstep.
+ * Sample form structure, driven by the active MIxS combination class.
  *
- * What's NOT here (by design):
- *   - project_name — sample inherits its project; emit from projects.project_name at export time
- *   - nucl_acid_ext — extraction protocol, lives on extracts
- *   - nucl_acid_amp — amplification protocol, lives on pcr_plates
- *   - tax_ident — determined by the PCR primer set via primer_sets.target_gene
- *   - seq_meth / lib_layout — sequencing run-level concerns
+ * The form renders every slot the (checklist, extension) combination class
+ * lists in its `properties`, filtered to slots that actually belong on the
+ * samples table (see slot-ownership.ts). Slots go into buckets by MIxS
+ * cardinality (Required → Recommended → Optional by subset). When MIxS
+ * bumps a release, the form picks up new slots automatically.
  *
- * Priority bucketing (Required / Recommended / Optional) is resolved at
- * render time from the active (checklist, extension) via requiredSlotSet +
- * recommendedSlotSet in $lib/mixs/checklists.
+ * SampleTown-specific additions are kept minimal: a tiny OVERRIDES map for
+ * slots where we bind a local picklist (env_medium, filter_type, etc.).
+ * Input type, placeholder, unit hints, and structured patterns all come
+ * from the MIxS schema index.
  */
-import { getSlot } from './schema-index';
-import { requiredSlotSet, recommendedSlotSet } from './checklists';
+import { getSlot, recommendedSlotsFor, requiredSlotsFor, getCombinationClass, getClass } from './schema-index';
+import { slotTable } from './slot-ownership';
 
-export interface SampleFormSlot {
-	/** MIxS slot name (or SampleTown-local column like `collector_name`, `notes`). */
+export type FormInputType = 'text' | 'number' | 'date' | 'select' | 'textarea';
+
+export interface SlotConfig {
 	slot: string;
-	/** Input type routing in <SlotInput>. */
-	type: 'text' | 'number' | 'date' | 'select' | 'textarea';
-	/** Name of a constrained_values picklist for select/text-with-options fields. */
-	constrainedCategory?: string;
-	/** Display unit appended to the label (MIxS stores units inside values). */
-	unit?: string;
-	/** Placeholder override; falls back to slot.examples[0]. */
+	type: FormInputType;
+	/** Name of a constrained_values picklist (select only). */
+	picklist?: string;
+	/** Placeholder — falls back to slot.examples[0]. */
 	placeholder?: string;
-	/** Grid colspan hint: 1 (half-width) or 2 (full). Default 1. */
-	colSpan?: 1 | 2;
-	/** Which MIxS subset the slot belongs to for grouping in the Optional bucket.
-	 *  If absent we fall back to the slot's `in_subset` from the schema index. */
-	subset?: 'environment' | 'sampling' | 'storage' | 'investigation' | 'taxonomy';
 }
 
 /**
- * All MIxS slots the sample form can render. Always includes every entry;
- * priority bucketing is computed from the active combination class at render time.
+ * Minimal SampleTown-specific overrides. Only slots that need a local picklist
+ * or a type we can't infer from MIxS land here. Everything else derives from
+ * the MIxS schema index.
  */
-export const SAMPLE_FORM_SLOTS: SampleFormSlot[] = [
-	// Core identity — always appear in the "What" header section, not here
-	{ slot: 'samp_taxon_id', type: 'text', subset: 'taxonomy' },
+const OVERRIDES: Record<string, Partial<SlotConfig>> = {
+	env_medium: { type: 'select', picklist: 'env_medium' },
+	filter_type: { type: 'select', picklist: 'filter_type' },
+	samp_store_sol: { type: 'select', picklist: 'samp_store_sol' },
+	samp_collect_device: { type: 'select', picklist: 'samp_collect_device' },
+	samp_mat_process: { type: 'textarea' }
+};
 
-	// Extension-specific location (only rendered when relevant)
-	{ slot: 'depth', type: 'text', unit: 'm', subset: 'environment' },
-	{ slot: 'elev', type: 'text', unit: 'm', subset: 'environment' },
-
-	// Host context (only rendered when relevant extension)
-	{ slot: 'host_taxid', type: 'text', subset: 'taxonomy' },
-	{ slot: 'specific_host', type: 'text', subset: 'taxonomy' },
-
-	// Environmental measurements
-	{ slot: 'temp', type: 'number', unit: '°C', subset: 'environment' },
-	{ slot: 'salinity', type: 'number', unit: 'PSU', subset: 'environment' },
-	{ slot: 'ph', type: 'number', subset: 'environment' },
-	{ slot: 'diss_oxygen', type: 'number', unit: 'mg/L', subset: 'environment' },
-	{ slot: 'pressure', type: 'number', unit: 'atm', subset: 'environment' },
-	{ slot: 'turbidity', type: 'number', unit: 'NTU', subset: 'environment' },
-	{ slot: 'chlorophyll', type: 'number', unit: 'µg/L', subset: 'environment' },
-	{ slot: 'nitrate', type: 'number', unit: 'µmol/L', subset: 'environment' },
-	{ slot: 'phosphate', type: 'number', unit: 'µmol/L', subset: 'environment' },
-
-	// Sampling process
-	{ slot: 'samp_collect_device', type: 'select', constrainedCategory: 'samp_collect_device', subset: 'sampling' },
-	{ slot: 'samp_collect_method', type: 'text', subset: 'sampling' },
-	{ slot: 'samp_mat_process', type: 'textarea', colSpan: 2, subset: 'sampling' },
-	{ slot: 'samp_size', type: 'text', subset: 'sampling' },
-	{ slot: 'samp_vol_we_dna_ext', type: 'number', unit: 'mL', subset: 'sampling' },
-	{ slot: 'size_frac', type: 'text', subset: 'sampling' },
-	{ slot: 'filter_type', type: 'select', constrainedCategory: 'filter_type', subset: 'sampling' },
-	{ slot: 'source_mat_id', type: 'text', colSpan: 2, subset: 'investigation' },
-
-	// Sample storage
-	{ slot: 'samp_store_sol', type: 'select', constrainedCategory: 'samp_store_sol', subset: 'storage' },
-	{ slot: 'samp_store_temp', type: 'number', unit: '°C', subset: 'storage' },
-	{ slot: 'samp_store_dur', type: 'text', subset: 'storage' },
-	{ slot: 'samp_store_loc', type: 'text', subset: 'storage' },
-
-	// Culture / reference — only rendered when the active combination class
-	// actually carries these slots (typically MIGS-BA, MISAG, etc.)
-	{ slot: 'ref_biomaterial', type: 'text', colSpan: 2, subset: 'investigation' },
-	{ slot: 'isol_growth_condt', type: 'text', colSpan: 2, subset: 'investigation' }
-];
-
-/** Slots rendered explicitly in the form's header (not via the priority buckets). */
-export const HEADER_SLOTS = new Set(['samp_name', 'collection_date', 'env_medium', 'mixs_checklist', 'extension']);
-
-export type Priority = 'required' | 'recommended' | 'optional';
+/** Slots displayed explicitly in the form's Identity header; excluded from bucketing. */
+export const HEADER_SLOTS = new Set(['samp_name', 'collection_date', 'env_medium']);
 
 export interface OrganizedForm {
-	required: SampleFormSlot[];
-	recommended: SampleFormSlot[];
-	optional: {
-		environment: SampleFormSlot[];
-		sampling: SampleFormSlot[];
-		storage: SampleFormSlot[];
-		investigation: SampleFormSlot[];
-		taxonomy: SampleFormSlot[];
-		other: SampleFormSlot[];
-	};
+	required: SlotConfig[];
+	recommended: SlotConfig[];
+	/** Optional slots grouped by MIxS `in_subset`. Buckets with zero entries stay empty. */
+	optional: Record<string, SlotConfig[]>;
+	/** Required slots that live on a different SampleTown table — surfaced for UI hints. */
+	requiredOffSample: Array<{ slot: string; table: string }>;
 }
 
 /**
- * Bucket slots into Required / Recommended / Optional[subset] for the active
- * (checklist, extension). Emits:
- *
- *   - Required: every slot the combination class marks required (MIxS-
- *     authoritative), looked up against SAMPLE_FORM_SLOTS for UI hints and
- *     falling back to a plain text input when no config is curated.
- *   - Recommended: every slot the combination class marks recommended.
- *   - Optional[subset]: SampleTown's curated always-visible slots (measurements,
- *     sampling, storage, taxonomy) that aren't already required/recommended
- *     for this combo, grouped by subset.
- *
- * Reactivity comes from the caller's `$derived(organizeForm(...))` — every
- * time checklist or extension changes, this re-runs and the form re-renders.
+ * Bucket every property of the active combination class for display on the
+ * sample form. Filters out slots owned by other tables (sites, extracts,
+ * pcr_plates, etc.) — those get surfaced separately as "on another tab".
  */
 export function organizeForm(checklist: string, extension: string | null): OrganizedForm {
-	const required = requiredSlotSet(checklist, extension);
-	const recommended = recommendedSlotSet(checklist, extension);
-	const configBySlot = new Map(SAMPLE_FORM_SLOTS.map((s) => [s.slot, s] as const));
-
-	// Always-visible baseline so operators can enter these regardless of the
-	// active class. Their contents shift between buckets as the class changes
-	// (e.g. `depth` jumps Required↔Optional when switching Water↔BuiltEnvironment).
-	const UNIVERSAL_OPTIONAL = new Set<string>([
-		'depth', 'elev',
-		'temp', 'salinity', 'ph', 'diss_oxygen', 'pressure', 'turbidity', 'chlorophyll', 'nitrate', 'phosphate',
-		'samp_collect_device', 'samp_collect_method', 'samp_mat_process', 'samp_size',
-		'samp_vol_we_dna_ext', 'size_frac', 'filter_type',
-		'samp_store_sol', 'samp_store_temp', 'samp_store_dur', 'samp_store_loc',
-		'samp_taxon_id'
-	]);
+	const cls = extension ? getCombinationClass(checklist, extension) : getClass(checklist);
+	const required = new Set(requiredSlotsFor(checklist, extension ?? ''));
+	const recommended = recommendedSlotsFor(checklist, extension ?? '');
+	const properties = cls?.properties ?? [];
 
 	const out: OrganizedForm = {
 		required: [],
 		recommended: [],
-		optional: { environment: [], sampling: [], storage: [], investigation: [], taxonomy: [], other: [] }
+		optional: {},
+		requiredOffSample: []
 	};
 
-	// 1. Required — every slot the combination class requires, in declared order.
-	for (const slot of required) {
+	for (const slot of properties) {
 		if (HEADER_SLOTS.has(slot)) continue;
-		out.required.push(configBySlot.get(slot) ?? defaultConfig(slot));
+		const table = slotTable(slot);
+
+		if (table !== 'samples') {
+			if (required.has(slot)) out.requiredOffSample.push({ slot, table });
+			continue;
+		}
+
+		const config = resolveSlotConfig(slot);
+		if (required.has(slot)) out.required.push(config);
+		else if (recommended.has(slot)) out.recommended.push(config);
+		else {
+			const bucket = subsetOfSlot(slot);
+			(out.optional[bucket] ??= []).push(config);
+		}
 	}
 
-	// 2. Recommended — every slot the combination class recommends.
-	for (const slot of recommended) {
-		if (HEADER_SLOTS.has(slot) || required.has(slot)) continue;
-		out.recommended.push(configBySlot.get(slot) ?? defaultConfig(slot));
-	}
-
-	// 3. Optional — SampleTown's curated universal slots that aren't already
-	//    above, grouped by subset.
-	for (const entry of SAMPLE_FORM_SLOTS) {
-		if (HEADER_SLOTS.has(entry.slot)) continue;
-		if (required.has(entry.slot) || recommended.has(entry.slot)) continue;
-		if (!UNIVERSAL_OPTIONAL.has(entry.slot)) continue;
-		const bucket = entry.subset ?? subsetOfSlot(entry.slot);
-		out.optional[bucket].push(entry);
-	}
 	return out;
 }
 
-/** Fallback config for an MIxS slot not in our curated SAMPLE_FORM_SLOTS. */
-function defaultConfig(slot: string): SampleFormSlot {
+/** Build a SlotConfig from MIxS metadata + SampleTown overrides. */
+function resolveSlotConfig(slot: string): SlotConfig {
 	const meta = getSlot(slot);
-	// MIxS ranges like `float`/`double`/`integer` → number input
-	const isNumeric = meta?.range && /^(float|double|integer|decimal)$/i.test(meta.range);
-	// Don't set subset on required/recommended entries — subset is only used
-	// by the Optional bucket grouping.
-	return { slot, type: isNumeric ? 'number' : 'text' };
+	const override = OVERRIDES[slot] ?? {};
+
+	// Type inference: OVERRIDES wins, else infer from MIxS range.
+	let type: FormInputType = override.type ?? 'text';
+	if (!override.type) {
+		const range = meta?.range;
+		if (range && /^(float|double|integer|decimal)$/i.test(range)) type = 'number';
+		// collection_date is the only date-ish slot on samples; it's in HEADER_SLOTS so we skip 'date'
+	}
+
+	return {
+		slot,
+		type,
+		picklist: override.picklist,
+		placeholder: meta?.examples?.[0]
+	};
 }
 
-function subsetOfSlot(slot: string): keyof OrganizedForm['optional'] {
-	const meta = getSlot(slot);
-	const subset = meta?.in_subset?.[0];
-	if (subset === 'environment') return 'environment';
-	if (subset === 'investigation' || subset === 'sequencing') return 'investigation';
-	return 'other';
+/** Group Optional slots by MIxS `in_subset` (fallback `other`). */
+function subsetOfSlot(slot: string): string {
+	const sub = getSlot(slot)?.in_subset?.[0];
+	if (!sub) return 'other';
+	// Normalize LinkML subset names to display-friendly labels.
+	return sub.replace(/^[a-z]/, (c) => c.toUpperCase());
+}
+
+/** Order the optional-bucket keys sensibly for display. */
+export function orderedOptionalBuckets(optional: Record<string, SlotConfig[]>): [string, SlotConfig[]][] {
+	const priority: Record<string, number> = {
+		'Environment': 0,
+		'Nucleic acid sequence source': 1,
+		'Investigation': 2,
+		'Sequencing': 3,
+		'other': 99
+	};
+	return Object.entries(optional).sort(([a], [b]) => (priority[a] ?? 50) - (priority[b] ?? 50));
 }
