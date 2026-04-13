@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
+import { splitSampleBody, mergeCustomFields } from '$lib/server/sample-body';
 
 /** Coerce empty strings to null (CHECK constraints reject ''). */
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
@@ -30,12 +31,17 @@ export const GET: RequestHandler = async ({ params }) => {
 
 export const PUT: RequestHandler = async ({ params, request }) => {
 	try {
-		const data = await request.json();
+		const raw = await request.json();
+		const { core: data, customFields: spill } = splitSampleBody(raw);
 		const db = getDb();
-		const existing = db.prepare('SELECT id FROM samples WHERE id = ? AND is_deleted = 0').get(params.id);
+		const existing = db.prepare('SELECT id, custom_fields FROM samples WHERE id = ? AND is_deleted = 0').get(params.id) as { id: string; custom_fields: string | null } | undefined;
 		if (!existing) throw error(404, 'Sample not found');
 
-		if (!data?.samp_name?.trim()) {
+		// Merge spill into any supplied custom_fields; fall back to the existing
+		// row's custom_fields so unrelated tags aren't wiped on update.
+		const mergedCustom = mergeCustomFields(data.custom_fields ?? existing.custom_fields, spill);
+
+		if (!(data?.samp_name as string)?.trim?.()) {
 			return json({ error: 'samp_name is required' }, { status: 400 });
 		}
 		if (!data?.site_id) {
@@ -61,7 +67,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.site_id,
 			data.mixs_checklist || 'MimarksS',
 			nn(data.extension),
-			data.samp_name.trim(),
+			(data.samp_name as string).trim(),
 			orMissing(data.collection_date),
 			orMissing(data.env_medium),
 			nn(data.depth),
@@ -94,7 +100,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			nn(data.filter_type),
 			nn(data.collector_name),
 			nn(data.notes),
-			nn(data.custom_fields),
+			mergedCustom,
 			params.id
 		);
 

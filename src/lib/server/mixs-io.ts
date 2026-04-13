@@ -22,8 +22,9 @@ export const SITE_FIELDS = new Set([
 ]);
 
 /** Sample columns that exist as real columns in the samples table and are
- *  MIxS slots. Kept explicit so we don't accidentally expose sync internals. */
-const SAMPLE_SLOT_COLUMNS = [
+ *  MIxS slots. Kept explicit so we don't accidentally expose sync internals.
+ *  Exported so the API can distinguish "real column" from "spill into custom_fields". */
+export const SAMPLE_SLOT_COLUMNS = [
 	// MIxS core
 	'samp_name', 'collection_date', 'env_medium',
 	// Extension-specific location
@@ -222,10 +223,10 @@ export function xlsxToTsv(buffer: Buffer): string {
 /**
  * Build the header→field map used by the column-mapper UI. Every MIxS slot
  * resolves to SOMETHING — either a named column (if SampleTown has one) or
- * `misc_param:<slot>` so the value lands in custom_fields JSON rather than
- * being silently dropped. SRA/BioSample aliases layer on top, and slot
- * aliases (from the LinkML `aliases` metadata) point at the same target
- * as the canonical slot name.
+ * the plain slot name, which the server routes into custom_fields JSON at
+ * insert/update time. The `misc_param:` prefix is reserved for headers that
+ * don't match any MIxS slot at all (truly custom tags); those stay on the
+ * sample so nothing's lost.
  */
 export function buildHeaderToFieldMap(): Record<string, string> {
 	const map: Record<string, string> = {};
@@ -234,16 +235,13 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 	for (const col of SAMPLE_SLOT_COLUMNS) map[col.toLowerCase()] = col;
 	for (const col of SITE_SLOT_COLUMNS) map[col.toLowerCase()] = col;
 
-	// Every other MIxS slot → misc_param:<slot>. Covers hundreds of
-	// environmental / chemical measurements (alkalinity, ammonium, bromide,
-	// …) that aren't SampleTown table columns but are legitimate MIxS data.
-	// Also covers extract/pcr/library/run/analysis slots on a sample import
-	// — we don't auto-create those entities, but the value is preserved.
+	// Every other MIxS slot → its canonical slot name (no prefix). The samples
+	// API splits unknown keys into custom_fields server-side. Covers hundreds
+	// of env/chemical measurements (alkalinity, ammonium, silicate, size_frac_*…)
+	// plus extract/pcr/library/run slots that we don't have columns for.
 	for (const slotName of allSlotNames()) {
 		const lower = slotName.toLowerCase();
-		if (!map[lower]) {
-			map[lower] = `${MISC_PARAM_PREFIX}${slotName}`;
-		}
+		if (!map[lower]) map[lower] = slotName;
 		// Aliases point at the same target the canonical slot resolves to.
 		const slot = getSlot(slotName);
 		for (const alias of slot?.aliases ?? []) {
@@ -342,16 +340,30 @@ export function parseMixsTsv(
 			if (val === '' || val === 'not collected' || val === 'not applicable' || val === 'missing') {
 				val = null;
 			}
-			// `misc_param:<key>` — route unknown columns into the custom_fields
-			// JSON blob. Sanitize the suffix to [a-z_] so imported keys match
-			// what the form + glossary expect (the column header could have
-			// arbitrary characters).
+			if (val == null) continue;
+			// `misc_param:<key>` — truly off-schema tag from the column mapper
+			// UI or a prior SampleTown export. Sanitize the suffix to [a-z_]
+			// and store under the same prefixed key in custom_fields.
 			if (field.startsWith(MISC_PARAM_PREFIX)) {
 				const name = sanitizeMiscParamName(field.slice(MISC_PARAM_PREFIX.length));
 				if (name) customFields[`${MISC_PARAM_PREFIX}${name}`] = val;
 				continue;
 			}
-			sample[field] = val;
+			// Real sample/site column → route to the sample row; the samples
+			// POST/PUT will bind it to a named column.
+			if ((SAMPLE_SLOT_COLUMNS as readonly string[]).includes(field) ||
+			    field === 'samp_name' || field === 'collection_date' || field === 'env_medium' ||
+			    SITE_FIELDS.has(field) || field === 'notes' || field === 'mixs_checklist' ||
+			    field === 'extension' || field === 'collector_name' || field === 'latitude' ||
+			    field === 'longitude' || field === 'site_name') {
+				sample[field] = val;
+				continue;
+			}
+			// Everything else is a recognized MIxS slot that SampleTown doesn't
+			// have a column for — store in custom_fields keyed by the slot name
+			// (no prefix) so the sample form's organizeForm re-surfaces it as a
+			// normal MIxS-slot input with glossary popover.
+			customFields[field] = val;
 		}
 
 		if (Object.keys(customFields).length > 0) {

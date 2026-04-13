@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
+import { splitSampleBody, mergeCustomFields } from '$lib/server/sample-body';
 
 /** Coerce empty / missing strings to null. */
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
@@ -39,10 +40,15 @@ export const GET: RequestHandler = async ({ url }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
-		const data = await request.json();
+		const raw = await request.json();
+		// Route any non-column keys (spill — typically unrecognized MIxS slots
+		// like silicate, ammonium, or `misc_param:*` user tags) into
+		// custom_fields JSON so they round-trip on the sample row.
+		const { core: data, customFields: spill } = splitSampleBody(raw);
+		const mergedCustom = mergeCustomFields(data.custom_fields, spill);
 
 		if (!data?.project_id) return json({ error: 'project_id is required' }, { status: 400 });
-		if (!data?.samp_name?.trim()) return json({ error: 'samp_name is required' }, { status: 400 });
+		if (!(data?.samp_name as string)?.trim?.()) return json({ error: 'samp_name is required' }, { status: 400 });
 		if (!data?.site_id) return json({ error: 'site_id is required' }, { status: 400 });
 
 		const db = getDb();
@@ -80,7 +86,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			data.site_id,
 			data.mixs_checklist || 'MimarksS',
 			nn(data.extension),
-			data.samp_name.trim(),
+			(data.samp_name as string).trim(),
 			orMissing(data.collection_date),
 			orMissing(data.env_medium),
 			nn(data.depth),
@@ -113,7 +119,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			nn(data.filter_type),
 			nn(data.collector_name),
 			nn(data.notes),
-			nn(data.custom_fields),
+			mergedCustom,
 			locals.user?.id ?? null
 		);
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { organizeForm, orderedOptionalBuckets, extractMiscParams, sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
+	import { organizeForm, orderedOptionalBuckets, sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import SlotInput from '$lib/components/SlotInput.svelte';
@@ -77,19 +77,13 @@
 		saving = true;
 		errorMsg = '';
 
-		// Pull misc_param:* entries out of form state and serialize them into
-		// the custom_fields JSON blob. The server stores them verbatim there.
-		const { core, miscParams } = extractMiscParams(form);
-		const body = {
-			...core,
-			custom_fields: Object.keys(miscParams).length ? JSON.stringify(miscParams) : null,
-			people
-		};
-
+		// Send the whole form as-is. The server splits known columns from
+		// everything else; extras (unrecognized MIxS slots + misc_param:*
+		// tags) spill into the sample's custom_fields JSON.
 		const res = await fetch('/api/samples', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
+			body: JSON.stringify({ ...form, people })
 		});
 		if (res.ok) {
 			const sample = await res.json();

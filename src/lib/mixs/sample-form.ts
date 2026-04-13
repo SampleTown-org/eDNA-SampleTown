@@ -202,7 +202,7 @@ const BUCKET_OVERRIDES: Record<string, string> = {
 	subspecf_gen_lin: 'Other',
 	host_disease_stat: 'Other',
 	host_spec_range: 'Other',
-	tax_ident: 'Investigation'
+	tax_ident: 'Other'
 };
 
 /**
@@ -277,37 +277,17 @@ export function sanitizeMiscParamName(raw: string): string {
 }
 
 /**
- * Split a form state object into its real-slot entries and its custom
- * misc_param:* entries. Used on submit to serialize misc_param tags into
- * custom_fields JSON, and on edit-load to un-serialize them back into
- * form state.
+ * Parse a stored custom_fields JSON string and return all entries as a
+ * Record ready to spread into form state. Keys may be either bare MIxS slot
+ * names (re-surface as normal slot inputs via organizeForm) or
+ * `misc_param:<tag>` for truly off-schema user tags (render as misc_param
+ * chips).
  */
-export function extractMiscParams(form: Record<string, unknown>): {
-	core: Record<string, unknown>;
-	miscParams: Record<string, unknown>;
-} {
-	const core: Record<string, unknown> = {};
-	const miscParams: Record<string, unknown> = {};
-	for (const [k, v] of Object.entries(form)) {
-		if (k.startsWith(MISC_PARAM_PREFIX)) {
-			if (v != null && v !== '') miscParams[k] = v;
-		} else {
-			core[k] = v;
-		}
-	}
-	return { core, miscParams };
-}
-
-/** Parse a stored custom_fields JSON string and return just its misc_param:* entries. */
-export function parseMiscParamsFromCustomFields(customFields: string | null | undefined): Record<string, unknown> {
+export function parseCustomFields(customFields: string | null | undefined): Record<string, unknown> {
 	if (!customFields) return {};
 	try {
 		const parsed = JSON.parse(customFields);
-		const out: Record<string, unknown> = {};
-		for (const [k, v] of Object.entries(parsed ?? {})) {
-			if (k.startsWith(MISC_PARAM_PREFIX)) out[k] = v;
-		}
-		return out;
+		return (parsed && typeof parsed === 'object') ? (parsed as Record<string, unknown>) : {};
 	} catch {
 		return {};
 	}

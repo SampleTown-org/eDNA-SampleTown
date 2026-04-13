@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { organizeForm, orderedOptionalBuckets, extractMiscParams, parseMiscParamsFromCustomFields, sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
+	import { organizeForm, orderedOptionalBuckets, parseCustomFields, sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import SlotInput from '$lib/components/SlotInput.svelte';
@@ -9,14 +9,15 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// Seed form state from the existing sample row + any misc_param:* entries
-	// serialized into custom_fields. Keep every column so the bound inputs
-	// don't trip over missing keys when buckets shift.
+	// Seed form state from the existing sample row + any spill fields in
+	// custom_fields. Spread order matters: custom_fields entries (plain
+	// MIxS slots and misc_param:* tags) overlay the column values so a
+	// user-edited slot stored in JSON wins on display.
 	const sample = data.sample as Record<string, unknown>;
-	const miscParamSeed = parseMiscParamsFromCustomFields(sample.custom_fields as string | null);
+	const customFieldSeed = parseCustomFields(sample.custom_fields as string | null);
 	let form = $state<Record<string, unknown>>({
 		...sample,
-		...miscParamSeed,
+		...customFieldSeed,
 		mixs_checklist: (sample.mixs_checklist as string) || 'MimarksS',
 		extension: (sample.extension as string) || '',
 		samp_name: (sample.samp_name as string) || '',
@@ -86,16 +87,12 @@
 
 		saving = true;
 		errorMsg = '';
-		const { core, miscParams } = extractMiscParams(form);
-		const body = {
-			...core,
-			custom_fields: Object.keys(miscParams).length ? JSON.stringify(miscParams) : null,
-			people
-		};
+		// Server splits known columns from spill (custom MIxS slots +
+		// misc_param:* tags) into custom_fields JSON.
 		const res = await fetch(`/api/samples/${(data.sample as any).id}`, {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
+			body: JSON.stringify({ ...form, people })
 		});
 		if (res.ok) {
 			goto(`/samples/${(data.sample as any).id}`);
