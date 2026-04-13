@@ -1,5 +1,12 @@
 import type { PageServerLoad } from './$types';
-import { MIXS_ACTIVE_VERSION, allSlotNames, getSlot, listChecklists, listExtensions } from '$lib/mixs/schema-index';
+import {
+	MIXS_ACTIVE_VERSION,
+	allSlotNames,
+	allSlotsFor,
+	getSlot,
+	listChecklists,
+	listExtensions
+} from '$lib/mixs/schema-index';
 
 /**
  * Glossary page loader — all data is derived from the baked-in MIxS schema
@@ -23,18 +30,34 @@ export const load: PageServerLoad = async () => {
 		})
 		.sort((a, b) => a.name.localeCompare(b.name));
 
+	const checklists = listChecklists().map((c) => ({
+		name: c.name,
+		title: c.title,
+		description: c.description ?? '',
+		properties: c.properties ?? []
+	}));
+	const extensions = listExtensions().map((c) => ({
+		name: c.name,
+		title: c.title,
+		description: c.description ?? '',
+		properties: c.properties ?? []
+	}));
+
+	// Precompute (checklist × extension) → slot-list for the "combo" filter.
+	// Keys are `${checklist}|${extension}` to avoid any `+` ambiguity.
+	const combos: Record<string, string[]> = {};
+	for (const c of checklists) {
+		for (const e of extensions) {
+			const props = allSlotsFor(c.name, e.name);
+			if (props.length > 0) combos[`${c.name}|${e.name}`] = props;
+		}
+	}
+
 	return {
 		version: MIXS_ACTIVE_VERSION,
 		slots,
-		checklists: listChecklists().map((c) => ({
-			name: c.name,
-			title: c.title,
-			description: c.description ?? ''
-		})),
-		extensions: listExtensions().map((c) => ({
-			name: c.name,
-			title: c.title,
-			description: c.description ?? ''
-		}))
+		checklists,
+		extensions,
+		combos
 	};
 };

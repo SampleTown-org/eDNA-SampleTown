@@ -61,7 +61,7 @@
 		env_medium: stripEnvo(s.env_medium)
 	})));
 
-	const columns = [
+	const DEFAULT_COLUMNS = [
 		{ key: 'samp_name', label: 'Sample', sortable: true },
 		{ key: 'project_name', label: 'Project', sortable: true },
 		{ key: 'site_name', label: 'Site', sortable: true },
@@ -72,6 +72,45 @@
 		{ key: 'collection_date', label: 'Collected', sortable: true },
 		{ key: 'people_summary', label: 'People', sortable: true }
 	];
+
+	// User-added optional columns, persisted across reloads.
+	const EXTRA_COLS_KEY = 'samples.extraColumns';
+	let extraColumnSlots = $state<string[]>(
+		(typeof localStorage !== 'undefined' && (() => {
+			try { return JSON.parse(localStorage.getItem(EXTRA_COLS_KEY) || '[]'); } catch { return []; }
+		})()) || []
+	);
+	$effect(() => {
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(EXTRA_COLS_KEY, JSON.stringify(extraColumnSlots));
+		}
+	});
+
+	const parameterTitles = $derived(
+		Object.fromEntries(data.availableParameters.map((p: any) => [p.slot, p.title]))
+	);
+
+	const columns = $derived([
+		...DEFAULT_COLUMNS,
+		...extraColumnSlots
+			.filter((slot) => parameterTitles[slot])
+			.map((slot) => ({ key: slot, label: parameterTitles[slot], sortable: true }))
+	]);
+
+	let addParamValue = $state('');
+	const pickableParameters = $derived(
+		data.availableParameters.filter((p: any) => !extraColumnSlots.includes(p.slot))
+	);
+	function onAddParameter() {
+		if (!addParamValue) return;
+		if (!extraColumnSlots.includes(addParamValue)) {
+			extraColumnSlots = [...extraColumnSlots, addParamValue];
+		}
+		addParamValue = '';
+	}
+	function removeExtraColumn(slot: string) {
+		extraColumnSlots = extraColumnSlots.filter((s) => s !== slot);
+	}
 
 	/** Mirrored from the DataTable so the map pins can adopt the same tint. */
 	let colorByKey = $state('');
@@ -129,6 +168,40 @@
 	{#if markers.length > 0}
 		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" />
 	{/if}
+
+	<!-- Optional columns: drawn from MIxS parameters that have data on ≥1 sample -->
+	<div class="flex flex-wrap items-center gap-2 text-xs">
+		{#each extraColumnSlots as slot (slot)}
+			{@const p = data.availableParameters.find((x: any) => x.slot === slot)}
+			{#if p}
+				<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-slate-700 bg-slate-800/70 text-slate-200">
+					{p.title}
+					<code class="text-slate-500 text-[10px]">{p.slot}</code>
+					<button
+						type="button"
+						onclick={() => removeExtraColumn(slot)}
+						class="text-slate-400 hover:text-red-300 ml-0.5"
+						title="Remove column"
+					>×</button>
+				</span>
+			{/if}
+		{/each}
+
+		{#if pickableParameters.length > 0}
+			<select
+				bind:value={addParamValue}
+				onchange={onAddParameter}
+				class="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-ocean-500"
+			>
+				<option value="">+ parameter</option>
+				{#each pickableParameters as p (p.slot)}
+					<option value={p.slot}>{p.title}{p.isCustom ? ' (custom)' : ''}</option>
+				{/each}
+			</select>
+		{:else if extraColumnSlots.length === 0}
+			<span class="text-slate-600 italic">No extra parameters have data on any sample yet.</span>
+		{/if}
+	</div>
 
 	<DataTable
 		{columns}
