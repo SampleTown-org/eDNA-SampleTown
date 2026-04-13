@@ -75,7 +75,7 @@
 			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Identification</legend>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="project_id" class="block text-sm font-medium text-slate-300 mb-1">Project</label>
+					<FieldLabel slot="project" for="project_id" label="Project" description="SampleTown project this site belongs to." />
 					<select id="project_id" bind:value={form.project_id} class={selectCls}>
 						<option value="">Select project...</option>
 						{#each data.projects as project}
@@ -84,12 +84,12 @@
 					</select>
 				</div>
 				<div>
-					<label for="site_name" class="block text-sm font-medium text-slate-300 mb-1">Site Name</label>
+					<FieldLabel slot="samp_name" for="site_name" label="Site Name" description="Human-readable name for this sampling site. Unique within the project." />
 					<input id="site_name" type="text" bind:value={form.site_name} class={inputCls} />
 				</div>
 			</div>
 			<div>
-				<label for="description" class="block text-sm font-medium text-slate-300 mb-1">Description</label>
+				<FieldLabel slot="description" label="Description" description="Brief description of this sampling site (free text)." />
 				<input id="description" type="text" bind:value={form.description} class={inputCls} placeholder="Brief description of this sampling site" />
 			</div>
 		</fieldset>
@@ -100,26 +100,24 @@
 			<MapPicker bind:latitude bind:longitude onchange={onMapClick} height="350px" />
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="latitude" class="block text-sm font-medium text-slate-300 mb-1">Latitude</label>
+					<FieldLabel slot="lat_lon" for="latitude" label="Latitude" description="Decimal degrees, positive north of the equator. Exported as part of the MIxS lat_lon slot." />
 					<input id="latitude" type="number" step="any" bind:value={latitude} class={inputCls} placeholder="e.g., 48.4284" />
 				</div>
 				<div>
-					<label for="longitude" class="block text-sm font-medium text-slate-300 mb-1">Longitude</label>
+					<FieldLabel slot="lat_lon" for="longitude" label="Longitude" description="Decimal degrees, positive east of the prime meridian. Exported as part of the MIxS lat_lon slot." />
 					<input id="longitude" type="number" step="any" bind:value={longitude} class={inputCls} placeholder="e.g., -123.3656" />
 				</div>
 			</div>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<FieldLabel slot="geo_loc_name" />
+					<FieldLabel slot="geo_loc_name" picklistCategory="geo_loc_name" />
 					<select id="geo_loc_name" bind:value={form.geo_loc_name} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.geo_loc_name as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select>
 				</div>
 				<div>
-					<label for="locality" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Locality</a>
-					</label>
+					<FieldLabel slot="locality" for="locality" label="Locality" picklistCategory="locality" description="Finer-grained locality name within the geographic location (SampleTown-local; not a MIxS slot)." />
 					<select id="locality" bind:value={form.locality} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.locality as opt}<option value={opt.value}>{opt.label}</option>{/each}
@@ -131,14 +129,14 @@
 		<fieldset class="space-y-4">
 			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Environment</legend>
 			<div>
-				<FieldLabel slot="env_broad_scale" />
+				<FieldLabel slot="env_broad_scale" picklistCategory="env_broad_scale" />
 				<select id="env_broad_scale" bind:value={form.env_broad_scale} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.env_broad_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 			<div>
-				<FieldLabel slot="env_local_scale" />
+				<FieldLabel slot="env_local_scale" picklistCategory="env_local_scale" />
 				<select id="env_local_scale" bind:value={form.env_local_scale} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.env_local_scale as opt}<option value={opt.value}>{opt.label}</option>{/each}
@@ -147,12 +145,12 @@
 		</fieldset>
 
 		<div>
-			<label for="access_notes" class="block text-sm font-medium text-slate-300 mb-1">Access Notes</label>
+			<FieldLabel slot="access_notes" label="Access Notes" description="How to get to this site: boat access only, permit required, trail conditions, etc. (SampleTown-local note.)" />
 			<textarea id="access_notes" bind:value={form.access_notes} rows="2" class={inputCls} placeholder="Boat access only, permit required, etc."></textarea>
 		</div>
 
 		<div>
-			<label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
+			<FieldLabel slot="notes" label="Notes" description="Free-form notes about this site." />
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>
 		</div>
 

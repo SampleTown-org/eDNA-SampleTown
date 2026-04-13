@@ -156,10 +156,6 @@
 				<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Inherited from site</h2>
 				<a href="/sites/{sample.site_id}" class="text-xs text-ocean-400 hover:text-ocean-300">{sample.site_name} →</a>
 			</div>
-			<p class="text-xs text-slate-500">
-				These MIxS parameters live on the site record and pass through to the sample on export.
-				Edit them on the <a href="/sites/{sample.site_id}/edit" class="text-ocean-400 hover:text-ocean-300">site page</a>.
-			</p>
 			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 				{#each filledSiteFields as f}
 					<div class={fieldRowCls}>

@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 
 	let form = $state({
 		project_name: '',
@@ -47,57 +50,32 @@
 
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-4">
 		<div>
-			<label for="project_name" class="block text-sm font-medium text-slate-300 mb-1">Project Name *</label>
-			<input
-				id="project_name"
-				type="text"
-				bind:value={form.project_name}
-				class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
-				placeholder={data.namingTemplates?.project_name || 'e.g., Arctic eDNA Survey 2026'}
-			/>
+			<FieldLabel slot="project_name" for="project_name" label="Project Name" required description="SampleTown-local project identifier. Maps to MIxS project_name at export time." />
+			<input id="project_name" type="text" bind:value={form.project_name} class={inputCls}
+				placeholder={data.namingTemplates?.project_name || 'e.g., Arctic eDNA Survey 2026'} />
 		</div>
 
 		<div>
-			<label for="description" class="block text-sm font-medium text-slate-300 mb-1">Description</label>
-			<textarea
-				id="description"
-				bind:value={form.description}
-				rows="3"
-				class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
-				placeholder="Brief description of the project"
-			></textarea>
+			<FieldLabel slot="description" for="description" label="Description" description="Brief description of the project's scope and goals." />
+			<textarea id="description" bind:value={form.description} rows="3" class={inputCls}
+				placeholder="Brief description of the project"></textarea>
 		</div>
 
 		<div class="grid grid-cols-2 gap-4">
 			<div>
-				<label for="pi_name" class="block text-sm font-medium text-slate-300 mb-1">Principal Investigator</label>
-				<input
-					id="pi_name"
-					type="text"
-					bind:value={form.pi_name}
-					class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
-				/>
+				<FieldLabel slot="pi_name" for="pi_name" label="Principal Investigator" description="Name of the PI or project lead. Stored locally; does not auto-export to MIxS." />
+				<input id="pi_name" type="text" bind:value={form.pi_name} class={inputCls} />
 			</div>
 			<div>
-				<label for="institution" class="block text-sm font-medium text-slate-300 mb-1">Institution</label>
-				<input
-					id="institution"
-					type="text"
-					bind:value={form.institution}
-					class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
-				/>
+				<FieldLabel slot="institution" for="institution" label="Institution" description="PI's affiliation (university, institute, lab)." />
+				<input id="institution" type="text" bind:value={form.institution} class={inputCls} />
 			</div>
 		</div>
 
 		<div>
-			<label for="github_repo" class="block text-sm font-medium text-slate-300 mb-1">GitHub Repository</label>
-			<input
-				id="github_repo"
-				type="text"
-				bind:value={form.github_repo}
-				class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
-				placeholder="e.g., org/repo-name"
-			/>
+			<FieldLabel slot="github_repo" for="github_repo" label="GitHub Repository" description="Repository where project DB snapshots are committed (e.g., org/repo-name). Optional." />
+			<input id="github_repo" type="text" bind:value={form.github_repo} class={inputCls}
+				placeholder="e.g., org/repo-name" />
 			<p class="text-xs text-slate-500 mt-1">Repository for DB snapshots (optional)</p>
 		</div>
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
 	import { getSlot } from '$lib/mixs/schema-index';
 	import { cart } from '$lib/stores/cart.svelte';
@@ -222,9 +223,7 @@
 	     on the single-sample form so the two stay aligned. -->
 	<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/40">
 		<div>
-			<label for="batch_checklist" class="block text-sm font-medium text-slate-300 mb-1">
-				<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Checklist</a>
-			</label>
+			<FieldLabel slot="mixs_checklist" for="batch_checklist" label="MIxS Checklist" description="Selects the MIxS LinkML class (MIGS, MIMS, MIMARKS-S, MIMARKS-C, etc.) that defines required/recommended slots for every row created here." />
 			<select id="batch_checklist" bind:value={batchChecklist} class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500">
 				{#each CHECKLIST_OPTIONS as opt}
 					<option value={opt.value}>{opt.label}</option>
@@ -232,9 +231,7 @@
 			</select>
 		</div>
 		<div>
-			<label for="batch_extension" class="block text-sm font-medium text-slate-300 mb-1">
-				<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Extension</a>
-			</label>
+			<FieldLabel slot="extension" for="batch_extension" label="MIxS Extension" description="Environmental extension (formerly env_package) — water / soil / host-associated / etc. Narrows required slots further." />
 			<select id="batch_extension" bind:value={batchExtension} class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500">
 				<option value="">None</option>
 				{#each EXTENSION_OPTIONS as opt}
@@ -335,13 +332,17 @@
 					{#each columns as col}
 						<th class="px-2 py-2 text-left font-medium {col.width ?? ''}">
 							<div class="flex items-center gap-1">
-								<span class={col.required ? 'text-red-400' : ''}>
-									{#if getSlot(col.key)}
-										<a href="/glossary#{col.key}" target="_blank" rel="noopener" class="hover:text-ocean-400">{col.label}</a>
-									{:else}
-										{col.label}
-									{/if}
-								</span>
+								<span class={col.required ? 'text-red-400' : ''}>{col.label}</span>
+								{#if getSlot(col.key)}
+									<a
+										href="/glossary#{col.key}"
+										target="_blank"
+										rel="noopener"
+										class="text-slate-500 hover:text-ocean-400 text-xs"
+										title="Open {col.key} in glossary"
+										aria-label="Open {col.key} in glossary"
+									>&#9432;</a>
+								{/if}
 								{#if extraColumnKeys.includes(col.key)}
 									<button
 										type="button"

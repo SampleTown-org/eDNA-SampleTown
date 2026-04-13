@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
@@ -149,17 +150,21 @@
 	{#if mode === 'single'}
 	<form onsubmit={(e) => { e.preventDefault(); submitSingle(); }} class="space-y-4">
 		<div>
-			<label for="sample_id" class="block text-sm font-medium text-slate-300 mb-1">Source Sample *</label>
+			<FieldLabel slot="sample" for="sample_id" label="Source Sample" required description="Physical sample this extract was made from." />
 			<select id="sample_id" bind:value={form.sample_id} class={selectCls}>
 				<option value="">Select sample{hasCartSamples ? ` (${filteredSamples.length} from cart)` : ''}...</option>
 				{#each filteredSamples as s}<option value={s.id}>{s.samp_name} ({s.project_name})</option>{/each}
 			</select>
 		</div>
 		<div class="grid grid-cols-3 gap-4">
-			<div><label for="extract_name" class="block text-sm font-medium text-slate-300 mb-1">Extract Name *</label>
-				<input id="extract_name" type="text" bind:value={form.extract_name} class={inputCls} placeholder={data.namingTemplates?.extract_name || 'e.g., EXT-001'} /></div>
-			<div><label for="extraction_date" class="block text-sm font-medium text-slate-300 mb-1">Extraction Date</label>
-				<input id="extraction_date" type="date" bind:value={form.extraction_date} class={inputCls} /></div>
+			<div>
+				<FieldLabel slot="extract_name" for="extract_name" label="Extract Name" required description="Human-readable name for this DNA extract. Unique within the lab." />
+				<input id="extract_name" type="text" bind:value={form.extract_name} class={inputCls} placeholder={data.namingTemplates?.extract_name || 'e.g., EXT-001'} />
+			</div>
+			<div>
+				<FieldLabel slot="extraction_date" for="extraction_date" label="Extraction Date" description="Date the extraction was performed." />
+				<input id="extraction_date" type="date" bind:value={form.extraction_date} class={inputCls} />
+			</div>
 			<div></div>
 		</div>
 		<PeoplePicker
@@ -170,70 +175,78 @@
 			label="People"
 		/>
 		<div>
-			<label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Extraction Method / Kit</a></label>
+			<FieldLabel slot="extraction_method" for="extraction_method" label="Extraction Method / Kit" picklistCategory="extraction_method" description="Kit or protocol used to extract nucleic acids." />
 			<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
 				<option value="">Select...</option>
 				{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
 			</select>
 		</div>
 		<div>
-			<label for="nucl_acid_ext" class="block text-sm font-medium text-slate-300 mb-1">
-				<a href="/glossary#nucl_acid_ext" target="_blank" class="hover:text-ocean-400">Nucleic Acid Extraction Protocol</a>
-			</label>
+			<FieldLabel slot="nucl_acid_ext" for="nucl_acid_ext" />
 			<input id="nucl_acid_ext" type="text" bind:value={form.nucl_acid_ext} class={inputCls}
 				placeholder="DOI or protocol URL (MIxS nucl_acid_ext)" />
 		</div>
 		<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 			<div>
-				<label for="samp_taxon_id" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary#samp_taxon_id" target="_blank" class="hover:text-ocean-400">Taxonomy ID of DNA sample</a>
-				</label>
+				<FieldLabel slot="samp_taxon_id" for="samp_taxon_id" />
 				<input id="samp_taxon_id" type="text" bind:value={form.samp_taxon_id} class={inputCls}
 					placeholder="NCBI taxid, e.g. 408172" />
 			</div>
 			<div>
-				<label for="samp_vol_we_dna_ext" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary#samp_vol_we_dna_ext" target="_blank" class="hover:text-ocean-400">Sample volume/weight for extraction</a>
-				</label>
+				<FieldLabel slot="samp_vol_we_dna_ext" for="samp_vol_we_dna_ext" />
 				<input id="samp_vol_we_dna_ext" type="text" bind:value={form.samp_vol_we_dna_ext} class={inputCls}
 					placeholder="e.g. 1500 ml" />
 			</div>
 			<div>
-				<label for="pool_dna_extracts" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary#pool_dna_extracts" target="_blank" class="hover:text-ocean-400">Pool of DNA extracts</a>
-				</label>
+				<FieldLabel slot="pool_dna_extracts" for="pool_dna_extracts" />
 				<input id="pool_dna_extracts" type="text" bind:value={form.pool_dna_extracts} class={inputCls}
 					placeholder="extract IDs if pooled" />
 			</div>
 		</div>
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-			<div><label for="concentration_ng_ul" class="block text-sm font-medium text-slate-300 mb-1">Conc. (ng/µL)</label>
-				<input id="concentration_ng_ul" type="number" step="any" bind:value={form.concentration_ng_ul} class={inputCls} /></div>
-			<div><label for="total_volume_ul" class="block text-sm font-medium text-slate-300 mb-1">Volume (µL)</label>
-				<input id="total_volume_ul" type="number" step="any" bind:value={form.total_volume_ul} class={inputCls} /></div>
-			<div><label for="a260_280" class="block text-sm font-medium text-slate-300 mb-1">260/280</label>
-				<input id="a260_280" type="number" step="any" bind:value={form.a260_280} class={inputCls} /></div>
-			<div><label for="a260_230" class="block text-sm font-medium text-slate-300 mb-1">260/230</label>
-				<input id="a260_230" type="number" step="any" bind:value={form.a260_230} class={inputCls} /></div>
+			<div>
+				<FieldLabel slot="concentration_ng_ul" for="concentration_ng_ul" label="Conc. (ng/µL)" description="Nucleic-acid concentration from quantification." />
+				<input id="concentration_ng_ul" type="number" step="any" bind:value={form.concentration_ng_ul} class={inputCls} />
+			</div>
+			<div>
+				<FieldLabel slot="total_volume_ul" for="total_volume_ul" label="Volume (µL)" description="Total elution volume for this extract." />
+				<input id="total_volume_ul" type="number" step="any" bind:value={form.total_volume_ul} class={inputCls} />
+			</div>
+			<div>
+				<FieldLabel slot="a260_280" for="a260_280" label="260/280" description="A260/A280 purity ratio (NanoDrop). DNA is clean ≈ 1.8." />
+				<input id="a260_280" type="number" step="any" bind:value={form.a260_280} class={inputCls} />
+			</div>
+			<div>
+				<FieldLabel slot="a260_230" for="a260_230" label="260/230" description="A260/A230 purity ratio (NanoDrop). Clean ≈ 2.0–2.2." />
+				<input id="a260_230" type="number" step="any" bind:value={form.a260_230} class={inputCls} />
+			</div>
 		</div>
 		<div class="grid grid-cols-3 gap-4">
-			<div><label for="quantification_method" class="block text-sm font-medium text-slate-300 mb-1">Quantification</label>
+			<div>
+				<FieldLabel slot="quantification_method" for="quantification_method" label="Quantification" description="Instrument used to measure DNA concentration." />
 				<select id="quantification_method" bind:value={form.quantification_method} class={selectCls}>
 					<option value="">Select...</option><option>Qubit</option><option>NanoDrop</option><option>Bioanalyzer</option><option>Other</option>
-				</select></div>
-			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=storage_room" target="_blank" class="hover:text-ocean-400">Room/Freezer</a></label>
+				</select>
+			</div>
+			<div>
+				<FieldLabel slot="storage_room" label="Room/Freezer" picklistCategory="storage_room" description="Physical room or freezer where this extract is stored." />
 				<select bind:value={form.storage_room} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.storage_room as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select></div>
-			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=storage_box" target="_blank" class="hover:text-ocean-400">Storage Box</a></label>
+				</select>
+			</div>
+			<div>
+				<FieldLabel slot="storage_box" label="Storage Box" picklistCategory="storage_box" description="Labeled box or rack within the freezer." />
 				<select bind:value={form.storage_box} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.storage_box as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select></div>
+				</select>
+			</div>
 		</div>
-		<div><label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
-			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea></div>
+		<div>
+			<FieldLabel slot="notes" for="notes" label="Notes" description="Free-form notes about this extract." />
+			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>
+		</div>
 		<div class="flex gap-3 pt-2">
 			<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">{saving ? 'Creating...' : 'Create Extract'}</button>
 			<a href="/extracts" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Cancel</a>
@@ -270,29 +283,41 @@
 		<div class="lg:col-span-2 space-y-4">
 			<p class="text-sm font-semibold text-slate-300">Shared Fields <span class="font-normal text-slate-500">(applied to all)</span></p>
 			<div class="grid grid-cols-2 gap-4">
-				<div><label class="block text-xs font-medium text-slate-400 mb-1">Extraction Date</label>
-					<input type="date" bind:value={shared.extraction_date} class={inputCls} /></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Extraction Method / Kit</a></label>
+				<div>
+					<FieldLabel slot="extraction_date" label="Extraction Date" description="Date the extraction was performed." />
+					<input type="date" bind:value={shared.extraction_date} class={inputCls} />
+				</div>
+				<div>
+					<FieldLabel slot="extraction_method" label="Extraction Method / Kit" picklistCategory="extraction_method" description="Kit or protocol used to extract nucleic acids." />
 					<select bind:value={shared.extraction_method} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1">Quantification</label>
+					</select>
+				</div>
+				<div>
+					<FieldLabel slot="quantification_method" label="Quantification" description="Instrument used to measure DNA concentration." />
 					<select bind:value={shared.quantification_method} class={selectCls}>
 						<option value="">Select...</option><option>Qubit</option><option>NanoDrop</option><option>Bioanalyzer</option><option>Other</option>
-					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=storage_room" target="_blank" class="hover:text-ocean-400">Room/Freezer</a></label>
+					</select>
+				</div>
+				<div>
+					<FieldLabel slot="storage_room" label="Room/Freezer" picklistCategory="storage_room" description="Physical room or freezer where these extracts are stored." />
 					<select bind:value={shared.storage_room} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.storage_room as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=storage_box" target="_blank" class="hover:text-ocean-400">Storage Box</a></label>
+					</select>
+				</div>
+				<div>
+					<FieldLabel slot="storage_box" label="Storage Box" picklistCategory="storage_box" description="Labeled box or rack within the freezer." />
 					<select bind:value={shared.storage_box} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.storage_box as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
-					<input type="text" bind:value={shared.notes} class={inputCls} /></div>
+					</select>
+				</div>
+				<div>
+					<FieldLabel slot="notes" label="Notes" description="Free-form notes applied to every extract in this batch." />
+					<input type="text" bind:value={shared.notes} class={inputCls} />
+				</div>
 			</div>
 			<PeoplePicker
 				bind:people

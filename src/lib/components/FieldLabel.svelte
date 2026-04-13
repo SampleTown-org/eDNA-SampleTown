@@ -28,6 +28,9 @@
 		recommended?: boolean;
 		/** Extra inline content after the label text (e.g. `(°C)`). */
 		suffix?: string;
+		/** constrained_values category this field is backed by, if any — adds a
+		 *  "Manage picklist values" link in the popover. */
+		picklistCategory?: string;
 		class?: string;
 	}
 	let {
@@ -38,13 +41,14 @@
 		required = false,
 		recommended = false,
 		suffix = '',
+		picklistCategory,
 		class: cls = ''
 	}: Props = $props();
 
 	const meta = $derived(getSlot(slot));
 	const displayLabel = $derived(label ?? meta?.title ?? slot);
 	const effectiveDescription = $derived(description ?? meta?.description);
-	const hasDoc = $derived(Boolean(effectiveDescription) || Boolean(meta));
+	const hasDoc = $derived(Boolean(effectiveDescription) || Boolean(meta) || Boolean(picklistCategory));
 	/** Only link to glossary for real MIxS slots. */
 	const hasGlossary = $derived(Boolean(meta));
 	let open = $state(false);
@@ -91,14 +95,24 @@
 						Pattern: <code class="text-slate-400">{meta.structured_pattern ?? meta.pattern}</code>
 					</div>
 				{/if}
-				{#if hasGlossary}
-					<div class="mt-2 flex items-center gap-3 text-[11px]">
-						<a
-							href="/glossary#{slot}"
-							class="text-ocean-400 hover:text-ocean-300"
-							target="_blank"
-							rel="noopener"
-						>Open in glossary &rarr;</a>
+				{#if hasGlossary || picklistCategory}
+					<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+						{#if hasGlossary}
+							<a
+								href="/glossary#{slot}"
+								class="text-ocean-400 hover:text-ocean-300"
+								target="_blank"
+								rel="noopener"
+							>Open in glossary &rarr;</a>
+						{/if}
+						{#if picklistCategory}
+							<a
+								href="/settings?tab=category#{picklistCategory}"
+								class="text-ocean-400 hover:text-ocean-300"
+								target="_blank"
+								rel="noopener"
+							>Manage picklist &rarr;</a>
+						{/if}
 						{#if meta?.slot_uri}
 							<span class="text-slate-500">{meta.slot_uri}</span>
 						{/if}
