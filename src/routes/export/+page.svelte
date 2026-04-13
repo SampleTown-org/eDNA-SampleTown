@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
+	import { MIXS_ACTIVE_VERSION } from '$lib/mixs/schema-index';
 
 	let { data }: { data: PageData } = $props();
 
@@ -11,8 +13,8 @@
 
 	// --- Export ---
 	let exportProject = $state('');
-	let exportChecklist = $state('');
-	let exportEnvPackage = $state('water');
+	let exportChecklist = $state('MimarksS');
+	let exportExtension = $state('Water');
 	let previewTsv = $state('');
 	let previewRows = $state(0);
 	let exporting = $state(false);
@@ -23,7 +25,7 @@
 		const params = new URLSearchParams({ format: 'preview' });
 		if (exportProject) params.set('project_id', exportProject);
 		if (exportChecklist) params.set('checklist', exportChecklist);
-		if (exportEnvPackage) params.set('env_package', exportEnvPackage);
+		if (exportExtension) params.set('extension', exportExtension);
 		const res = await fetch(`/api/export/mixs?${params}`);
 		if (res.ok) {
 			const data = await res.json();
@@ -37,9 +39,16 @@
 		const params = new URLSearchParams();
 		if (exportProject) params.set('project_id', exportProject);
 		if (exportChecklist) params.set('checklist', exportChecklist);
-		if (exportEnvPackage) params.set('env_package', exportEnvPackage);
+		if (exportExtension) params.set('extension', exportExtension);
 		window.location.href = `/api/export/mixs?${params}`;
 	}
+
+	// --- MIxS template download (import side) ---
+	let templateChecklist = $state('MimarksS');
+	let templateExtension = $state('Water');
+	let templateUrl = $derived(
+		`/api/mixs/template?checklist=${templateChecklist}${templateExtension ? '&extension=' + templateExtension : ''}`
+	);
 
 	// --- Import ---
 	let importProject = $state('');
@@ -205,16 +214,14 @@
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
 				<select bind:value={exportChecklist} class={selectCls}>
-					<option value="">All checklists</option>
-					{#each data.checklists as c}<option value={c.mixs_checklist}>{c.mixs_checklist}</option>{/each}
+					{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
 				</select>
 			</div>
 			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1">Env Package</label>
-				<select bind:value={exportEnvPackage} class={selectCls}>
-					{#each ['water', 'soil', 'sediment', 'host-associated', 'air', 'built', 'plant-associated', 'agriculture'] as pkg}
-						<option value={pkg}>{pkg}</option>
-					{/each}
+				<label class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
+				<select bind:value={exportExtension} class={selectCls}>
+					<option value="">(none)</option>
+					{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
 				</select>
 			</div>
 			<button onclick={previewExport} disabled={exporting} class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
@@ -544,33 +551,34 @@
 			</div>
 		{/if}
 
-		<!-- NCBI Templates -->
+		<!-- MIxS v6.3 templates — generated from SampleTown's bundled LinkML
+		     schema, so column headers exactly match what the import parser
+		     recognizes. NCBI BioSample's public templates still lag at v6.0;
+		     using our own generation keeps everything in sync. -->
 		<div class="p-4 rounded-lg border border-slate-800 bg-slate-900/50 space-y-3">
-			<h3 class="text-sm font-medium text-slate-300">NCBI BioSample Templates</h3>
-			<p class="text-xs text-slate-500">Download official NCBI xlsx templates, fill them in, and import directly. SampleTown maps NCBI column headers automatically.</p>
-			<div class="flex flex-wrap gap-2">
-				{#each [
-					{ label: 'MIMARKS Specimen', file: 'MIMARKS.specimen.6.0' },
-					{ label: 'MIMARKS Survey', file: 'MIMARKS.survey.6.0' },
-					{ label: 'MIMS (Metagenome)', file: 'MIMS.me.6.0' },
-					{ label: 'MIMAG', file: 'MIMAG.6.0' },
-					{ label: 'MISAG', file: 'MISAG.6.0' },
-					{ label: 'MIGS Bacteria', file: 'MIGS.ba.6.0' },
-					{ label: 'MIGS Eukaryote', file: 'MIGS.eu.6.0' },
-					{ label: 'MIGS Virus', file: 'MIGS.vi.6.0' },
-					{ label: 'MIUViG', file: 'MIUVIG.6.0' }
-				] as tmpl}
-					<a href="https://www.ncbi.nlm.nih.gov/biosample/docs/templates/packages/{tmpl.file}.xlsx"
-						target="_blank" rel="noopener"
-						class="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs hover:bg-slate-600 hover:text-white transition-colors">
-						{tmpl.label}
-					</a>
-				{/each}
-			</div>
-			<div class="pt-1">
-				<button onclick={() => { window.location.href = '/api/export/mixs?project_id=_none_'; }} class="px-2 py-1 bg-slate-800 text-slate-400 rounded text-xs hover:bg-slate-700 hover:text-white transition-colors">
-					SampleTown Empty Template (TSV)
-				</button>
+			<h3 class="text-sm font-medium text-slate-300">MIxS v{MIXS_ACTIVE_VERSION} templates</h3>
+			<p class="text-xs text-slate-500">
+				Pick a checklist and extension to download an empty TSV with the exact columns that combination requires and recommends.
+				Required slots are prefixed with <code class="text-rose-400">*</code>. Fill in the file, save as TSV, and import above.
+			</p>
+			<div class="flex flex-wrap gap-2 items-end">
+				<div>
+					<label for="tmpl_checklist" class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
+					<select id="tmpl_checklist" bind:value={templateChecklist} class={selectCls}>
+						{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
+					</select>
+				</div>
+				<div>
+					<label for="tmpl_extension" class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
+					<select id="tmpl_extension" bind:value={templateExtension} class={selectCls}>
+						<option value="">(none)</option>
+						{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
+					</select>
+				</div>
+				<a href={templateUrl} download
+					class="px-3 py-2 bg-ocean-700 hover:bg-ocean-600 text-white rounded-lg text-sm font-medium">
+					Download TSV template
+				</a>
 			</div>
 		</div>
 	</div>

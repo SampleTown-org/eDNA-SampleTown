@@ -220,36 +220,44 @@ export function xlsxToTsv(buffer: Buffer): string {
 }
 
 /**
- * Build the header→field map used by the column-mapper UI. Matches on:
- *   1. Exact MIxS slot name (lowercase)
- *   2. MIxS slot aliases (lowercase) — from the active schema's slot metadata
- *   3. A handful of sample/site column aliases specific to SampleTown
- * Returns '_skip_' for columns we recognize as MIxS-structural but don't store
- * (project_name goes to its own column, custom fields handled separately).
+ * Build the header→field map used by the column-mapper UI. Every MIxS slot
+ * resolves to SOMETHING — either a named column (if SampleTown has one) or
+ * `misc_param:<slot>` so the value lands in custom_fields JSON rather than
+ * being silently dropped. SRA/BioSample aliases layer on top, and slot
+ * aliases (from the LinkML `aliases` metadata) point at the same target
+ * as the canonical slot name.
  */
 export function buildHeaderToFieldMap(): Record<string, string> {
 	const map: Record<string, string> = {};
 
-	// Known SampleTown sample columns
+	// Known SampleTown sample + site columns: direct mapping.
 	for (const col of SAMPLE_SLOT_COLUMNS) map[col.toLowerCase()] = col;
-	// Known site columns
 	for (const col of SITE_SLOT_COLUMNS) map[col.toLowerCase()] = col;
 
-	// MIxS slot aliases from the schema index
+	// Every other MIxS slot → misc_param:<slot>. Covers hundreds of
+	// environmental / chemical measurements (alkalinity, ammonium, bromide,
+	// …) that aren't SampleTown table columns but are legitimate MIxS data.
+	// Also covers extract/pcr/library/run/analysis slots on a sample import
+	// — we don't auto-create those entities, but the value is preserved.
 	for (const slotName of allSlotNames()) {
+		const lower = slotName.toLowerCase();
+		if (!map[lower]) {
+			map[lower] = `${MISC_PARAM_PREFIX}${slotName}`;
+		}
+		// Aliases point at the same target the canonical slot resolves to.
 		const slot = getSlot(slotName);
-		if (!slot?.aliases) continue;
-		for (const alias of slot.aliases) {
+		for (const alias of slot?.aliases ?? []) {
 			const k = alias.toLowerCase();
-			if (!map[k] && isKnownColumn(slotName)) map[k] = slotName;
+			if (!map[k]) map[k] = map[lower];
 		}
 	}
 
 	// SRA / BioSample column name translation (canonical list in sra-mapping.ts).
 	for (const [sraCol, mixsSlot] of Object.entries(SRA_TO_MIXS)) {
-		if (isKnownColumn(mixsSlot) || mixsSlot === 'collector_name' || mixsSlot === 'site_name' || mixsSlot === 'notes') {
-			map[sraCol.toLowerCase()] = mixsSlot;
-		}
+		// sraToMixs target may be a SampleTown column (known), a SampleTown-local
+		// field (collector_name / site_name / notes), or any MIxS slot — we
+		// trust the mapping and use it directly.
+		map[sraCol.toLowerCase()] = mixsSlot;
 	}
 
 	// SampleTown-local aliases not covered by the SRA mapping.
@@ -264,11 +272,6 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 	for (const [k, v] of Object.entries(local)) map[k] = v;
 
 	return map;
-}
-
-function isKnownColumn(slot: string): boolean {
-	return (SAMPLE_SLOT_COLUMNS as readonly string[]).includes(slot) ||
-		(SITE_SLOT_COLUMNS as readonly string[]).includes(slot);
 }
 
 /** Fields available as column-mapper targets, labeled with their table. */
