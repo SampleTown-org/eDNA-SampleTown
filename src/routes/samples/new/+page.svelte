@@ -60,7 +60,10 @@
 	const selectCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';
 	const legendCls = 'text-sm font-semibold text-slate-300 uppercase tracking-wider';
 
-	const PROJECT_DESCRIPTION = 'SampleTown project this sample belongs to. On MIxS export, the project name is emitted from the project record.';
+	// Site isn't a MIxS concept — it's SampleTown's grouping of location +
+	// environmental context (lat_lon, geo_loc_name, env_broad_scale,
+	// env_local_scale). For Project we just use the MIxS project_name slot
+	// directly (MIXS:0000092), so no local description override is needed.
 	const SITE_DESCRIPTION = 'SampleTown site where this sample was collected. Sites own the MIxS location slots (lat_lon, geo_loc_name, env_broad_scale, env_local_scale) and pass them through to the sample on export.';
 </script>
 
@@ -119,7 +122,7 @@
 
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<FieldLabel slot="project_id" label="Project" required description={PROJECT_DESCRIPTION} />
+					<FieldLabel slot="project_name" for="project_id" label="Project" required />
 					<select id="project_id" bind:value={form.project_id} class={selectCls}>
 						<option value="">Select project...</option>
 						{#each data.projects as project}

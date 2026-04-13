@@ -106,9 +106,22 @@ export const NON_SAMPLE_SLOTS: Record<string, SampleTownTable> = {
 	seq_quality_check: 'analyses'
 };
 
-/** Return the SampleTown table that owns a given MIxS slot. */
+import { getSlot } from './schema-index';
+
+/**
+ * Return the SampleTown table that owns a given MIxS slot.
+ * Explicit NON_SAMPLE_SLOTS entries take precedence. Slots not mapped but
+ * living in MIxS `in_subset: sequencing` are assumed to belong on analyses —
+ * MIxS's sequencing subset is almost entirely about post-sequencing results
+ * (assembly, annotation, taxonomy, bin quality, contamination screening),
+ * which SampleTown doesn't currently import. Everything else defaults to
+ * samples.
+ */
 export function slotTable(slot: string): SampleTownTable {
-	return NON_SAMPLE_SLOTS[slot] ?? 'samples';
+	if (NON_SAMPLE_SLOTS[slot]) return NON_SAMPLE_SLOTS[slot];
+	const meta = getSlot(slot);
+	if (meta?.in_subset?.[0] === 'sequencing') return 'analyses';
+	return 'samples';
 }
 
 /** Human-facing label for a table (for "→ extracts tab" style links). */

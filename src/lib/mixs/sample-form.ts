@@ -191,16 +191,17 @@ const BUCKET_OVERRIDES: Record<string, string> = {
 	pathogenicity: 'Other',
 	tidal_stage: 'Other',
 
-	// Investigation — culture / isolate / reference metadata
-	isol_growth_condt: 'Investigation',
-	ref_biomaterial: 'Investigation',
-	encoded_traits: 'Investigation',
-	estimated_size: 'Investigation',
-	propagation: 'Investigation',
-	ploidy: 'Investigation',
-	subspecf_gen_lin: 'Investigation',
-	host_disease_stat: 'Investigation',
-	host_spec_range: 'Investigation',
+	// Culture / isolate / reference metadata — folded into Other with the
+	// measurements; rare-for-eDNA, no value in a dedicated bucket
+	isol_growth_condt: 'Other',
+	ref_biomaterial: 'Other',
+	encoded_traits: 'Other',
+	estimated_size: 'Other',
+	propagation: 'Other',
+	ploidy: 'Other',
+	subspecf_gen_lin: 'Other',
+	host_disease_stat: 'Other',
+	host_spec_range: 'Other',
 	tax_ident: 'Investigation'
 };
 
@@ -219,7 +220,13 @@ const BUCKET_OVERRIDES: Record<string, string> = {
 function subsetOfSlot(slot: string): string {
 	if (BUCKET_OVERRIDES[slot]) return BUCKET_OVERRIDES[slot];
 	const sub = getSlot(slot)?.in_subset?.[0];
-	if (!sub || sub === 'nucleic acid sequence source' || sub === 'environment') return 'Other';
+	// MIxS subsets that fold into Other:
+	//   - environment (too noisy as its own section)
+	//   - nucleic acid sequence source (grab-bag)
+	//   - investigation (dropped per UX feedback)
+	if (!sub || sub === 'nucleic acid sequence source' || sub === 'environment' || sub === 'investigation') {
+		return 'Other';
+	}
 	return sub.replace(/^[a-z]/, (c) => c.toUpperCase());
 }
 
@@ -233,9 +240,7 @@ function subsetOfSlot(slot: string): string {
 export function orderedOptionalBuckets(optional: Record<string, SlotConfig[]>): [string, SlotConfig[]][] {
 	const priority: Record<string, number> = {
 		'Sampling & Storage': 0,
-		Other: 1,
-		Investigation: 2,
-		Sequencing: 3
+		Other: 1
 	};
 	return Object.entries(optional)
 		.sort(([a], [b]) => (priority[a] ?? 50) - (priority[b] ?? 50))
