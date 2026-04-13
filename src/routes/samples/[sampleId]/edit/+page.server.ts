@@ -4,17 +4,23 @@ import { getDb } from '$lib/server/db';
 import { getConstrainedValues } from '$lib/server/constrained-values';
 import { getActivePersonnel } from '$lib/server/personnel';
 import { getEntityPersonnel } from '$lib/server/entity-personnel';
+import { loadSampleValues } from '$lib/server/sample-body';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const db = getDb();
 
-	const sample = db.prepare(`
+	const sampleRow = db.prepare(`
 		SELECT s.*, p.project_name
 		FROM samples s
 		JOIN projects p ON p.id = s.project_id
 		WHERE s.id = ? AND s.is_deleted = 0
-	`).get(params.sampleId);
-	if (!sample) throw error(404, 'Sample not found');
+	`).get(params.sampleId) as Record<string, unknown> | undefined;
+	if (!sampleRow) throw error(404, 'Sample not found');
+
+	// Spread sample_values onto the sample object so the form sees every
+	// EAV-stored slot (silicate, ammonium, misc_param:*, …) as a plain key.
+	const values = loadSampleValues(db, params.sampleId);
+	const sample = { ...sampleRow, ...values };
 
 	const projects = db.prepare('SELECT id, project_name FROM projects ORDER BY project_name').all();
 	const sites = db.prepare(`

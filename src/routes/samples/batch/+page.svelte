@@ -1,10 +1,23 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
+	import { getSlot } from '$lib/mixs/schema-index';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	/** MIxS checklist + extension applied to every row created here. Matches
+	 *  the picker on the single-sample form so batch-created rows agree
+	 *  on which combination class drives validation/required slots. */
+	let batchChecklist = $state('MimarksS');
+	let batchExtension = $state('Water');
+
+	/** Resolve a header label to its MIxS slot title for nicer column headers. */
+	function slotLabel(key: string, fallback: string): string {
+		return getSlot(key)?.title ?? fallback;
+	}
 
 	type Row = Record<string, string>;
 
@@ -158,6 +171,8 @@
 				project_id: row.project_id,
 				site_id: row.site_id,
 				samp_name: row.samp_name.trim(),
+				mixs_checklist: batchChecklist,
+				extension: batchExtension || null,
 				people
 			};
 			for (const col of columns) {
@@ -201,6 +216,35 @@
 	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
 		<a href="/samples/new" class="px-4 py-1.5 rounded text-sm font-medium text-slate-400 hover:text-white transition-colors">Single</a>
 		<span class="px-4 py-1.5 rounded text-sm font-medium bg-ocean-600 text-white">Batch</span>
+	</div>
+
+	<!-- MIxS checklist + extension applied to every row. Matches the picker
+	     on the single-sample form so the two stay aligned. -->
+	<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/40">
+		<div>
+			<label for="batch_checklist" class="block text-sm font-medium text-slate-300 mb-1">
+				<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Checklist</a>
+			</label>
+			<select id="batch_checklist" bind:value={batchChecklist} class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500">
+				{#each CHECKLIST_OPTIONS as opt}
+					<option value={opt.value}>{opt.label}</option>
+				{/each}
+			</select>
+		</div>
+		<div>
+			<label for="batch_extension" class="block text-sm font-medium text-slate-300 mb-1">
+				<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Extension</a>
+			</label>
+			<select id="batch_extension" bind:value={batchExtension} class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500">
+				<option value="">None</option>
+				{#each EXTENSION_OPTIONS as opt}
+					<option value={opt.value}>{opt.label}</option>
+				{/each}
+			</select>
+		</div>
+		<p class="text-xs text-slate-500 sm:col-span-2">
+			Applied to every row created here. Equivalent to picking these on the single-sample form.
+		</p>
 	</div>
 
 	{#if errorMsg}
@@ -291,7 +335,13 @@
 					{#each columns as col}
 						<th class="px-2 py-2 text-left font-medium {col.width ?? ''}">
 							<div class="flex items-center gap-1">
-								<span class={col.required ? 'text-red-400' : ''}>{col.label}</span>
+								<span class={col.required ? 'text-red-400' : ''}>
+									{#if getSlot(col.key)}
+										<a href="/glossary#{col.key}" target="_blank" rel="noopener" class="hover:text-ocean-400">{col.label}</a>
+									{:else}
+										{col.label}
+									{/if}
+								</span>
 								{#if extraColumnKeys.includes(col.key)}
 									<button
 										type="button"

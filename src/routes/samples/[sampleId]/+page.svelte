@@ -1,9 +1,14 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
+	import { getSlot } from '$lib/mixs/schema-index';
+	import { slotTable } from '$lib/mixs/slot-ownership';
+	import { MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	const sample = data.sample as Record<string, unknown>;
 
 	const extractColumns = [
 		{ key: 'extract_name', label: 'Extract', sortable: true },
@@ -12,26 +17,97 @@
 		{ key: 'extraction_date', label: 'Date', sortable: true }
 	];
 
-	const coreFields: [string, unknown, string?][] = [
-		['Collection Date', data.sample.collection_date, 'collection_date'],
-		['Lat/Lon', data.sample.lat_lon, 'lat_lon'],
-		['Location', data.sample.geo_loc_name, 'geo_loc_name'],
-		['Broad-scale Env', data.sample.env_broad_scale, 'env_broad_scale'],
-		['Local Env', data.sample.env_local_scale, 'env_local_scale'],
-		['Env Medium', data.sample.env_medium, 'env_medium']
+	/** SampleTown columns that hold direct sample-stage data. We render every
+	 *  one that has a value, so empty slots don't clutter the page. */
+	const SAMPLE_COLUMNS: { key: string; label?: string; unit?: string }[] = [
+		{ key: 'env_medium' },
+		{ key: 'depth', unit: 'm' },
+		{ key: 'elev', unit: 'm' },
+		{ key: 'host_taxid' },
+		{ key: 'specific_host' },
+		{ key: 'temp', unit: '°C' },
+		{ key: 'salinity', unit: 'PSU' },
+		{ key: 'ph' },
+		{ key: 'diss_oxygen', unit: 'mg/L' },
+		{ key: 'pressure', unit: 'atm' },
+		{ key: 'turbidity', unit: 'NTU' },
+		{ key: 'chlorophyll', unit: 'µg/L' },
+		{ key: 'nitrate', unit: 'µmol/L' },
+		{ key: 'phosphate', unit: 'µmol/L' },
+		{ key: 'samp_collect_device' },
+		{ key: 'samp_collect_method' },
+		{ key: 'samp_mat_process' },
+		{ key: 'samp_size' },
+		{ key: 'size_frac' },
+		{ key: 'source_mat_id' },
+		{ key: 'samp_store_sol' },
+		{ key: 'samp_store_temp', unit: '°C' },
+		{ key: 'samp_store_dur' },
+		{ key: 'samp_store_loc' },
+		{ key: 'store_cond' },
+		{ key: 'ref_biomaterial' },
+		{ key: 'isol_growth_condt' },
+		{ key: 'tax_ident' },
+		{ key: 'filter_type' },
+		{ key: 'collector_name' }
 	];
 
-	const measurements: [string, unknown, string, string?][] = ([
-		['Temperature', data.sample.temp, '°C', 'temp'],
-		['Salinity', data.sample.salinity, 'PSU', 'salinity'],
-		['pH', data.sample.ph, '', 'ph'],
-		['Dissolved O₂', data.sample.diss_oxygen, 'mg/L', 'diss_oxygen'],
-		['Pressure', data.sample.pressure, 'atm', 'pressure'],
-		['Turbidity', data.sample.turbidity, 'NTU', 'turbidity'],
-		['Chlorophyll', data.sample.chlorophyll, 'µg/L', 'chlorophyll'],
-		['Nitrate', data.sample.nitrate, 'µmol/L', 'nitrate'],
-		['Phosphate', data.sample.phosphate, 'µmol/L', 'phosphate']
-	] as [string, unknown, string, string?][]).filter(([_, v]) => v != null);
+	/** Site-inherited fields. These live on sites; SampleTown emits them on
+	 *  MIxS export from the joined site row. */
+	const SITE_INHERITED: { key: string; label?: string }[] = [
+		{ key: 'lat_lon' },
+		{ key: 'geo_loc_name' },
+		{ key: 'env_broad_scale' },
+		{ key: 'env_local_scale' }
+	];
+
+	function val(key: string): unknown { return sample[key]; }
+	function present(v: unknown): boolean { return v != null && v !== ''; }
+	function slotTitle(s: string): string {
+		return getSlot(s)?.title ?? s;
+	}
+
+	let filledSampleColumns = $derived(SAMPLE_COLUMNS.filter((c) => present(val(c.key))));
+	let filledSiteFields = $derived(SITE_INHERITED.filter((c) => present(val(c.key))));
+
+	/** Anything else on the sample object that isn't one of our known columns
+	 *  must be a sample_values entry (other MIxS slot or misc_param:* tag).
+	 *  Filter out housekeeping columns so we don't render them. */
+	const HOUSEKEEPING = new Set([
+		'id', 'project_id', 'site_id', 'mixs_checklist', 'extension',
+		'samp_name', 'collection_date', 'project_name', 'site_name',
+		'latitude', 'longitude', 'notes',
+		'sync_version', 'is_deleted', 'created_by', 'created_at', 'updated_at',
+		'client_id', 'local_created_at',
+		...SAMPLE_COLUMNS.map((c) => c.key),
+		...SITE_INHERITED.map((c) => c.key)
+	]);
+
+	let extraSlots = $derived.by(() => {
+		const out: { slot: string; value: unknown; title: string; isCustom: boolean }[] = [];
+		for (const [k, v] of Object.entries(sample)) {
+			if (HOUSEKEEPING.has(k)) continue;
+			if (!present(v)) continue;
+			const isCustom = k.startsWith(MISC_PARAM_PREFIX);
+			out.push({
+				slot: k,
+				value: v,
+				title: isCustom ? k.slice(MISC_PARAM_PREFIX.length) : slotTitle(k),
+				isCustom
+			});
+		}
+		return out.sort((a, b) => {
+			// Custom tags last; everything else alphabetical
+			if (a.isCustom !== b.isCustom) return a.isCustom ? 1 : -1;
+			return a.slot.localeCompare(b.slot);
+		});
+	});
+	let mixsExtras = $derived(extraSlots.filter((e) => !e.isCustom));
+	let customTags = $derived(extraSlots.filter((e) => e.isCustom));
+
+	const fieldRowCls = 'flex justify-between py-1 border-b border-slate-800/50';
+	const labelCls = 'text-slate-400';
+	const valueCls = 'text-slate-200';
 </script>
 
 <div class="space-y-6">
@@ -39,45 +115,116 @@
 		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
 		<div class="flex items-center justify-between mt-1">
 			<div class="flex items-center gap-3">
-				<h1 class="text-2xl font-bold text-white">{data.sample.samp_name}</h1>
-				<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{data.sample.mixs_checklist}</span>
+				<h1 class="text-2xl font-bold text-white">{sample.samp_name}</h1>
+				<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">
+					{sample.mixs_checklist}{sample.extension ? ' + ' + sample.extension : ''}
+				</span>
 			</div>
-			<a href="/samples/{data.sample.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<a href="/samples/{sample.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 		<p class="text-slate-400 mt-1">
-			Project: <a href="/projects/{data.sample.project_id}" class="text-ocean-400 hover:text-ocean-300">{data.sample.project_name}</a>
-			{#if data.sample.site_name}
-				&middot; Site: <a href="/sites/{data.sample.site_id}" class="text-ocean-400 hover:text-ocean-300">{data.sample.site_name}</a>
+			Project: <a href="/projects/{sample.project_id}" class="text-ocean-400 hover:text-ocean-300">{sample.project_name}</a>
+			{#if sample.site_name}
+				&middot; Site: <a href="/sites/{sample.site_id}" class="text-ocean-400 hover:text-ocean-300">{sample.site_name}</a>
 			{/if}
 		</p>
 	</div>
 
-	<!-- Core fields -->
+	<!-- Identity / what + when -->
 	<div class="rounded-lg border border-slate-800 p-5 space-y-3">
-		<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">MIxS Core</h2>
+		<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Identity</h2>
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-			{#each coreFields as [label, value, slot]}
-				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">
-						{#if slot}<a href="/glossary#{slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{label}</a>{:else}{label}{/if}
-					</dt>
-					<dd class="text-slate-200">{value || '—'}</dd>
-				</div>
-			{/each}
+			<div class={fieldRowCls}>
+				<dt class={labelCls}>
+					<a href="/glossary#samp_name" target="_blank" rel="noopener" class="hover:text-ocean-400">Sample Name</a>
+				</dt>
+				<dd class={valueCls}>{sample.samp_name || '—'}</dd>
+			</div>
+			<div class={fieldRowCls}>
+				<dt class={labelCls}>
+					<a href="/glossary#collection_date" target="_blank" rel="noopener" class="hover:text-ocean-400">Collection Date</a>
+				</dt>
+				<dd class={valueCls}>{sample.collection_date || '—'}</dd>
+			</div>
 		</dl>
 	</div>
 
-	<!-- Measurements (if any) -->
-	{#if measurements.length > 0}
+	<!-- Inherited from site -->
+	{#if filledSiteFields.length > 0}
 		<div class="rounded-lg border border-slate-800 p-5 space-y-3">
-			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Measurements</h2>
-			<dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
-				{#each measurements as [label, value, unit, slot]}
-					<div class="flex justify-between py-1 border-b border-slate-800/50">
-						<dt class="text-slate-400">
-							{#if slot}<a href="/glossary#{slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{label}</a>{:else}{label}{/if}
+			<div class="flex items-baseline justify-between">
+				<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Inherited from site</h2>
+				<a href="/sites/{sample.site_id}" class="text-xs text-ocean-400 hover:text-ocean-300">{sample.site_name} →</a>
+			</div>
+			<p class="text-xs text-slate-500">
+				These MIxS slots live on the site record and pass through to the sample on export.
+				Edit them on the <a href="/sites/{sample.site_id}/edit" class="text-ocean-400 hover:text-ocean-300">site page</a>.
+			</p>
+			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+				{#each filledSiteFields as f}
+					<div class={fieldRowCls}>
+						<dt class={labelCls}>
+							<a href="/glossary#{f.key}" target="_blank" rel="noopener" class="hover:text-ocean-400">{slotTitle(f.key)}</a>
 						</dt>
-						<dd class="text-slate-200">{value} {unit}</dd>
+						<dd class={valueCls}>{val(f.key)}</dd>
+					</div>
+				{/each}
+			</dl>
+		</div>
+	{/if}
+
+	<!-- Sample-specific (column-stored) -->
+	{#if filledSampleColumns.length > 0}
+		<div class="rounded-lg border border-slate-800 p-5 space-y-3">
+			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Sample data</h2>
+			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+				{#each filledSampleColumns as c}
+					<div class={fieldRowCls}>
+						<dt class={labelCls}>
+							<a href="/glossary#{c.key}" target="_blank" rel="noopener" class="hover:text-ocean-400">{slotTitle(c.key)}</a>
+						</dt>
+						<dd class={valueCls}>{val(c.key)}{c.unit ? ' ' + c.unit : ''}</dd>
+					</div>
+				{/each}
+			</dl>
+		</div>
+	{/if}
+
+	<!-- Other MIxS slots (sample_values EAV) -->
+	{#if mixsExtras.length > 0}
+		<div class="rounded-lg border border-slate-800 p-5 space-y-3">
+			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+				Other MIxS slots
+				<span class="text-xs text-slate-500 normal-case tracking-normal font-normal">({mixsExtras.length})</span>
+			</h2>
+			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+				{#each mixsExtras as e}
+					<div class={fieldRowCls}>
+						<dt class={labelCls}>
+							<a href="/glossary#{e.slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{e.title}</a>
+							<span class="text-xs text-slate-600 ml-1 font-mono">{e.slot}</span>
+						</dt>
+						<dd class={valueCls}>{e.value}</dd>
+					</div>
+				{/each}
+			</dl>
+		</div>
+	{/if}
+
+	<!-- Custom tags (misc_param:*) -->
+	{#if customTags.length > 0}
+		<div class="rounded-lg border border-amber-900/50 bg-amber-950/10 p-5 space-y-3">
+			<h2 class="text-sm font-semibold text-amber-300 uppercase tracking-wider">
+				Custom tags
+				<span class="text-xs text-amber-300/60 normal-case tracking-normal font-normal">(off-schema)</span>
+			</h2>
+			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+				{#each customTags as e}
+					<div class={fieldRowCls}>
+						<dt class={labelCls}>
+							<a href="/glossary#misc_param" target="_blank" rel="noopener" class="text-amber-400 hover:text-amber-300 font-mono text-xs">misc_param:</a><span class="font-mono text-xs text-slate-200">{e.title}</span>
+						</dt>
+						<dd class={valueCls}>{e.value}</dd>
 					</div>
 				{/each}
 			</dl>
@@ -85,10 +232,10 @@
 	{/if}
 
 	<!-- Notes -->
-	{#if data.sample.notes}
+	{#if sample.notes}
 		<div class="rounded-lg border border-slate-800 p-5">
 			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-2">Notes</h2>
-			<p class="text-sm text-slate-300">{data.sample.notes}</p>
+			<p class="text-sm text-slate-300 whitespace-pre-wrap">{sample.notes}</p>
 		</div>
 	{/if}
 
@@ -104,7 +251,7 @@
 		<div class="flex items-center justify-between mb-3">
 			<h2 class="text-lg font-semibold text-white">DNA Extracts ({data.extracts.length})</h2>
 			<a
-				href="/extracts/new?sample_id={data.sample.id}"
+				href="/extracts/new?sample_id={sample.id}"
 				class="px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
 			>
 				Add Extract
