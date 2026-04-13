@@ -256,3 +256,43 @@ function sortBucket(fields: SlotConfig[]): SlotConfig[] {
 		return a.slot.localeCompare(b.slot);
 	});
 }
+
+/** Prefix used for custom misc_param annotations in form state + custom_fields JSON. */
+export const MISC_PARAM_PREFIX = 'misc_param:';
+
+/**
+ * Split a form state object into its real-slot entries and its custom
+ * misc_param:* entries. Used on submit to serialize misc_param tags into
+ * custom_fields JSON, and on edit-load to un-serialize them back into
+ * form state.
+ */
+export function extractMiscParams(form: Record<string, unknown>): {
+	core: Record<string, unknown>;
+	miscParams: Record<string, unknown>;
+} {
+	const core: Record<string, unknown> = {};
+	const miscParams: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(form)) {
+		if (k.startsWith(MISC_PARAM_PREFIX)) {
+			if (v != null && v !== '') miscParams[k] = v;
+		} else {
+			core[k] = v;
+		}
+	}
+	return { core, miscParams };
+}
+
+/** Parse a stored custom_fields JSON string and return just its misc_param:* entries. */
+export function parseMiscParamsFromCustomFields(customFields: string | null | undefined): Record<string, unknown> {
+	if (!customFields) return {};
+	try {
+		const parsed = JSON.parse(customFields);
+		const out: Record<string, unknown> = {};
+		for (const [k, v] of Object.entries(parsed ?? {})) {
+			if (k.startsWith(MISC_PARAM_PREFIX)) out[k] = v;
+		}
+		return out;
+	} catch {
+		return {};
+	}
+}

@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { organizeForm, orderedOptionalBuckets } from '$lib/mixs/sample-form';
-	import { tableLabel } from '$lib/mixs/slot-ownership';
+	import { organizeForm, orderedOptionalBuckets, extractMiscParams, parseMiscParamsFromCustomFields, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import SlotInput from '$lib/components/SlotInput.svelte';
@@ -10,11 +9,14 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// Seed form state from the existing sample row — keep every column so the
-	// bound inputs don't trip over missing keys when buckets shift.
+	// Seed form state from the existing sample row + any misc_param:* entries
+	// serialized into custom_fields. Keep every column so the bound inputs
+	// don't trip over missing keys when buckets shift.
 	const sample = data.sample as Record<string, unknown>;
+	const miscParamSeed = parseMiscParamsFromCustomFields(sample.custom_fields as string | null);
 	let form = $state<Record<string, unknown>>({
 		...sample,
+		...miscParamSeed,
 		mixs_checklist: (sample.mixs_checklist as string) || 'MimarksS',
 		extension: (sample.extension as string) || '',
 		samp_name: (sample.samp_name as string) || '',
@@ -40,6 +42,43 @@
 		organizeForm(form.mixs_checklist as string, (form.extension as string) || null, data.picklists)
 	);
 
+	let otherFields = $derived(organized.optional.Other ?? []);
+	let otherRecommended = $derived(otherFields.filter((f) => f.recommended));
+	let otherRest = $derived(otherFields.filter((f) => !f.recommended));
+
+	// Auto-reveal any non-recommended slot that already has a value saved
+	// (so editing an existing sample shows its filled fields in the Other
+	// section instead of tucking them away behind Add-parameter).
+	let revealed = $state<Set<string>>(new Set(
+		Object.entries(form)
+			.filter(([k, v]) => v != null && v !== '' && !k.startsWith(MISC_PARAM_PREFIX))
+			.map(([k]) => k)
+	));
+	let miscParamKeys = $derived(Object.keys(form).filter((k) => k.startsWith(MISC_PARAM_PREFIX)));
+
+	let otherRestVisible = $derived(otherRest.filter((f) => revealed.has(f.slot)));
+	let otherRestHidden = $derived(otherRest.filter((f) => !revealed.has(f.slot)));
+
+	let addSlotValue = $state<string>('');
+	let customName = $state<string>('');
+
+	function onAddSlotChange() {
+		const v = addSlotValue;
+		if (!v || v === '__custom__') return;
+		revealed.add(v);
+		revealed = new Set(revealed);
+		form[v] ??= '';
+		addSlotValue = '';
+	}
+	function addCustomParam() {
+		const name = customName.trim().replace(/[^a-zA-Z0-9_.\-]/g, '_');
+		if (!name) return;
+		const key = `${MISC_PARAM_PREFIX}${name}`;
+		if (!(key in form)) form[key] = '';
+		customName = '';
+		addSlotValue = '';
+	}
+
 	async function submit() {
 		if (!form.project_id) { errorMsg = 'Please select a project'; return; }
 		if (!form.site_id) { errorMsg = 'Please select a site'; return; }
@@ -47,10 +86,16 @@
 
 		saving = true;
 		errorMsg = '';
+		const { core, miscParams } = extractMiscParams(form);
+		const body = {
+			...core,
+			custom_fields: Object.keys(miscParams).length ? JSON.stringify(miscParams) : null,
+			people
+		};
 		const res = await fetch(`/api/samples/${(data.sample as any).id}`, {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ ...form, people })
+			body: JSON.stringify(body)
 		});
 		if (res.ok) {
 			goto(`/samples/${(data.sample as any).id}`);
@@ -179,26 +224,9 @@
 			</div>
 		</fieldset>
 
-		<!-- Required but on another SampleTown tab. Purely informational. -->
-		{#if organized.requiredOffSample.length > 0}
-			<div class="rounded-lg border border-amber-800 bg-amber-900/10 p-3 text-sm text-amber-200">
-				<p class="font-medium mb-1">Also required by {form.mixs_checklist}{form.extension ? ` + ${form.extension}` : ''}:</p>
-				<ul class="space-y-0.5 text-xs">
-					{#each organized.requiredOffSample as { slot, table }}
-						<li>
-							<a href="/glossary#{slot}" target="_blank" class="hover:text-amber-100">
-								<code class="text-amber-300">{slot}</code>
-							</a>
-							<span class="text-amber-200/60"> → {tableLabel(table as any)}</span>
-						</li>
-					{/each}
-				</ul>
-			</div>
-		{/if}
-
-		<!-- Optional buckets — recommended slots appear here with an amber `*`. -->
+		<!-- Sampling & Storage (and any other non-Other bucket) — flat render -->
 		{#each orderedOptionalBuckets(organized.optional) as [bucket, fields] (bucket)}
-			{#if fields.length > 0}
+			{#if bucket !== 'Other' && fields.length > 0}
 				<details class="group space-y-4">
 					<summary class="{legendCls} cursor-pointer flex items-center gap-2">
 						<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
@@ -222,6 +250,86 @@
 				</details>
 			{/if}
 		{/each}
+
+		<!-- Other — recommended slots inline; rest hidden behind +Add parameter -->
+		{#if otherFields.length > 0 || miscParamKeys.length > 0}
+			<details class="group space-y-4" open>
+				<summary class="{legendCls} cursor-pointer flex items-center gap-2">
+					<span class="text-slate-500 group-open:rotate-90 transition-transform">&#9654;</span>
+					Other
+					<span class="normal-case tracking-normal font-normal text-xs text-slate-500">
+						({otherRecommended.length} recommended, {otherRest.length} available)
+					</span>
+				</summary>
+
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+					{#each otherRecommended as field (field.slot)}
+						<SlotInput
+							slot={field.slot}
+							type={field.type}
+							bind:value={form[field.slot]}
+							placeholder={field.placeholder}
+							recommended={true}
+							options={field.options ?? []}
+						/>
+					{/each}
+
+					{#each otherRestVisible as field (field.slot)}
+						<SlotInput
+							slot={field.slot}
+							type={field.type}
+							bind:value={form[field.slot]}
+							placeholder={field.placeholder}
+							options={field.options ?? []}
+						/>
+					{/each}
+
+					{#each miscParamKeys as key (key)}
+						<div>
+							<label for={key} class="block text-sm font-medium text-slate-300 mb-1">
+								<a href="/glossary#misc_param" target="_blank" class="text-amber-300 hover:text-amber-200 font-mono text-xs">misc_param:</a><span class="font-mono text-xs text-slate-200">{key.slice(MISC_PARAM_PREFIX.length)}</span>
+							</label>
+							<input id={key} type="text" bind:value={form[key]}
+								class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500" />
+						</div>
+					{/each}
+				</div>
+
+				<div class="mt-4 flex flex-wrap gap-2 items-center">
+					<select
+						bind:value={addSlotValue}
+						onchange={onAddSlotChange}
+						class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500"
+					>
+						<option value="">+ Add parameter...</option>
+						{#if otherRestHidden.length > 0}
+							<optgroup label="MIxS optional slots">
+								{#each otherRestHidden as f (f.slot)}
+									<option value={f.slot}>{f.slot}</option>
+								{/each}
+							</optgroup>
+						{/if}
+						<option value="__custom__">custom tag (misc_param:…)</option>
+					</select>
+
+					{#if addSlotValue === '__custom__'}
+						<input
+							type="text"
+							bind:value={customName}
+							placeholder="parameter name (e.g., Bicarbonate concentration)"
+							class="flex-1 min-w-48 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-ocean-500"
+						/>
+						<button
+							type="button"
+							onclick={addCustomParam}
+							class="px-3 py-2 bg-ocean-700 hover:bg-ocean-600 rounded-lg text-white text-sm font-medium"
+						>
+							Add
+						</button>
+					{/if}
+				</div>
+			</details>
+		{/if}
 
 		<PeoplePicker
 			bind:people

@@ -338,9 +338,11 @@ export function parseMixsTsv(
 			if (val === '' || val === 'not collected' || val === 'not applicable' || val === 'missing') {
 				val = null;
 			}
-			if (field.startsWith('custom:')) {
-				const key = field.slice('custom:'.length);
-				if (key) customFields[key] = val;
+			// `misc_param:<key>` — route unknown columns into the custom_fields
+			// JSON blob under a MIxS-style misc_param-prefixed key. The sample form
+			// reads these back as optional inputs.
+			if (field.startsWith('misc_param:')) {
+				if (field.length > 'misc_param:'.length) customFields[field] = val;
 				continue;
 			}
 			sample[field] = val;

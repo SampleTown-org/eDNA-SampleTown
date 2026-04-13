@@ -82,7 +82,7 @@
 	let duplicateTargets = $derived.by(() => {
 		const seen = new Map<string, string[]>();
 		for (const [header, field] of Object.entries(columnMap)) {
-			if (!field || field === '_skip_' || field.startsWith('custom:')) continue;
+			if (!field || field === '_skip_' || field.startsWith('misc_param:')) continue;
 			if (!seen.has(field)) seen.set(field, []);
 			seen.get(field)!.push(header);
 		}
@@ -384,7 +384,7 @@
 														class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-ocean-500"
 													>
 														<option value="">(skip)</option>
-														<option value="custom:{header}">(add as custom field)</option>
+														<option value="misc_param:{header}">(add as misc_param:{header})</option>
 														{#each importPreview.available_fields ?? [] as f}
 															<option value={f.value} class="{siteFieldSet.has(f.value) ? 'text-ocean-400' : 'text-green-400'}">{f.label}</option>
 														{/each}
