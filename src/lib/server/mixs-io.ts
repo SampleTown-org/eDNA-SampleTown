@@ -24,7 +24,7 @@ export const SITE_FIELDS = new Set([
  *  MIxS slots. Kept explicit so we don't accidentally expose sync internals. */
 const SAMPLE_SLOT_COLUMNS = [
 	// MIxS core
-	'samp_name', 'collection_date', 'env_medium', 'samp_taxon_id',
+	'samp_name', 'collection_date', 'env_medium',
 	// Extension-specific location
 	'depth', 'elev',
 	// Host-associated
@@ -33,13 +33,14 @@ const SAMPLE_SLOT_COLUMNS = [
 	'temp', 'salinity', 'ph', 'diss_oxygen', 'pressure', 'turbidity', 'chlorophyll', 'nitrate', 'phosphate',
 	// Sampling
 	'samp_collect_device', 'samp_collect_method', 'samp_mat_process', 'samp_size',
-	'samp_vol_we_dna_ext', 'size_frac', 'source_mat_id',
+	'size_frac', 'source_mat_id',
 	// Storage
-	'samp_store_sol', 'samp_store_temp', 'samp_store_dur', 'samp_store_loc',
+	'samp_store_sol', 'samp_store_temp', 'samp_store_dur', 'samp_store_loc', 'store_cond',
 	// MIGS/MIMAG context
 	'ref_biomaterial', 'isol_growth_condt', 'tax_ident'
-	// nucl_acid_ext lives on extracts, nucl_acid_amp on pcr_plates —
-	// joined in at export time (see chooseExportColumns below).
+	// Joined in at export time from downstream tables:
+	//   samp_taxon_id / samp_vol_we_dna_ext / pool_dna_extracts / nucl_acid_ext → extracts
+	//   nucl_acid_amp → pcr_plates
 ] as const;
 
 /** Site columns that are MIxS slots. */
@@ -90,6 +91,15 @@ export function exportMixsTsv(options: {
 		(SELECT e.nucl_acid_ext FROM extracts e
 		  WHERE e.sample_id = s.id AND e.is_deleted = 0 AND e.nucl_acid_ext IS NOT NULL
 		  ORDER BY e.created_at DESC LIMIT 1) AS sample_nucl_acid_ext,
+		(SELECT e.samp_taxon_id FROM extracts e
+		  WHERE e.sample_id = s.id AND e.is_deleted = 0 AND e.samp_taxon_id IS NOT NULL
+		  ORDER BY e.created_at DESC LIMIT 1) AS sample_samp_taxon_id,
+		(SELECT e.samp_vol_we_dna_ext FROM extracts e
+		  WHERE e.sample_id = s.id AND e.is_deleted = 0 AND e.samp_vol_we_dna_ext IS NOT NULL
+		  ORDER BY e.created_at DESC LIMIT 1) AS sample_samp_vol_we_dna_ext,
+		(SELECT e.pool_dna_extracts FROM extracts e
+		  WHERE e.sample_id = s.id AND e.is_deleted = 0 AND e.pool_dna_extracts IS NOT NULL
+		  ORDER BY e.created_at DESC LIMIT 1) AS sample_pool_dna_extracts,
 		(SELECT pp.nucl_acid_amp FROM pcr_plates pp
 		  JOIN pcr_amplifications pa ON pa.plate_id = pp.id
 		  JOIN extracts e ON e.id = pa.extract_id
@@ -113,6 +123,9 @@ export function exportMixsTsv(options: {
 				if (c.source === '__project_name__') return escTsv(row.proj_project_name);
 				if (c.source === '__nucl_acid_ext__') return escTsv(row.sample_nucl_acid_ext);
 				if (c.source === '__nucl_acid_amp__') return escTsv(row.sample_nucl_acid_amp);
+				if (c.source === '__samp_taxon_id__') return escTsv(row.sample_samp_taxon_id);
+				if (c.source === '__samp_vol_we_dna_ext__') return escTsv(row.sample_samp_vol_we_dna_ext);
+				if (c.source === '__pool_dna_extracts__') return escTsv(row.sample_pool_dna_extracts);
 				return escTsv(row[c.source]);
 			})
 			.join('\t');
@@ -146,6 +159,9 @@ export function chooseExportColumns(
 			if (slot === 'project_name') source = '__project_name__';
 			else if (slot === 'nucl_acid_ext') source = '__nucl_acid_ext__';
 			else if (slot === 'nucl_acid_amp') source = '__nucl_acid_amp__';
+			else if (slot === 'samp_taxon_id') source = '__samp_taxon_id__';
+			else if (slot === 'samp_vol_we_dna_ext') source = '__samp_vol_we_dna_ext__';
+			else if (slot === 'pool_dna_extracts') source = '__pool_dna_extracts__';
 			else if (SITE_SLOT_SET.has(slot)) source = `site_${slot}`;
 			else source = slot;
 			baseColumns.push({

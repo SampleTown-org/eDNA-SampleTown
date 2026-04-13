@@ -18,8 +18,7 @@
 		['Location', data.sample.geo_loc_name, 'geo_loc_name'],
 		['Broad-scale Env', data.sample.env_broad_scale, 'env_broad_scale'],
 		['Local Env', data.sample.env_local_scale, 'env_local_scale'],
-		['Env Medium', data.sample.env_medium, 'env_medium'],
-		['Taxon ID', data.sample.samp_taxon_id, 'samp_taxon_id']
+		['Env Medium', data.sample.env_medium, 'env_medium']
 	];
 
 	const measurements: [string, unknown, string, string?][] = ([

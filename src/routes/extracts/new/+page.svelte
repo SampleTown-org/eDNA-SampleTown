@@ -22,6 +22,7 @@
 	let form = $state({
 		sample_id: data.preselectedSampleId ?? '',
 		extract_name: '', extraction_date: '', extraction_method: '', nucl_acid_ext: '',
+		samp_taxon_id: '', samp_vol_we_dna_ext: '', pool_dna_extracts: '',
 		concentration_ng_ul: '', total_volume_ul: '', a260_280: '', a260_230: '',
 		quantification_method: '', storage_room: '', storage_box: '', notes: ''
 	});
@@ -181,6 +182,29 @@
 			</label>
 			<input id="nucl_acid_ext" type="text" bind:value={form.nucl_acid_ext} class={inputCls}
 				placeholder="DOI or protocol URL (MIxS nucl_acid_ext)" />
+		</div>
+		<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+			<div>
+				<label for="samp_taxon_id" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/glossary#samp_taxon_id" target="_blank" class="hover:text-ocean-400">Taxonomy ID of DNA sample</a>
+				</label>
+				<input id="samp_taxon_id" type="text" bind:value={form.samp_taxon_id} class={inputCls}
+					placeholder="NCBI taxid, e.g. 408172" />
+			</div>
+			<div>
+				<label for="samp_vol_we_dna_ext" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/glossary#samp_vol_we_dna_ext" target="_blank" class="hover:text-ocean-400">Sample volume/weight for extraction</a>
+				</label>
+				<input id="samp_vol_we_dna_ext" type="text" bind:value={form.samp_vol_we_dna_ext} class={inputCls}
+					placeholder="e.g. 1500 ml" />
+			</div>
+			<div>
+				<label for="pool_dna_extracts" class="block text-sm font-medium text-slate-300 mb-1">
+					<a href="/glossary#pool_dna_extracts" target="_blank" class="hover:text-ocean-400">Pool of DNA extracts</a>
+				</label>
+				<input id="pool_dna_extracts" type="text" bind:value={form.pool_dna_extracts} class={inputCls}
+					placeholder="extract IDs if pooled" />
+			</div>
 		</div>
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
 			<div><label for="concentration_ng_ul" class="block text-sm font-medium text-slate-300 mb-1">Conc. (ng/µL)</label>

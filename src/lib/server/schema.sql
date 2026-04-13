@@ -122,8 +122,9 @@ CREATE TABLE IF NOT EXISTS samples (
     samp_name TEXT NOT NULL,
     collection_date TEXT NOT NULL,        -- ISO 8601
     env_medium TEXT NOT NULL,             -- ENVO material term (per-sample: water/ice/sediment at same site)
-    samp_taxon_id TEXT,                   -- NCBI taxonomy ID of the sampled material
-    -- MIxS project_name is sourced from the joined projects.project_name at
+    -- samp_taxon_id, samp_vol_we_dna_ext, pool_dna_extracts — those describe
+    -- the DNA sample, not the physical collection; they live on extracts.
+    -- project_name is sourced from the joined projects.project_name at
     -- export time rather than stored redundantly on each sample.
 
     -- Extension-specific location context
@@ -150,15 +151,15 @@ CREATE TABLE IF NOT EXISTS samples (
     samp_collect_method TEXT,
     samp_mat_process TEXT,
     samp_size TEXT,                       -- amount or size of sample collected
-    samp_vol_we_dna_ext REAL,             -- volume/weight for DNA extraction (formerly 'volume_filtered_ml')
     size_frac TEXT,                       -- size fraction selected
     source_mat_id TEXT,
 
     -- Sample storage
     samp_store_sol TEXT,                  -- formerly 'preservation_method'
-    samp_store_temp REAL,                 -- °C (formerly 'storage_conditions' — now numeric)
-    samp_store_dur TEXT,                  -- duration
+    samp_store_temp TEXT,                 -- MIxS string with units, e.g. "-80 degree Celsius"
+    samp_store_dur TEXT,                  -- ISO 8601 duration
     samp_store_loc TEXT,                  -- storage location
+    store_cond TEXT,                      -- MIxS storage_conditions slot
 
     -- MIxS nucl_acid_ext lives on extracts (it's an extraction protocol),
     -- nucl_acid_amp lives on pcr_plates (it's an amplification protocol).
@@ -207,6 +208,9 @@ CREATE TABLE IF NOT EXISTS extracts (
     extraction_method TEXT,
     extraction_kit TEXT,
     nucl_acid_ext TEXT,                   -- MIxS nucleic acid extraction protocol (URL / DOI / PID)
+    samp_taxon_id TEXT,                   -- MIxS: NCBI taxid of the DNA sample's source taxon
+    samp_vol_we_dna_ext TEXT,             -- MIxS: sample volume or weight used for DNA extraction (string with units)
+    pool_dna_extracts TEXT,               -- MIxS: pooling of DNA extracts (if done)
     concentration_ng_ul REAL,
     total_volume_ul REAL,
     a260_280 REAL,

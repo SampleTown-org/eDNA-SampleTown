@@ -11,7 +11,11 @@
 		env_medium: 'Environmental Medium',
 		filter_type: 'Filter Types',
 		samp_store_sol: 'Sample Storage Solution',
+		samp_store_temp: 'Sample Storage Temperature',
+		samp_store_loc: 'Sample Storage Location',
+		store_cond: 'Storage Conditions',
 		samp_collect_device: 'Sample Collection Devices',
+		samp_collect_method: 'Sample Collection Methods',
 		storage_room: 'Storage Rooms/Freezers',
 		storage_box: 'Storage Boxes',
 		extraction_method: 'Extraction Methods / Kits',
@@ -56,7 +60,7 @@
 		{
 			label: 'MIxS',
 			description: 'Minimum Information about any (x) Sequence — standardized environment descriptors',
-			categories: ['geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale', 'env_medium', 'samp_store_sol', 'samp_collect_device']
+			categories: ['geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale', 'env_medium', 'samp_store_sol', 'samp_store_temp', 'samp_store_loc', 'store_cond', 'samp_collect_device', 'samp_collect_method']
 		},
 		{
 			label: 'SRA / ENA',

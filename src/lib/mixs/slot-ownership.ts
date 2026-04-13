@@ -38,8 +38,14 @@ export const NON_SAMPLE_SLOTS: Record<string, SampleTownTable> = {
 	associated_resource: 'projects',
 	investigation_type: 'projects',
 
-	// Extracts — nucleic acid extraction protocol
+	// Extracts — anything that describes the DNA sample itself, not the physical
+	// collection. samp_taxon_id / samp_vol_we_dna_ext / pool_dna_extracts are
+	// properties of the extraction (which taxon's DNA, how much input, was it
+	// pooled from multiple extracts), not of the source water/soil sample.
 	nucl_acid_ext: 'extracts',
+	samp_taxon_id: 'extracts',
+	samp_vol_we_dna_ext: 'extracts',
+	pool_dna_extracts: 'extracts',
 
 	// PCR plates — amplification protocol + primers + controls
 	nucl_acid_amp: 'pcr_plates',

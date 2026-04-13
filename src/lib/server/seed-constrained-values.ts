@@ -87,6 +87,22 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'peristaltic pump', 'bucket', 'syringe', 'Van Dorn bottle',
 		'sterile swab', 'scoop', 'tweezers', 'other'
 	],
+	samp_collect_method: [
+		'filtration', 'grab sample', 'pumped', 'corer', 'swab',
+		'net tow', 'sediment trap', 'bulk sample', 'scraping', 'other'
+	],
+	samp_store_temp: [
+		'-196 degree Celsius', '-80 degree Celsius', '-20 degree Celsius',
+		'4 degree Celsius', 'room temperature', 'ambient'
+	],
+	samp_store_loc: [
+		'-80 freezer', '-20 freezer', 'LN₂ dewar', '4°C fridge',
+		'bench (room temp)', 'ship cold room', 'desiccator cabinet'
+	],
+	store_cond: [
+		'frozen', 'refrigerated', 'room temperature', 'desiccated',
+		'in RNAlater', 'in ethanol', 'dry', 'dark', 'light-exposed'
+	],
 	// Extraction methods + kits merged into one picklist (was previously
 	// split into extraction_method + extraction_kit — redundant).
 	extraction_method: [

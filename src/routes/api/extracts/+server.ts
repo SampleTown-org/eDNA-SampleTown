@@ -17,11 +17,13 @@ function insertExtract(db: ReturnType<typeof getDb>, data: Record<string, unknow
 	const id = generateId();
 	db.prepare(`
 		INSERT INTO extracts (id, sample_id, extract_name, extraction_date, extraction_method, extraction_kit,
-			nucl_acid_ext, concentration_ng_ul, total_volume_ul, a260_280, a260_230, quantification_method,
+			nucl_acid_ext, samp_taxon_id, samp_vol_we_dna_ext, pool_dna_extracts,
+			concentration_ng_ul, total_volume_ul, a260_280, a260_230, quantification_method,
 			storage_location, storage_room, storage_box, notes, custom_fields, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`).run(id, data.sample_id, data.extract_name, data.extraction_date ?? null, data.extraction_method ?? null,
 		data.extraction_kit ?? null, data.nucl_acid_ext ?? null,
+		data.samp_taxon_id ?? null, data.samp_vol_we_dna_ext ?? null, data.pool_dna_extracts ?? null,
 		data.concentration_ng_ul ?? null, data.total_volume_ul ?? null,
 		data.a260_280 ?? null, data.a260_230 ?? null, data.quantification_method ?? null,
 		data.storage_location ?? null, data.storage_room ?? null, data.storage_box ?? null,

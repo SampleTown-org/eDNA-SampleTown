@@ -72,7 +72,6 @@ export interface Sample {
 	samp_name: string;
 	collection_date: string;
 	env_medium: string;
-	samp_taxon_id: string | null;
 
 	// Extension-specific location context
 	depth: string | null;
@@ -98,15 +97,15 @@ export interface Sample {
 	samp_collect_method: string | null;
 	samp_mat_process: string | null;
 	samp_size: string | null;
-	samp_vol_we_dna_ext: number | null;
 	size_frac: string | null;
 	source_mat_id: string | null;
 
 	// Storage
 	samp_store_sol: string | null;
-	samp_store_temp: number | null;
+	samp_store_temp: string | null;
 	samp_store_dur: string | null;
 	samp_store_loc: string | null;
+	store_cond: string | null;
 
 	// MIGS/MIMAG/MISAG context
 	ref_biomaterial: string | null;
@@ -139,6 +138,9 @@ export interface Extract {
 	extraction_method: string | null;
 	extraction_kit: string | null;
 	nucl_acid_ext: string | null;
+	samp_taxon_id: string | null;
+	samp_vol_we_dna_ext: string | null;
+	pool_dna_extracts: string | null;
 	concentration_ng_ul: number | null;
 	total_volume_ul: number | null;
 	a260_280: number | null;

@@ -149,22 +149,48 @@ function resolveSlotConfig(slot: string, picklists: Picklists): SlotConfig {
 	return { slot, type: 'text', placeholder };
 }
 
-/** Group Optional slots by MIxS `in_subset` (fallback `other`). */
+/**
+ * Force specific slots into SampleTown-native buckets that cut across MIxS
+ * subsets. Storage groups the samp_store_* slots plus store_cond into a
+ * single display section; Sampling absorbs what MIxS calls "nucleic acid
+ * sequence source" for slots that are really about the physical collection
+ * (samp_collect_*, size_frac, samp_mat_process, source_mat_id) — the NASS
+ * label was confusing operators, and every remaining slot in that subset
+ * lives on extracts/pcr now anyway.
+ */
+const BUCKET_OVERRIDES: Record<string, string> = {
+	samp_store_sol: 'Storage',
+	samp_store_temp: 'Storage',
+	samp_store_dur: 'Storage',
+	samp_store_loc: 'Storage',
+	store_cond: 'Storage',
+
+	samp_collect_device: 'Sampling',
+	samp_collect_method: 'Sampling',
+	samp_mat_process: 'Sampling',
+	samp_size: 'Sampling',
+	size_frac: 'Sampling',
+	source_mat_id: 'Sampling',
+	filter_type: 'Sampling'
+};
+
+/** Group Optional slots by bucket (SampleTown overrides, else MIxS in_subset, else Other). */
 function subsetOfSlot(slot: string): string {
+	if (BUCKET_OVERRIDES[slot]) return BUCKET_OVERRIDES[slot];
 	const sub = getSlot(slot)?.in_subset?.[0];
-	if (!sub) return 'other';
-	// Normalize LinkML subset names to display-friendly labels.
+	if (!sub) return 'Other';
 	return sub.replace(/^[a-z]/, (c) => c.toUpperCase());
 }
 
 /** Order the optional-bucket keys sensibly for display. */
 export function orderedOptionalBuckets(optional: Record<string, SlotConfig[]>): [string, SlotConfig[]][] {
 	const priority: Record<string, number> = {
-		'Environment': 0,
-		'Nucleic acid sequence source': 1,
-		'Investigation': 2,
-		'Sequencing': 3,
-		'other': 99
+		Environment: 0,
+		Sampling: 1,
+		Storage: 2,
+		Investigation: 3,
+		Sequencing: 4,
+		Other: 99
 	};
 	return Object.entries(optional).sort(([a], [b]) => (priority[a] ?? 50) - (priority[b] ?? 50));
 }

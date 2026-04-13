@@ -33,7 +33,6 @@
 		{ key: 'temp', label: 'Temp (°C)', width: 'w-24' },
 		{ key: 'salinity', label: 'Salinity', width: 'w-24' },
 		{ key: 'ph', label: 'pH', width: 'w-20' },
-		{ key: 'samp_vol_we_dna_ext', label: 'Vol filtered (mL)', width: 'w-28' },
 		{ key: 'filter_type', label: 'Filter type', width: 'w-32' },
 		{ key: 'samp_store_sol', label: 'Preservation', width: 'w-32' }
 	];
