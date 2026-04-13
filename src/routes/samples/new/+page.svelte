@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { organizeForm, orderedOptionalBuckets, extractMiscParams, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
+	import { organizeForm, orderedOptionalBuckets, extractMiscParams, sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import SlotInput from '$lib/components/SlotInput.svelte';
@@ -61,7 +61,7 @@
 		addSlotValue = '';
 	}
 	function addCustomParam() {
-		const name = customName.trim().replace(/[^a-zA-Z0-9_.\-]/g, '_');
+		const name = sanitizeMiscParamName(customName);
 		if (!name) return;
 		const key = `${MISC_PARAM_PREFIX}${name}`;
 		if (!(key in form)) form[key] = '';

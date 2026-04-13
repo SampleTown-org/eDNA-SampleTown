@@ -12,6 +12,7 @@
 import { getDb } from './db';
 import { allSlotNames, getSlot, getClass, getCombinationClass } from '$lib/mixs/schema-index';
 import { SRA_TO_MIXS } from '$lib/mixs/sra-mapping';
+import { sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 import * as XLSX from 'xlsx';
 
 /** Fields that live on the sites table, not the samples table. */
@@ -339,10 +340,12 @@ export function parseMixsTsv(
 				val = null;
 			}
 			// `misc_param:<key>` — route unknown columns into the custom_fields
-			// JSON blob under a MIxS-style misc_param-prefixed key. The sample form
-			// reads these back as optional inputs.
-			if (field.startsWith('misc_param:')) {
-				if (field.length > 'misc_param:'.length) customFields[field] = val;
+			// JSON blob. Sanitize the suffix to [a-z_] so imported keys match
+			// what the form + glossary expect (the column header could have
+			// arbitrary characters).
+			if (field.startsWith(MISC_PARAM_PREFIX)) {
+				const name = sanitizeMiscParamName(field.slice(MISC_PARAM_PREFIX.length));
+				if (name) customFields[`${MISC_PARAM_PREFIX}${name}`] = val;
 				continue;
 			}
 			sample[field] = val;

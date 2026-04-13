@@ -261,6 +261,22 @@ function sortBucket(fields: SlotConfig[]): SlotConfig[] {
 export const MISC_PARAM_PREFIX = 'misc_param:';
 
 /**
+ * Sanitize a user-supplied misc_param name down to `[a-z_]` only — keeps
+ * custom tags consistent with MIxS's lowercase-underscore slot-name style
+ * and avoids accidental TSV delimiter / URL / JSON-key surprises.
+ * Collapses runs of underscores and strips leading/trailing ones. Returns
+ * an empty string when no valid characters remain.
+ */
+export function sanitizeMiscParamName(raw: string): string {
+	return raw
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z_]+/g, '_')
+		.replace(/_+/g, '_')
+		.replace(/^_|_$/g, '');
+}
+
+/**
  * Split a form state object into its real-slot entries and its custom
  * misc_param:* entries. Used on submit to serialize misc_param tags into
  * custom_fields JSON, and on edit-load to un-serialize them back into
