@@ -37,7 +37,7 @@
 	}
 
 	let organized = $derived(
-		organizeForm(form.mixs_checklist as string, (form.extension as string) || null)
+		organizeForm(form.mixs_checklist as string, (form.extension as string) || null, data.picklists)
 	);
 
 	async function submit() {
@@ -178,7 +178,7 @@
 							bind:value={form[field.slot]}
 							placeholder={field.placeholder}
 							required={true}
-							options={field.picklist ? data.picklists[field.picklist] : []}
+							options={field.options ?? []}
 						/>
 					{/each}
 				</div>
@@ -217,7 +217,7 @@
 							type={field.type}
 							bind:value={form[field.slot]}
 							placeholder={field.placeholder}
-							options={field.picklist ? data.picklists[field.picklist] : []}
+							options={field.options ?? []}
 						/>
 					{/each}
 				</div>
@@ -241,7 +241,7 @@
 								type={field.type}
 								bind:value={form[field.slot]}
 								placeholder={field.placeholder}
-								options={field.picklist ? data.picklists[field.picklist] : []}
+								options={field.options ?? []}
 							/>
 						{/each}
 					</div>

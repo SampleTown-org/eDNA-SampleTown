@@ -12,30 +12,33 @@
  * Input type, placeholder, unit hints, and structured patterns all come
  * from the MIxS schema index.
  */
-import { getSlot, recommendedSlotsFor, requiredSlotsFor, getCombinationClass, getClass } from './schema-index';
+import { getSlot, getEnum, recommendedSlotsFor, requiredSlotsFor, getCombinationClass, getClass } from './schema-index';
 import { slotTable } from './slot-ownership';
 
 export type FormInputType = 'text' | 'number' | 'date' | 'select' | 'textarea';
 
+export interface SlotOption { value: string; label: string }
+
 export interface SlotConfig {
 	slot: string;
 	type: FormInputType;
-	/** Name of a constrained_values picklist (select only). */
-	picklist?: string;
+	/** Inline options for select inputs — resolved from either a MIxS enum
+	 *  or a local SampleTown picklist at organizeForm time. */
+	options?: SlotOption[];
 	/** Placeholder — falls back to slot.examples[0]. */
 	placeholder?: string;
 }
 
 /**
- * Minimal SampleTown-specific overrides. Only slots that need a local picklist
- * or a type we can't infer from MIxS land here. Everything else derives from
- * the MIxS schema index.
+ * SampleTown-specific type overrides. Only non-default input types go here —
+ * picklist bindings are auto-detected (see resolveSlotConfig below). Left
+ * intentionally small: anything that MIxS can tell us (range, enum, examples)
+ * doesn't need an entry.
  */
-const OVERRIDES: Record<string, Partial<SlotConfig>> = {
-	env_medium: { type: 'select', picklist: 'env_medium' },
-	filter_type: { type: 'select', picklist: 'filter_type' },
-	samp_store_sol: { type: 'select', picklist: 'samp_store_sol' },
-	samp_collect_device: { type: 'select', picklist: 'samp_collect_device' },
+const OVERRIDES: Record<string, { type: FormInputType }> = {
+	// samp_mat_process is free-text in MIxS but is almost always a multi-step
+	// description in practice — render as a textarea so long values don't wrap
+	// off the edge of a single-line input.
 	samp_mat_process: { type: 'textarea' }
 };
 
@@ -51,12 +54,25 @@ export interface OrganizedForm {
 	requiredOffSample: Array<{ slot: string; table: string }>;
 }
 
+/** Picklist categories keyed by category name → [{value, label}]. */
+export type Picklists = Record<string, SlotOption[]>;
+
 /**
  * Bucket every property of the active combination class for display on the
- * sample form. Filters out slots owned by other tables (sites, extracts,
- * pcr_plates, etc.) — those get surfaced separately as "on another tab".
+ * sample form. Filters out slots owned by other tables — those surface
+ * separately as "required on another tab".
+ *
+ * `picklists` is the set of SampleTown-managed categories available via
+ * `data.picklists`. Any slot whose name matches a category key gets a
+ * dropdown bound to that category; separately, any slot whose MIxS range
+ * is an enum class gets a dropdown populated from the enum's
+ * permissible_values. MIxS enum wins over local picklist when both exist.
  */
-export function organizeForm(checklist: string, extension: string | null): OrganizedForm {
+export function organizeForm(
+	checklist: string,
+	extension: string | null,
+	picklists: Picklists = {}
+): OrganizedForm {
 	const cls = extension ? getCombinationClass(checklist, extension) : getClass(checklist);
 	const required = new Set(requiredSlotsFor(checklist, extension ?? ''));
 	const recommended = recommendedSlotsFor(checklist, extension ?? '');
@@ -78,7 +94,7 @@ export function organizeForm(checklist: string, extension: string | null): Organ
 			continue;
 		}
 
-		const config = resolveSlotConfig(slot);
+		const config = resolveSlotConfig(slot, picklists);
 		if (required.has(slot)) out.required.push(config);
 		else if (recommended.has(slot)) out.recommended.push(config);
 		else {
@@ -90,25 +106,47 @@ export function organizeForm(checklist: string, extension: string | null): Organ
 	return out;
 }
 
-/** Build a SlotConfig from MIxS metadata + SampleTown overrides. */
-function resolveSlotConfig(slot: string): SlotConfig {
+/**
+ * Resolve a slot's UI config. Priority for choosing a select's options:
+ *   1. Local SampleTown picklist with a matching category name
+ *   2. MIxS enum range (permissible_values from the schema)
+ *   3. No options — render as text/number/textarea per MIxS range + overrides
+ * Local picklist wins over MIxS enum because operators curate kits/vocabularies
+ * that are narrower than the MIxS-defined set in practice.
+ */
+function resolveSlotConfig(slot: string, picklists: Picklists): SlotConfig {
 	const meta = getSlot(slot);
-	const override = OVERRIDES[slot] ?? {};
+	const override = OVERRIDES[slot];
+	const placeholder = meta?.examples?.[0];
 
-	// Type inference: OVERRIDES wins, else infer from MIxS range.
-	let type: FormInputType = override.type ?? 'text';
-	if (!override.type) {
-		const range = meta?.range;
-		if (range && /^(float|double|integer|decimal)$/i.test(range)) type = 'number';
-		// collection_date is the only date-ish slot on samples; it's in HEADER_SLOTS so we skip 'date'
+	// Explicit type override always wins.
+	if (override?.type) {
+		return { slot, type: override.type, placeholder };
 	}
 
-	return {
-		slot,
-		type,
-		picklist: override.picklist,
-		placeholder: meta?.examples?.[0]
-	};
+	// 1. Local picklist auto-bind — category name matches slot name.
+	if (picklists[slot] && picklists[slot].length > 0) {
+		return { slot, type: 'select', options: picklists[slot], placeholder };
+	}
+
+	// 2. MIxS enum range → dropdown from permissible_values.
+	if (meta?.range) {
+		const enumDef = getEnum(meta.range);
+		if (enumDef && enumDef.values.length > 0) {
+			return {
+				slot,
+				type: 'select',
+				options: enumDef.values.map((v) => ({ value: v.value, label: v.value })),
+				placeholder
+			};
+		}
+		// 3. Numeric range → number input
+		if (/^(float|double|integer|decimal)$/i.test(meta.range)) {
+			return { slot, type: 'number', placeholder };
+		}
+	}
+
+	return { slot, type: 'text', placeholder };
 }
 
 /** Group Optional slots by MIxS `in_subset` (fallback `other`). */
