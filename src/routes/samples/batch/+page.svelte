@@ -116,26 +116,51 @@
 
 	let extraColumnKeys = $state<string[]>([]);
 	/** Slots the user explicitly removed — auto-seed skips these so the ✕
-	 *  button actually sticks instead of having the seed re-add the row.
-	 *  Reset when the checklist/extension combo changes (the new combination
-	 *  is a fresh slate). */
+	 *  button actually sticks instead of having the seed re-add the row. */
 	let suppressedKeys = $state<Set<string>>(new Set());
+	/** Slots the user added via the +Add parameter picker (not auto-seeded).
+	 *  We preserve these across combination changes as long as the slot is
+	 *  still valid for the new combination. Auto-seeded entries from a
+	 *  previous combination get pruned on switch so the table doesn't
+	 *  accumulate stale fields. */
+	let userAddedKeys = $state<Set<string>>(new Set());
 
-	/** Detect combination changes so we can (a) drop slots no longer valid
-	 *  for the new (checklist, extension) from the table, and (b) clear the
-	 *  user-suppression set so the new combination's required/S&S seed
-	 *  populates. Ordering matters — this effect runs before the auto-seed
-	 *  below because of declaration order. */
+	/** Compute the auto-seed set (required on samples + S&S bucket +
+	 *  recommended Other) for the current combination. Used by both the
+	 *  seed effect and the combination-switch prune. */
+	function autoSeedFor(checklist: string, extension: string): Set<string> {
+		const req = requiredSlotsFor(checklist, extension)
+			.filter((s) => !CORE_KEYS.has(s) && slotTable(s) === 'samples');
+		const org = organizeForm(checklist, extension, data.picklists as Picklists);
+		const storage = (org.optional['Sampling & Storage'] ?? []).map((f) => f.slot);
+		const otherRec = (org.optional.Other ?? []).filter((f) => f.recommended).map((f) => f.slot);
+		return new Set([...req, ...storage, ...otherRec]);
+	}
+
+	/** Detect combination changes so we can (a) drop slots that were
+	 *  auto-seeded by a previous combination and aren't part of the new
+	 *  combination's seed, and (b) clear the suppression set so the new
+	 *  seed populates. User-added slots (via +Add parameter) that are still
+	 *  valid for the new combination are preserved. Declaration order
+	 *  matters — this effect runs before the auto-seed below. */
 	let prevCombo = $state<string>(`${batchChecklist}|${batchExtension}`);
 	$effect(() => {
 		const combo = `${batchChecklist}|${batchExtension}`;
 		if (combo === prevCombo) return;
 		prevCombo = combo;
+		const newSeed = autoSeedFor(batchChecklist, batchExtension);
 		const validSlots = new Set(allSlotsFor(batchChecklist, batchExtension));
-		// Keep misc_param:* (they're off-schema and not tied to a combo) and
-		// any slot still valid in the new combination; drop the rest.
+		// Keep a slot if:
+		//   - it's a misc_param:* custom tag (off-schema, unrelated to combo)
+		//   - it's part of the new combination's auto-seed (will be re-added
+		//     by the seed effect anyway — keeping it preserves cell values)
+		//   - the user added it explicitly and it's still valid in the new
+		//     combination class
 		const kept = extraColumnKeys.filter(
-			(k) => k.startsWith(MISC_PARAM_PREFIX) || validSlots.has(k)
+			(k) =>
+				k.startsWith(MISC_PARAM_PREFIX) ||
+				newSeed.has(k) ||
+				(userAddedKeys.has(k) && validSlots.has(k))
 		);
 		const dropped = new Set(extraColumnKeys.filter((k) => !kept.includes(k)));
 		if (dropped.size > 0) {
@@ -145,24 +170,22 @@
 				for (const k of dropped) delete next[k];
 				return next;
 			});
+			// Also drop any stale user-added entries (slots no longer valid).
+			const nextUser = new Set(userAddedKeys);
+			for (const k of dropped) nextUser.delete(k);
+			userAddedKeys = nextUser;
 		}
 		suppressedKeys = new Set();
 	});
 
-	/** Auto-seed the parameter list with what a single-sample form would show
-	 *  by default: every MIxS-required slot (samples-owned) + every slot in
-	 *  the Sampling & Storage bucket + every recommended slot in Other.
-	 *  Non-recommended Other slots stay behind the +Add parameter picker so
-	 *  the default view isn't overwhelmed. Respects suppressedKeys so ✕
-	 *  removal isn't undone. */
+	/** Auto-seed the parameter list with what the single-sample form would
+	 *  show by default (see autoSeedFor). Respects suppressedKeys so ✕
+	 *  removal isn't undone and runs after the combination-switch prune. */
 	$effect(() => {
-		const req = requiredSlotsFor(batchChecklist, batchExtension)
-			.filter((s) => !CORE_KEYS.has(s) && slotTable(s) === 'samples');
-		const storage = (organized.optional['Sampling & Storage'] ?? []).map((f) => f.slot);
-		const otherRec = (organized.optional.Other ?? [])
-			.filter((f) => f.recommended)
-			.map((f) => f.slot);
-		const desired = [...req, ...storage, ...otherRec].filter((s) => !suppressedKeys.has(s));
+		void organized; // subscribe to (checklist, extension) changes
+		const desired = [...autoSeedFor(batchChecklist, batchExtension)].filter(
+			(s) => !suppressedKeys.has(s)
+		);
 		const toAdd = desired.filter((s) => !extraColumnKeys.includes(s));
 		if (toAdd.length > 0) {
 			extraColumnKeys = [...extraColumnKeys, ...toAdd];
@@ -272,6 +295,7 @@
 		}
 		if (extraColumnKeys.includes(key)) { extraToAdd = ''; return; }
 		extraColumnKeys = [...extraColumnKeys, key];
+		userAddedKeys = new Set([...userAddedKeys, key]);
 		// Un-suppress if the user had previously removed it: explicit re-add beats
 		// the earlier ✕ click.
 		if (suppressedKeys.has(key)) {
