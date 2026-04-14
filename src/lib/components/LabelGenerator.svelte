@@ -32,20 +32,22 @@
 	}
 
 	// ---- Blank-sheet state ----
-	let blankPages = $state(1);
+	let blankUnique = $state(30);
+	let blankCopies = $state(1);
 	let blankType = $state('');
 	let blankIds = $state<string[]>([]);
 	let blankPreviewSvgs = $state<string[]>([]);
 	let origin = $state('');
 	let busy = $state(false);
 
-	const blankCount = $derived(blankPages * LABELS_PER_PAGE);
+	const blankTotal = $derived(blankUnique * blankCopies);
+	const blankPages = $derived(Math.max(1, Math.ceil(blankTotal / LABELS_PER_PAGE)));
 
 	async function generateBlank() {
 		busy = true;
 		try {
 			const { default: QRCode } = await import('qrcode');
-			const fresh = Array.from({ length: blankCount }, mintId);
+			const fresh = Array.from({ length: blankUnique }, mintId);
 			const svgs = await Promise.all(
 				fresh.map((id) => {
 					const target = blankType
@@ -66,14 +68,26 @@
 		}
 	}
 
+	/** Repeat each id `copies` times in place, so duplicates of the same
+	 *  label sit next to each other on the sheet (keeps related stickers
+	 *  adjacent when peeling off a strip). */
+	function expandWithCopies<T>(items: T[], copies: number): T[] {
+		const out: T[] = [];
+		for (const item of items) {
+			for (let c = 0; c < copies; c++) out.push(item);
+		}
+		return out;
+	}
+
 	async function downloadBlankPdf() {
 		if (blankIds.length === 0) return;
 		busy = true;
 		try {
-			const labels: LabelInput[] = blankIds.map((id) => ({
+			const base: LabelInput[] = blankIds.map((id) => ({
 				id,
 				type: blankType || undefined
 			}));
+			const labels = expandWithCopies(base, blankCopies);
 			const ts = new Date().toISOString().slice(0, 10);
 			const suffix = blankType ? `-${blankType}` : '';
 			await buildLabelsPdf(labels, origin, `sampletown-labels${suffix}-${ts}.pdf`);
@@ -102,18 +116,22 @@
 	}
 
 	// ---- Cart-labels state ----
+	let cartCopies = $state(1);
 	let cartBusy = $state(false);
+
+	const cartTotal = $derived(cart.count * cartCopies);
 
 	async function downloadCartPdf() {
 		if (cart.count === 0) return;
 		cartBusy = true;
 		try {
-			const labels: LabelInput[] = cart.items.map((it) => ({
+			const base: LabelInput[] = cart.items.map((it) => ({
 				id: it.id,
 				type: it.type,
 				primary: it.label,
 				secondary: it.sublabel
 			}));
+			const labels = expandWithCopies(base, cartCopies);
 			const ts = new Date().toISOString().slice(0, 10);
 			await buildLabelsPdf(labels, origin, `sampletown-cart-${ts}.pdf`);
 		} finally {
@@ -138,13 +156,24 @@
 			item's entity name, project/site context, and type tag so a scanned tube
 			lands on the right detail page.
 		</p>
-		<div class="flex items-center gap-3 flex-wrap">
+		<div class="flex items-end gap-3 flex-wrap">
+			<label class="block">
+				<span class="block text-xs text-slate-400 mb-1">Copies per item</span>
+				<input
+					type="number"
+					min="1"
+					max="50"
+					bind:value={cartCopies}
+					class="w-20 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
+				/>
+			</label>
+			<div class="text-xs text-slate-500 pb-2">= {cartTotal} label{cartTotal === 1 ? '' : 's'}</div>
 			<button
 				type="button"
 				onclick={downloadCartPdf}
 				disabled={cart.count === 0 || cartBusy}
 				class="px-3 py-1.5 bg-ocean-600 text-white rounded hover:bg-ocean-500 transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-			>{cartBusy ? 'Building PDF…' : `Download PDF (${cart.count} label${cart.count === 1 ? '' : 's'})`}</button>
+			>{cartBusy ? 'Building PDF…' : 'Download PDF'}</button>
 			{#if cart.count === 0}
 				<span class="text-xs text-slate-500">Add items to the cart on any list page to enable this.</span>
 			{/if}
@@ -174,16 +203,28 @@
 				</select>
 			</label>
 			<label class="block">
-				<span class="block text-xs text-slate-400 mb-1">Pages (30 labels each)</span>
+				<span class="block text-xs text-slate-400 mb-1">Unique labels</span>
+				<input
+					type="number"
+					min="1"
+					max="1500"
+					bind:value={blankUnique}
+					class="w-24 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
+				/>
+			</label>
+			<label class="block">
+				<span class="block text-xs text-slate-400 mb-1">Copies each</span>
 				<input
 					type="number"
 					min="1"
 					max="50"
-					bind:value={blankPages}
-					class="w-24 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
+					bind:value={blankCopies}
+					class="w-20 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
 				/>
 			</label>
-			<div class="text-xs text-slate-500 pb-2">= {blankCount} labels</div>
+			<div class="text-xs text-slate-500 pb-2">
+				= {blankTotal} label{blankTotal === 1 ? '' : 's'} · {blankPages} page{blankPages === 1 ? '' : 's'}
+			</div>
 			<button
 				type="button"
 				onclick={generateBlank}
