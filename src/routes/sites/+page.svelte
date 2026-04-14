@@ -90,24 +90,29 @@
 	let markers = $derived(
 		sites
 			.filter((s: any) => s.latitude != null && s.longitude != null)
-			.map((s: any) => ({
-				id: s.id,
-				lat: s.latitude,
-				lng: s.longitude,
-				label: `${s.site_name} (${s.sample_count} samples)`,
-				href: `/sites/${s.id}`,
-				color: colorByKey ? pinColorForValue(s[colorByKey]) : undefined,
-				colorLabel: colorByKey ? colorByLabel : undefined,
-				colorValue: colorByKey ? (s[colorByKey] != null ? String(s[colorByKey]) : '—') : undefined
-			}))
+			.map((s: any) => {
+				const v = colorByKey ? s[colorByKey] : null;
+				const isNull = Boolean(colorByKey) && (v == null || v === '');
+				return {
+					id: s.id,
+					lat: s.latitude,
+					lng: s.longitude,
+					label: `${s.site_name} (${s.sample_count} samples)`,
+					href: `/sites/${s.id}`,
+					color: colorByKey && !isNull ? pinColorForValue(v) : undefined,
+					nullValue: isNull,
+					colorLabel: colorByKey ? colorByLabel : undefined,
+					colorValue: colorByKey ? (isNull ? '—' : String(v)) : undefined
+				};
+			})
 	);
 
-	/** Clicking a pin toggles the row's selection (same affordance as the
-	 *  checkbox in the DataTable below). Selection syncs to the cart via the
-	 *  existing "Update Cart" button. */
-	function toggleFromMap(id: string) {
+	/** Shift-drag a rectangle on the map to batch-add every contained pin to
+	 *  the selection. Additive — existing selection is preserved so users
+	 *  can build up a selection with multiple drags. */
+	function addFromBox(ids: string[]) {
 		const next = new Set(selectedIds);
-		if (next.has(id)) next.delete(id); else next.add(id);
+		for (const id of ids) next.add(id);
 		selectedIds = next;
 	}
 
@@ -141,7 +146,7 @@
 	</div>
 
 	{#if markers.length > 0}
-		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onmarkerclick={toggleFromMap} />
+		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={addFromBox} />
 	{/if}
 
 	<DataTable

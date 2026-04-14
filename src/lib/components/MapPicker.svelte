@@ -24,14 +24,19 @@
 			color?: string;
 			colorLabel?: string;
 			colorValue?: string;
+			/** Color-by is active but this row's value for that column is null/
+			 *  empty — render as a hollow dashed circle so missing data is
+			 *  visually distinct from a colored value. */
+			nullValue?: boolean;
 		}>;
-		/** Fired when a marker is clicked. Used by the sites + samples lists to
-		 *  toggle the row's selection (which feeds the cart) via the same path
-		 *  as clicking the checkbox in the DataTable. */
-		onmarkerclick?: (id: string) => void;
+		/** Fired when the user finishes a shift-drag rectangle — called once
+		 *  with the IDs of every marker whose lat/lng fell inside the box, so
+		 *  the parent can batch-add them to selection / the cart. Single-pin
+		 *  clicks still just open the popup. */
+		onboxselect?: (ids: string[]) => void;
 	}
 
-	let { latitude = $bindable(), longitude = $bindable(), onchange, height = '300px', readonly = false, markers = [], onmarkerclick }: Props = $props();
+	let { latitude = $bindable(), longitude = $bindable(), onchange, height = '300px', readonly = false, markers = [], onboxselect }: Props = $props();
 
 	let mapEl: HTMLDivElement;
 	let map: any;
@@ -95,6 +100,7 @@
 		// Multi-marker mode (dashboard / sites list)
 		if (markers.length > 0) {
 			renderMarkers();
+			if (onboxselect) setupBoxSelect();
 		}
 
 		return () => { map.remove(); };
@@ -116,7 +122,18 @@
 		const layer = L.featureGroup();
 		for (const m of markers) {
 			let mk: any;
-			if (m.color) {
+			if (m.nullValue) {
+				// Color-by active but this row is null — hollow dashed circle so
+				// a missing value reads as visually distinct from the colored
+				// values on the same map.
+				mk = L.circleMarker([m.lat, m.lng], {
+					radius: 7,
+					color: '#94a3b8',
+					weight: 2,
+					fillOpacity: 0,
+					dashArray: '3,3'
+				});
+			} else if (m.color) {
 				// Colored circle — matches the DataTable color-by tint when the
 				// row uses an HSL string. White outline keeps it visible against
 				// dark and light tile patches.
@@ -142,14 +159,6 @@
 					? `<div style="margin-top:4px;font-size:11px;color:#94a3b8"><span style="color:#64748b">${escapeHtml(m.colorLabel)}:</span> ${escapeHtml(m.colorValue)}</div>`
 					: '';
 			mk.bindPopup(`${head}${colorLine}`);
-			// Clicking a pin: tell the parent so it can toggle the row's
-			// selection and keep the cart in sync with whatever the user is
-			// clicking on the map. We use `click` — the default popup-open is
-			// preserved by Leaflet; the selection side-effect happens alongside.
-			if (onmarkerclick && m.id) {
-				const id = m.id;
-				mk.on('click', () => onmarkerclick!(id));
-			}
 			layer.addLayer(mk);
 		}
 		layer.addTo(map);
@@ -158,6 +167,51 @@
 		if (markers.length > 1) {
 			map.fitBounds(layer.getBounds(), { padding: [40, 40] });
 		}
+	}
+
+	/**
+	 * Shift-drag box-select. Replaces Leaflet's built-in box-zoom so the same
+	 * shortcut the operator already expects (shift + drag = "select a region")
+	 * is repurposed to batch-select markers rather than zoom. On mouseup the
+	 * rectangle's bounds are checked against every marker; IDs of those
+	 * inside are handed to the parent via onboxselect for it to merge into
+	 * selectedIds / the cart.
+	 */
+	function setupBoxSelect() {
+		if (!map || !L || !onboxselect) return;
+		map.boxZoom.disable();
+		let startLatLng: any = null;
+		let rect: any = null;
+		map.on('mousedown', (e: any) => {
+			if (!e.originalEvent.shiftKey) return;
+			startLatLng = e.latlng;
+			map.dragging.disable();
+		});
+		map.on('mousemove', (e: any) => {
+			if (!startLatLng) return;
+			const b = L.latLngBounds(startLatLng, e.latlng);
+			if (rect) rect.setBounds(b);
+			else
+				rect = L.rectangle(b, {
+					color: '#0ea5e9',
+					weight: 2,
+					fillOpacity: 0.08,
+					dashArray: '5,5'
+				}).addTo(map);
+		});
+		map.on('mouseup', () => {
+			if (!startLatLng) return;
+			const bounds = rect?.getBounds();
+			if (rect) { rect.remove(); rect = null; }
+			startLatLng = null;
+			map.dragging.enable();
+			if (bounds && onboxselect) {
+				const ids = markers
+					.filter((m) => m.id && bounds.contains([m.lat, m.lng]))
+					.map((m) => m.id as string);
+				if (ids.length > 0) onboxselect(ids);
+			}
+		});
 	}
 
 	// Re-render markers when the parent passes a new array (color change, etc.)

@@ -134,23 +134,28 @@
 	let markers = $derived(
 		displaySamples
 			.filter((s: any) => s.latitude != null && s.longitude != null)
-			.map((s: any) => ({
-				id: s.id,
-				lat: s.latitude,
-				lng: s.longitude,
-				label: `${s.samp_name} (${s.site_name})`,
-				href: `/samples/${s.id}`,
-				color: colorByKey ? pinColorForValue(s[colorByKey]) : undefined,
-				colorLabel: colorByKey ? colorByLabel : undefined,
-				colorValue: colorByKey ? (s[colorByKey] != null ? String(s[colorByKey]) : '—') : undefined
-			}))
+			.map((s: any) => {
+				const v = colorByKey ? s[colorByKey] : null;
+				const isNull = Boolean(colorByKey) && (v == null || v === '');
+				return {
+					id: s.id,
+					lat: s.latitude,
+					lng: s.longitude,
+					label: `${s.samp_name} (${s.site_name})`,
+					href: `/samples/${s.id}`,
+					color: colorByKey && !isNull ? pinColorForValue(v) : undefined,
+					nullValue: isNull,
+					colorLabel: colorByKey ? colorByLabel : undefined,
+					colorValue: colorByKey ? (isNull ? '—' : String(v)) : undefined
+				};
+			})
 	);
 
-	/** Toggle selection when a map pin is clicked — keeps the cart in sync
-	 *  with whatever the user points at on the map. */
-	function toggleFromMap(id: string) {
+	/** Shift-drag a rectangle on the map to batch-add every contained pin to
+	 *  the selection. Additive — existing selection is preserved. */
+	function addFromBox(ids: string[]) {
 		const next = new Set(selectedIds);
-		if (next.has(id)) next.delete(id); else next.add(id);
+		for (const id of ids) next.add(id);
 		selectedIds = next;
 	}
 
@@ -184,7 +189,7 @@
 	</div>
 
 	{#if markers.length > 0}
-		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onmarkerclick={toggleFromMap} />
+		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={addFromBox} />
 	{/if}
 
 	<!-- Optional columns: drawn from MIxS parameters that have data on ≥1 sample -->

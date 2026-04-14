@@ -237,6 +237,9 @@
 						/>
 					</th>
 				{/if}
+				{#if hasActions}
+					<th class="px-2 py-3 text-left font-medium text-slate-400 w-24"></th>
+				{/if}
 				{#if showId}
 					<th class="px-3 py-3 text-left font-medium text-slate-500 w-20">ID</th>
 				{/if}
@@ -273,9 +276,6 @@
 						</div>
 					</th>
 				{/each}
-				{#if hasActions}
-					<th class="px-4 py-3 text-right font-medium text-slate-400"></th>
-				{/if}
 			</tr>
 		</thead>
 		<tbody>
@@ -305,6 +305,14 @@
 							/>
 						</td>
 					{/if}
+					{#if hasActions}
+						<td class="px-2 py-3 whitespace-nowrap">
+							{#if actions}{@render actions(row)}{/if}
+							{#if editHref}<a href={editHref(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Edit</a>{/if}
+							{#if onduplicate}<button onclick={() => onduplicate(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Dup</button>{/if}
+							{#if ondelete}<button onclick={() => ondelete(row)} class="text-xs text-slate-600 hover:text-red-400">Del</button>{/if}
+						</td>
+					{/if}
 					{#if showId}
 						<td class="px-3 py-3">
 							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>
@@ -321,14 +329,6 @@
 							{/if}
 						</td>
 					{/each}
-					{#if hasActions}
-						<td class="px-4 py-3 text-right whitespace-nowrap">
-							{#if actions}{@render actions(row)}{/if}
-							{#if editHref}<a href={editHref(row)} class="text-xs text-slate-500 hover:text-ocean-400 ml-2">Edit</a>{/if}
-							{#if onduplicate}<button onclick={() => onduplicate(row)} class="text-xs text-slate-500 hover:text-ocean-400 ml-2">Dup</button>{/if}
-							{#if ondelete}<button onclick={() => ondelete(row)} class="text-xs text-slate-600 hover:text-red-400 ml-2">Del</button>{/if}
-						</td>
-					{/if}
 				</tr>
 			{/each}
 		</tbody>
