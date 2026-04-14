@@ -220,29 +220,6 @@
 				Shift+↑↓ navigate · Space select · Shift+click header to color
 			</span>
 		{/if}
-		<!-- Bulk actions: only appear with ≥2 selected rows + parent-supplied
-		     handlers. Inline so they sit next to the filter + cart chip rather
-		     than reshuffling the table header. -->
-		{#if selectable && selectedIds.size >= 2 && (onbulkduplicate || onbulkdelete)}
-			{@const selectedRows = sortedRows.filter((r) => selectedIds.has(r.id as string))}
-			<span class="ml-auto flex items-center gap-2">
-				<span class="text-xs text-slate-500">{selectedIds.size} selected</span>
-				{#if onbulkduplicate}
-					<button
-						type="button"
-						onclick={() => onbulkduplicate!(selectedRows)}
-						class="text-xs px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-ocean-400"
-					>Dup all</button>
-				{/if}
-				{#if onbulkdelete}
-					<button
-						type="button"
-						onclick={() => onbulkdelete!(selectedRows)}
-						class="text-xs px-2 py-1 rounded border border-slate-700 text-slate-500 hover:bg-slate-800 hover:text-red-400 hover:border-red-900"
-					>Del all</button>
-				{/if}
-			</span>
-		{/if}
 	</div>
 {/if}
 
@@ -268,7 +245,31 @@
 					</th>
 				{/if}
 				{#if hasActions}
-					<th class="px-2 py-3 text-left font-medium text-slate-400 w-24"></th>
+					<!-- Bulk actions live in the per-row action column's header so
+					     they sit immediately above the per-row Edit/Dup/Del links
+					     and right next to the select-all checkbox. Hidden until
+					     ≥2 rows are selected + the parent provides the handlers. -->
+					<th class="px-2 py-3 text-left font-medium text-slate-400 w-28 whitespace-nowrap">
+						{#if selectable && selectedIds.size >= 2 && (onbulkduplicate || onbulkdelete)}
+							{@const selectedRows = sortedRows.filter((r) => selectedIds.has(r.id as string))}
+							{#if onbulkduplicate}
+								<button
+									type="button"
+									onclick={() => onbulkduplicate!(selectedRows)}
+									class="text-xs text-slate-500 hover:text-ocean-400 mr-2"
+									title="Duplicate {selectedIds.size} rows"
+								>Dup all</button>
+							{/if}
+							{#if onbulkdelete}
+								<button
+									type="button"
+									onclick={() => onbulkdelete!(selectedRows)}
+									class="text-xs text-slate-600 hover:text-red-400"
+									title="Delete {selectedIds.size} rows"
+								>Del all</button>
+							{/if}
+						{/if}
+					</th>
 				{/if}
 				{#if showId}
 					<th class="px-3 py-3 text-left font-medium text-slate-500 w-20">ID</th>
