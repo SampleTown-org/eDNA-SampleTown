@@ -7,6 +7,10 @@
 
 export interface LabelInput {
 	id: string;
+	/** Entity type slug (project, site, sample, …). Rendered as an
+	 *  uppercase tag at the top of each label so field workers can tell
+	 *  at a glance what the sticker is for. Omit for fully-blank labels. */
+	type?: string;
 	/** Optional heading for the label (e.g. entity name). */
 	primary?: string;
 	/** Optional sub-line (e.g. project or site name). */
@@ -48,38 +52,53 @@ export async function buildLabelsPdf(
 		const x = MARGIN_LEFT + col * (CELL_W + GAP_X);
 		const y = MARGIN_TOP + row * CELL_H;
 
-		const { id, primary, secondary } = labels[i];
+		const { id, type, primary, secondary } = labels[i];
+
+		// Embed the type into the QR URL so a scanner can skip the
+		// claim-type picker and route straight to the right new-form.
+		// Unknown-type labels encode just /id/<uuid>.
+		const target = type
+			? `${origin}/id/${id}?t=${encodeURIComponent(type)}`
+			: `${origin}/id/${id}`;
 
 		// PNG at 300px so the QR stays crisp when printed at 300+ DPI.
-		const png = await QRCode.toDataURL(`${origin}/id/${id}`, {
+		const png = await QRCode.toDataURL(target, {
 			margin: 1,
 			width: 300,
 			color: { dark: '#000000', light: '#ffffff' }
 		});
 		pdf.addImage(png, 'PNG', x + 0.05, y + 0.05, 0.9, 0.9);
 
-		// Text column: primary (entity name) at top, secondary line below,
-		// id split over two lines. When primary is absent (pre-printed
-		// sheet), fall back to a brand label so the row isn't blank.
+		// Text column: uppercase type tag (if known) → primary → secondary
+		// → id. Falls back to a brand label when the label carries no
+		// entity context at all.
 		const textX = x + 1.05;
 		pdf.setFont('courier', 'normal');
+		let cursor = y + 0.18;
+		if (type) {
+			pdf.setFont('helvetica', 'bold');
+			pdf.setFontSize(10);
+			pdf.text(type.toUpperCase().replace(/_/g, ' '), textX, cursor);
+			cursor += 0.18;
+			pdf.setFont('courier', 'normal');
+		}
 		if (primary) {
 			pdf.setFontSize(9);
-			pdf.text(truncate(primary, 18), textX, y + 0.2);
+			pdf.text(truncate(primary, 18), textX, cursor);
+			cursor += 0.15;
 			if (secondary) {
 				pdf.setFontSize(7);
-				pdf.text(truncate(secondary, 22), textX, y + 0.35);
+				pdf.text(truncate(secondary, 22), textX, cursor);
+				cursor += 0.14;
 			}
-			pdf.setFontSize(6);
-			pdf.text(id.slice(0, 16), textX, y + 0.72);
-			pdf.text(id.slice(16), textX, y + 0.86);
-		} else {
+		} else if (!type) {
 			pdf.setFontSize(8);
-			pdf.text('SampleTown', textX, y + 0.18);
-			pdf.setFontSize(7);
-			pdf.text(id.slice(0, 16), textX, y + 0.55);
-			pdf.text(id.slice(16), textX, y + 0.72);
+			pdf.text('SampleTown', textX, cursor);
+			cursor += 0.18;
 		}
+		pdf.setFontSize(6);
+		pdf.text(id.slice(0, 16), textX, y + 0.74);
+		pdf.text(id.slice(16), textX, y + 0.88);
 	}
 	pdf.save(filename);
 }
