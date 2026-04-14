@@ -104,7 +104,7 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'in RNAlater', 'in ethanol', 'dry', 'dark', 'light-exposed'
 	],
 	// Extraction methods + kits merged into one picklist (was previously
-	// split into extraction_method + extraction_kit — redundant).
+	// split into extraction_method + nucl_acid_ext_kit — redundant).
 	extraction_method: [
 		'Column-based', 'Phenol-chloroform', 'Bead-beating + column',
 		'Magnetic bead', 'CTAB', 'Chelex', 'Direct PCR (no extraction)',
@@ -235,12 +235,12 @@ const PRIMER_SETS = [
 ];
 
 const PCR_PROTOCOLS = [
-	{ name: 'Standard 16S (55°C, 30 cycles)', polymerase: 'Q5 High-Fidelity', annealing_temp_c: 55, num_cycles: 30, pcr_conditions: '98°C 30s; 30x(98°C 10s, 55°C 30s, 72°C 30s); 72°C 2min' },
-	{ name: 'Standard 18S (50°C, 30 cycles)', polymerase: 'Q5 High-Fidelity', annealing_temp_c: 50, num_cycles: 30, pcr_conditions: '98°C 30s; 30x(98°C 10s, 50°C 30s, 72°C 30s); 72°C 2min' },
-	{ name: 'CO1 touchdown (62→46°C, 35 cycles)', polymerase: 'Phusion High-Fidelity', annealing_temp_c: 46, num_cycles: 35, pcr_conditions: '98°C 30s; 16x(98°C 10s, 62°C→46°C 30s, 72°C 30s); 19x(98°C 10s, 46°C 30s, 72°C 30s); 72°C 5min' },
-	{ name: '12S MiFish (65°C, 35 cycles)', polymerase: 'KAPA HiFi HotStart', annealing_temp_c: 65, num_cycles: 35, pcr_conditions: '95°C 3min; 35x(98°C 20s, 65°C 15s, 72°C 15s); 72°C 5min' },
-	{ name: 'ITS Standard (52°C, 30 cycles)', polymerase: 'Phusion High-Fidelity', annealing_temp_c: 52, num_cycles: 30, pcr_conditions: '98°C 30s; 30x(98°C 10s, 52°C 30s, 72°C 30s); 72°C 5min' },
-	{ name: 'Low-template eDNA (50°C, 45 cycles)', polymerase: 'Platinum Taq', annealing_temp_c: 50, num_cycles: 45, pcr_conditions: '94°C 3min; 45x(94°C 30s, 50°C 30s, 72°C 60s); 72°C 10min' }
+	{ name: 'Standard 16S (55°C, 30 cycles)', polymerase: 'Q5 High-Fidelity', annealing_temp_c: 55, num_cycles: 30, pcr_cond: '98°C 30s; 30x(98°C 10s, 55°C 30s, 72°C 30s); 72°C 2min' },
+	{ name: 'Standard 18S (50°C, 30 cycles)', polymerase: 'Q5 High-Fidelity', annealing_temp_c: 50, num_cycles: 30, pcr_cond: '98°C 30s; 30x(98°C 10s, 50°C 30s, 72°C 30s); 72°C 2min' },
+	{ name: 'CO1 touchdown (62→46°C, 35 cycles)', polymerase: 'Phusion High-Fidelity', annealing_temp_c: 46, num_cycles: 35, pcr_cond: '98°C 30s; 16x(98°C 10s, 62°C→46°C 30s, 72°C 30s); 19x(98°C 10s, 46°C 30s, 72°C 30s); 72°C 5min' },
+	{ name: '12S MiFish (65°C, 35 cycles)', polymerase: 'KAPA HiFi HotStart', annealing_temp_c: 65, num_cycles: 35, pcr_cond: '95°C 3min; 35x(98°C 20s, 65°C 15s, 72°C 15s); 72°C 5min' },
+	{ name: 'ITS Standard (52°C, 30 cycles)', polymerase: 'Phusion High-Fidelity', annealing_temp_c: 52, num_cycles: 30, pcr_cond: '98°C 30s; 30x(98°C 10s, 52°C 30s, 72°C 30s); 72°C 5min' },
+	{ name: 'Low-template eDNA (50°C, 45 cycles)', polymerase: 'Platinum Taq', annealing_temp_c: 50, num_cycles: 45, pcr_cond: '94°C 3min; 45x(94°C 30s, 50°C 30s, 72°C 60s); 72°C 10min' }
 ];
 
 const NAMING_TEMPLATES = [
@@ -309,10 +309,10 @@ export function seedConstrainedValues(db: Database.Database) {
 	const protocolCount = db.prepare('SELECT COUNT(*) AS count FROM pcr_protocols').get() as { count: number };
 	if (protocolCount.count === 0) {
 		const insert = db.prepare(`INSERT OR IGNORE INTO pcr_protocols
-			(id, name, polymerase, annealing_temp_c, num_cycles, pcr_conditions, sort_order)
+			(id, name, polymerase, annealing_temp_c, num_cycles, pcr_cond, sort_order)
 			VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?)`);
 		const insertAll = db.transaction(() => {
-			PCR_PROTOCOLS.forEach((p, i) => insert.run(p.name, p.polymerase, p.annealing_temp_c, p.num_cycles, p.pcr_conditions, i));
+			PCR_PROTOCOLS.forEach((p, i) => insert.run(p.name, p.polymerase, p.annealing_temp_c, p.num_cycles, p.pcr_cond, i));
 		});
 		insertAll();
 	}

@@ -44,9 +44,27 @@ function runMigrations(db: Database.Database) {
 			if (!msg.includes('duplicate column')) throw err;
 		}
 	};
+	/** RENAME COLUMN with idempotency: fine on first run, silently skipped
+	 *  once the target column already has the new name. Covers both sqlite
+	 *  error strings ("no such column" when old is gone, "duplicate column"
+	 *  if someone ALTERs in parallel). */
+	const renameColumn = (table: string, oldName: string, newName: string) => {
+		try {
+			db.exec(`ALTER TABLE ${table} RENAME COLUMN ${oldName} TO ${newName}`);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			if (!msg.includes('no such column') && !msg.includes('duplicate column')) throw err;
+		}
+	};
 	addColumn('pcr_amplifications', 'well_label TEXT');
 	addColumn('library_preps', 'well_label TEXT');
 	addColumn('users', 'avatar_emoji TEXT');
+	// MIxS audit (docs/MIXS_AUDIT.md) recommended column renames for exact
+	// alignment with MIxS v6.3 slot names.
+	renameColumn('extracts', 'extraction_kit', 'nucl_acid_ext_kit');
+	renameColumn('pcr_plates', 'pcr_conditions', 'pcr_cond');
+	renameColumn('pcr_amplifications', 'pcr_conditions', 'pcr_cond');
+	renameColumn('pcr_protocols', 'pcr_conditions', 'pcr_cond');
 
 	// Merge the lab-position roles (PI, Postdoc, etc.) that used to be a
 	// hardcoded list on the Personnel dropdown into the person_role picklist,

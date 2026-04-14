@@ -176,7 +176,7 @@ const pcrPlateFields = {
 	forward_primer_seq: optionalShortText,
 	reverse_primer_name: optionalShortText,
 	reverse_primer_seq: optionalShortText,
-	pcr_conditions: optionalLongText,
+	pcr_cond: optionalLongText,
 	annealing_temp_c: optionalNumber,
 	num_cycles: optionalInt,
 	polymerase: optionalShortText,

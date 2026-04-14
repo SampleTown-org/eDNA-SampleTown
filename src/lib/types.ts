@@ -137,7 +137,7 @@ export interface Extract {
 	extract_name: string;
 	extraction_date: string | null;
 	extraction_method: string | null;
-	extraction_kit: string | null;
+	nucl_acid_ext_kit: string | null;
 	nucl_acid_ext: string | null;
 	samp_taxon_id: string | null;
 	samp_vol_we_dna_ext: string | null;
@@ -167,7 +167,7 @@ export interface PcrPlate {
 	forward_primer_seq: string | null;
 	reverse_primer_name: string | null;
 	reverse_primer_seq: string | null;
-	pcr_conditions: string | null;
+	pcr_cond: string | null;
 	annealing_temp_c: number | null;
 	num_cycles: number | null;
 	polymerase: string | null;
@@ -192,7 +192,7 @@ export interface PcrAmplification {
 	forward_primer_seq: string | null;
 	reverse_primer_name: string | null;
 	reverse_primer_seq: string | null;
-	pcr_conditions: string | null;
+	pcr_cond: string | null;
 	annealing_temp_c: number | null;
 	num_cycles: number | null;
 	polymerase: string | null;

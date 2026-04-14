@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS extracts (
     extract_name TEXT NOT NULL,
     extraction_date TEXT,
     extraction_method TEXT,
-    extraction_kit TEXT,
+    nucl_acid_ext_kit TEXT,               -- MIxS nucl_acid_ext_kit: extraction kit product name
     nucl_acid_ext TEXT,                   -- MIxS nucleic acid extraction protocol (URL / DOI / PID)
     samp_taxon_id TEXT,                   -- MIxS: NCBI taxid of the DNA sample's source taxon
     samp_vol_we_dna_ext TEXT,             -- MIxS: sample volume or weight used for DNA extraction (string with units)
@@ -267,7 +267,7 @@ CREATE TABLE IF NOT EXISTS pcr_plates (
     forward_primer_seq TEXT,
     reverse_primer_name TEXT,
     reverse_primer_seq TEXT,
-    pcr_conditions TEXT,
+    pcr_cond TEXT,                        -- MIxS pcr_cond: annealing + cycling conditions
     annealing_temp_c REAL,
     num_cycles INTEGER,
     polymerase TEXT,
@@ -299,7 +299,7 @@ CREATE TABLE IF NOT EXISTS pcr_amplifications (
     forward_primer_seq TEXT,
     reverse_primer_name TEXT,
     reverse_primer_seq TEXT,
-    pcr_conditions TEXT,
+    pcr_cond TEXT,                        -- MIxS pcr_cond: annealing + cycling conditions
     annealing_temp_c REAL,
     num_cycles INTEGER,
     polymerase TEXT,
@@ -499,7 +499,7 @@ CREATE TABLE IF NOT EXISTS pcr_protocols (
     polymerase TEXT,
     annealing_temp_c REAL,
     num_cycles INTEGER,
-    pcr_conditions TEXT,
+    pcr_cond TEXT,                        -- MIxS pcr_cond: annealing + cycling conditions
     is_active INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))

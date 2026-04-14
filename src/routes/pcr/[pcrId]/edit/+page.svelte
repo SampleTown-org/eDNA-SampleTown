@@ -24,7 +24,7 @@
 					forward_primer_seq: (data.plate as any).forward_primer_seq || '',
 					reverse_primer_name: (data.plate as any).reverse_primer_name || '',
 					reverse_primer_seq: (data.plate as any).reverse_primer_seq || '',
-					pcr_conditions: (data.plate as any).pcr_conditions || '',
+					pcr_cond: (data.plate as any).pcr_cond || '',
 					annealing_temp_c: (data.plate as any).annealing_temp_c ?? '',
 					num_cycles: (data.plate as any).num_cycles ?? '',
 					polymerase: (data.plate as any).polymerase || '',
@@ -63,7 +63,7 @@
 		plateForm.polymerase = proto.polymerase || '';
 		plateForm.annealing_temp_c = proto.annealing_temp_c ?? '';
 		plateForm.num_cycles = proto.num_cycles ?? '';
-		plateForm.pcr_conditions = proto.pcr_conditions || '';
+		plateForm.pcr_cond = proto.pcr_cond || '';
 	}
 
 	// Reaction-edit branch state
@@ -211,8 +211,8 @@
 						<option value={proto.id}>{proto.name}</option>
 					{/each}
 				</select>
-				{#if plateForm.pcr_conditions}
-					<div class="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400 font-mono">{plateForm.pcr_conditions}</div>
+				{#if plateForm.pcr_cond}
+					<div class="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400 font-mono">{plateForm.pcr_cond}</div>
 				{/if}
 			</div>
 

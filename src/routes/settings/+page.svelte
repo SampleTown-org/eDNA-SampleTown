@@ -337,7 +337,7 @@
 			if (!searchQuery.trim()) return pcrProtocols;
 			const q = searchQuery.toLowerCase();
 			return pcrProtocols.filter(
-				(p: any) => matches(p.name, q) || matches(p.polymerase, q) || matches(p.pcr_conditions, q)
+				(p: any) => matches(p.name, q) || matches(p.polymerase, q) || matches(p.pcr_cond, q)
 			);
 		})()
 	);
@@ -487,7 +487,7 @@
 	}
 
 	// --- PCR Protocols CRUD ---
-	const emptyProtocol = () => ({ name: '', polymerase: '', annealing_temp_c: '' as string | number, num_cycles: '' as string | number, pcr_conditions: '' });
+	const emptyProtocol = () => ({ name: '', polymerase: '', annealing_temp_c: '' as string | number, num_cycles: '' as string | number, pcr_cond: '' });
 	let newProtocol = $state(emptyProtocol());
 	let editingProtocolId = $state('');
 	let editProtocol = $state(emptyProtocol());
@@ -502,7 +502,7 @@
 
 	function startEditProtocol(proto: any) {
 		editingProtocolId = proto.id;
-		editProtocol = { name: proto.name, polymerase: proto.polymerase || '', annealing_temp_c: proto.annealing_temp_c ?? '', num_cycles: proto.num_cycles ?? '', pcr_conditions: proto.pcr_conditions || '' };
+		editProtocol = { name: proto.name, polymerase: proto.polymerase || '', annealing_temp_c: proto.annealing_temp_c ?? '', num_cycles: proto.num_cycles ?? '', pcr_cond: proto.pcr_cond || '' };
 	}
 
 	async function saveEditProtocol() {
@@ -769,7 +769,7 @@
 					{#if proto.annealing_temp_c}<span>Anneal: <span class="text-slate-300">{proto.annealing_temp_c}°C</span></span>{/if}
 					{#if proto.num_cycles}<span>Cycles: <span class="text-slate-300">{proto.num_cycles}</span></span>{/if}
 				</div>
-				{#if proto.pcr_conditions}<p class="text-xs text-slate-500 mt-1 font-mono">{proto.pcr_conditions}</p>{/if}
+				{#if proto.pcr_cond}<p class="text-xs text-slate-500 mt-1 font-mono">{proto.pcr_cond}</p>{/if}
 			</div>
 			{/each}
 		</div>
@@ -784,7 +784,7 @@
 			<div class="grid grid-cols-3 gap-3">
 				<div><label class="block text-xs text-slate-400 mb-1">Anneal °C</label><input type="number" step="any" bind:value={editProtocol.annealing_temp_c} class="w-full {inputCls} text-sm" /></div>
 				<div><label class="block text-xs text-slate-400 mb-1">Cycles</label><input type="number" bind:value={editProtocol.num_cycles} class="w-full {inputCls} text-sm" /></div>
-				<div><label class="block text-xs text-slate-400 mb-1">PCR Conditions</label><input type="text" bind:value={editProtocol.pcr_conditions} class="w-full {inputCls} text-sm" /></div>
+				<div><label class="block text-xs text-slate-400 mb-1">PCR Conditions</label><input type="text" bind:value={editProtocol.pcr_cond} class="w-full {inputCls} text-sm" /></div>
 			</div>
 			<div class="flex gap-2">
 				<button type="submit" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">Save</button>
@@ -802,7 +802,7 @@
 				<div class="grid grid-cols-3 gap-3">
 					<div><label class="block text-xs text-slate-400 mb-1">Anneal °C</label><input type="number" step="any" bind:value={newProtocol.annealing_temp_c} class="w-full {inputCls} text-sm" /></div>
 					<div><label class="block text-xs text-slate-400 mb-1">Cycles</label><input type="number" bind:value={newProtocol.num_cycles} class="w-full {inputCls} text-sm" /></div>
-					<div><label class="block text-xs text-slate-400 mb-1">PCR Conditions</label><input type="text" bind:value={newProtocol.pcr_conditions} class="w-full {inputCls} text-sm" placeholder="e.g., 98°C 30s; 30x(...)" /></div>
+					<div><label class="block text-xs text-slate-400 mb-1">PCR Conditions</label><input type="text" bind:value={newProtocol.pcr_cond} class="w-full {inputCls} text-sm" placeholder="e.g., 98°C 30s; 30x(...)" /></div>
 				</div>
 				<button type="submit" disabled={!newProtocol.name.trim()} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 text-sm font-medium">Add Protocol</button>
 			</form>

@@ -35,7 +35,7 @@
 	let plate = $state({
 		plate_name: '', pcr_date: '', primer_set_id: '', target_subfragment: '',
 		forward_primer_name: '', forward_primer_seq: '', reverse_primer_name: '', reverse_primer_seq: '',
-		pcr_conditions: '', annealing_temp_c: '', num_cycles: '', polymerase: '', nucl_acid_amp: '', notes: ''
+		pcr_cond: '', annealing_temp_c: '', num_cycles: '', polymerase: '', nucl_acid_amp: '', notes: ''
 	});
 
 	// Primer set selector — selecting a primer set sets primer_set_id + copies
@@ -70,7 +70,7 @@
 			plate.polymerase = proto.polymerase || '';
 			plate.annealing_temp_c = proto.annealing_temp_c ?? '';
 			plate.num_cycles = proto.num_cycles ?? '';
-			plate.pcr_conditions = proto.pcr_conditions || '';
+			plate.pcr_cond = proto.pcr_cond || '';
 		}
 	}
 
@@ -260,7 +260,7 @@
 					{#if proto}
 					<div class="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400">
 						<span>{proto.polymerase} &middot; {proto.annealing_temp_c}°C &middot; {proto.num_cycles} cycles</span>
-						{#if proto.pcr_conditions}<div class="font-mono mt-1">{proto.pcr_conditions}</div>{/if}
+						{#if proto.pcr_cond}<div class="font-mono mt-1">{proto.pcr_cond}</div>{/if}
 					</div>
 					{/if}
 				{/if}

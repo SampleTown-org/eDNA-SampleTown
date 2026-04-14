@@ -48,7 +48,7 @@
 				['Anneal Temp', data.plate.annealing_temp_c != null ? `${data.plate.annealing_temp_c}°C` : null],
 				['Cycles', data.plate.num_cycles],
 				['Polymerase', data.plate.polymerase],
-				['Conditions', data.plate.pcr_conditions]
+				['Conditions', data.plate.pcr_cond]
 			] as [label, value]}
 				{#if value != null}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">

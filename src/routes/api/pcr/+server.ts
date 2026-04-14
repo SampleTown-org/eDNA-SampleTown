@@ -19,12 +19,12 @@ function insertPcr(db: ReturnType<typeof getDb>, data: Record<string, unknown>, 
 	db.prepare(`
 		INSERT INTO pcr_amplifications (id, extract_id, pcr_name, primer_set_id, target_subfragment,
 			forward_primer_name, forward_primer_seq, reverse_primer_name, reverse_primer_seq,
-			pcr_conditions, annealing_temp_c, num_cycles, polymerase, pcr_date, band_observed, concentration_ng_ul,
+			pcr_cond, annealing_temp_c, num_cycles, polymerase, pcr_date, band_observed, concentration_ng_ul,
 			notes, custom_fields, created_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`).run(id, data.extract_id, data.pcr_name, data.primer_set_id ?? null, data.target_subfragment ?? null,
 		data.forward_primer_name ?? null, data.forward_primer_seq ?? null, data.reverse_primer_name ?? null, data.reverse_primer_seq ?? null,
-		data.pcr_conditions ?? null, data.annealing_temp_c ?? null, data.num_cycles ?? null, data.polymerase ?? null,
+		data.pcr_cond ?? null, data.annealing_temp_c ?? null, data.num_cycles ?? null, data.polymerase ?? null,
 		data.pcr_date ?? null, data.band_observed ?? null, data.concentration_ng_ul ?? null,
 		data.notes ?? null, data.custom_fields ?? null, userId);
 	return db.prepare('SELECT * FROM pcr_amplifications WHERE id = ?').get(id);

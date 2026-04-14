@@ -13,9 +13,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	const db = getDb();
 	const id = generateId();
 	try {
-		db.prepare(`INSERT INTO pcr_protocols (id, name, polymerase, annealing_temp_c, num_cycles, pcr_conditions, sort_order)
+		db.prepare(`INSERT INTO pcr_protocols (id, name, polymerase, annealing_temp_c, num_cycles, pcr_cond, sort_order)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, data.name, data.polymerase ?? null,
-			data.annealing_temp_c ?? null, data.num_cycles ?? null, data.pcr_conditions ?? null, data.sort_order ?? 0);
+			data.annealing_temp_c ?? null, data.num_cycles ?? null, data.pcr_cond ?? null, data.sort_order ?? 0);
 		return json(db.prepare('SELECT * FROM pcr_protocols WHERE id = ?').get(id), { status: 201 });
 	} catch (err) { return apiError(err); }
 };
