@@ -60,8 +60,8 @@
 
 <span class="glossary-doc-pop relative inline-flex items-center gap-1 {cls}">
 	{#if !iconOnly}<span>{displayLabel}</span>{/if}
-	{#if star === 'required'}<span class="text-rose-400" title="Required by MIxS" aria-label="required">★</span>{/if}
-	{#if star === 'recommended'}<span class="text-amber-400" title="Recommended by MIxS" aria-label="recommended">★</span>{/if}
+	{#if star === 'required'}<span class="text-rose-400" title="Required by MIxS" aria-label="required">*</span>{/if}
+	{#if star === 'recommended'}<span class="text-amber-400" title="Recommended by MIxS" aria-label="recommended">*</span>{/if}
 	{#if hasDoc}
 		<button
 			type="button"
