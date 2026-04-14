@@ -76,7 +76,8 @@ export const load: PageServerLoad = async () => {
 	const activitySql = `
 		SELECT date(s.collection_date) AS date, 'sample' AS type, s.id, s.samp_name AS name,
 			p.project_name AS detail,
-			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar
+			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar,
+			s.updated_at AS updated_at
 		FROM samples s
 		JOIN projects p ON p.id = s.project_id
 		LEFT JOIN users u ON u.id = s.created_by
@@ -86,7 +87,8 @@ export const load: PageServerLoad = async () => {
 
 		SELECT date(e.extraction_date) AS date, 'extract' AS type, e.id, e.extract_name AS name,
 			s.samp_name AS detail,
-			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar
+			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar,
+			e.updated_at AS updated_at
 		FROM extracts e
 		JOIN samples s ON s.id = e.sample_id
 		LEFT JOIN users u ON u.id = e.created_by
@@ -96,7 +98,8 @@ export const load: PageServerLoad = async () => {
 
 		SELECT date(p.pcr_date) AS date, 'pcr_plate' AS type, p.id, p.plate_name AS name,
 			COALESCE(ps.target_gene, 'PCR') || ' · ' || (SELECT COUNT(*) FROM pcr_amplifications WHERE plate_id = p.id AND is_deleted = 0) || ' reactions' AS detail,
-			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar
+			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar,
+			p.updated_at AS updated_at
 		FROM pcr_plates p
 		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
 		LEFT JOIN users u ON u.id = p.created_by
@@ -106,7 +109,8 @@ export const load: PageServerLoad = async () => {
 
 		SELECT date(lp.library_prep_date) AS date, 'library_plate' AS type, lp.id, lp.plate_name AS name,
 			lp.library_type || ' · ' || (SELECT COUNT(*) FROM library_preps WHERE library_plate_id = lp.id AND is_deleted = 0) || ' libraries' AS detail,
-			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar
+			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar,
+			lp.updated_at AS updated_at
 		FROM library_plates lp
 		LEFT JOIN users u ON u.id = lp.created_by
 		WHERE lp.is_deleted = 0 AND date(lp.library_prep_date) IS NOT NULL
@@ -115,7 +119,8 @@ export const load: PageServerLoad = async () => {
 
 		SELECT date(r.run_date) AS date, 'run' AS type, r.id, r.run_name AS name,
 			r.platform AS detail,
-			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar
+			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar,
+			r.updated_at AS updated_at
 		FROM sequencing_runs r
 		LEFT JOIN users u ON u.id = r.created_by
 		WHERE r.is_deleted = 0 AND date(r.run_date) IS NOT NULL
@@ -130,6 +135,7 @@ export const load: PageServerLoad = async () => {
 		detail: string | null;
 		created_by_username: string | null;
 		created_by_avatar: string | null;
+		updated_at: string | null;
 	}[];
 
 	return { counts, events, activities };

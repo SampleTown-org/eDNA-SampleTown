@@ -93,7 +93,7 @@
 	};
 
 	// Sort control — supports sorting by any column
-	let sortKey = $state<'date' | 'type' | 'name' | 'detail'>('date');
+	let sortKey = $state<'date' | 'type' | 'name' | 'detail' | 'updated_at'>('date');
 	let sortDir = $state<'asc' | 'desc'>('desc');
 
 	function toggleSort(key: typeof sortKey) {
@@ -351,12 +351,17 @@
 							</button>
 						</th>
 						<th class="px-3 py-2 text-left font-medium">By</th>
+						<th class="px-3 py-2 text-left font-medium">
+							<button onclick={() => toggleSort('updated_at')} class="hover:text-white transition-colors" title="Last modified">
+								Modified {sortKey === 'updated_at' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+							</button>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#if pagedActivities.length === 0}
 						<tr>
-							<td colspan="6" class="px-3 py-8 text-center text-slate-500">
+							<td colspan="7" class="px-3 py-8 text-center text-slate-500">
 								{selectedDates.size > 0 ? 'No activities on the selected date(s).' : 'No dated activities yet.'}
 							</td>
 						</tr>
@@ -396,6 +401,9 @@
 								{:else}
 									<span class="text-slate-600">—</span>
 								{/if}
+							</td>
+							<td class="px-3 py-2 text-slate-500 font-mono text-xs whitespace-nowrap" title={act.updated_at ?? ''}>
+								{act.updated_at ? act.updated_at.slice(0, 10) : '—'}
 							</td>
 						</tr>
 					{/each}
