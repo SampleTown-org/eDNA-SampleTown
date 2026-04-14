@@ -229,6 +229,9 @@
 		const row = Object.fromEntries(columns.map((c) => [c.key, ''])) as Row;
 		if (data.preselectedProjectId) row.project_id = data.preselectedProjectId;
 		if (data.preselectedSiteId) row.site_id = data.preselectedSiteId;
+		// Scanned QR id rides along as a non-column field; submit() passes it
+		// into the sample POST body, server uses it as the row id via resolveId.
+		if (data.scannedId) row.id = data.scannedId;
 		return row;
 	}
 	function emptyRow(): Row {
@@ -441,6 +444,7 @@
 
 		for (const row of nonEmptyRows) {
 			const body: Record<string, unknown> = {
+				...(row.id ? { id: row.id } : {}),
 				project_id: row.project_id,
 				site_id: row.site_id,
 				samp_name: row.samp_name.trim(),

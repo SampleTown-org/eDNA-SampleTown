@@ -3,6 +3,7 @@
 	import Navbar from '$lib/components/Navbar.svelte';
 	import CartSidebar from '$lib/components/CartSidebar.svelte';
 	import FeedbackForm from '$lib/components/FeedbackForm.svelte';
+	import ScanButton from '$lib/components/ScanButton.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { Snippet } from 'svelte';
 
@@ -24,6 +25,9 @@
 			<CartSidebar />
 		{/if}
 	</div>
+	{#if data.user}
+		<ScanButton />
+	{/if}
 	<FeedbackForm />
 	<footer class="py-4 text-center text-xs text-slate-600">
 		SampleTown &middot; MIxS-compliant eDNA sample tracking

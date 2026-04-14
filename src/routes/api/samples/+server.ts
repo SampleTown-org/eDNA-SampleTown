@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb, resolveId } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { splitSampleBody, insertSampleValues, loadSampleValues } from '$lib/server/sample-body';
@@ -43,7 +43,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (!data?.site_id) return json({ error: 'site_id is required' }, { status: 400 });
 
 		const db = getDb();
-		const id = generateId();
+		const id = resolveId(raw?.id);
 
 		db.prepare(
 			`INSERT INTO samples (

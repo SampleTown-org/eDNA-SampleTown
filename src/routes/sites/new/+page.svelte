@@ -55,6 +55,7 @@
 		saving = true; errorMsg = '';
 
 		const body = {
+			...(data.scannedId ? { id: data.scannedId } : {}),
 			...form,
 			lat_lon: latitude != null && longitude != null ? formatLatLon(latitude, longitude) : null,
 			latitude,

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb, generateId, resolveId } from '$lib/server/db';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { parseBody } from '$lib/server/validation';
 import { RunCreateBody } from '$lib/server/schemas/lab';
@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const data = parsed.data;
 
 	const db = getDb();
-	const id = generateId();
+	const id = resolveId((data as Record<string, unknown>)?.id);
 	db.prepare(`
 		INSERT INTO sequencing_runs (id, run_name, run_date, platform, instrument_model,
 			flow_cell_id, run_directory, fastq_directory, total_reads, total_bases, notes, custom_fields, created_by)

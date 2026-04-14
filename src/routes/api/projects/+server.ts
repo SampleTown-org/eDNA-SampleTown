@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb, resolveId } from '$lib/server/db';
 
 export const GET: RequestHandler = async () => {
 	const db = getDb();
@@ -11,7 +11,7 @@ export const GET: RequestHandler = async () => {
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const data = await request.json();
 	const db = getDb();
-	const id = generateId();
+	const id = resolveId(data?.id);
 
 	db.prepare(`
 		INSERT INTO projects (id, project_name, description, pi_name, institution, github_repo, created_by)

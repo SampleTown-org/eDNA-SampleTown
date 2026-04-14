@@ -28,6 +28,9 @@ export const load: PageServerLoad = async ({ url }) => {
 		personnel,
 		picklists,
 		preselectedProjectId: url.searchParams.get('project_id') || '',
-		preselectedSiteId: url.searchParams.get('site_id') || ''
+		preselectedSiteId: url.searchParams.get('site_id') || '',
+		/** Scanned QR id (pre-allocated UUID). When present, the first row's
+		 *  POST will use it as the sample id. */
+		scannedId: url.searchParams.get('id') || ''
 	};
 };

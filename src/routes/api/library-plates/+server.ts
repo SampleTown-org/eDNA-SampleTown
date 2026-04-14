@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb, generateId, resolveId } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { parseBody } from '$lib/server/validation';
@@ -22,7 +22,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const data = parsed.data;
 
 	const db = getDb();
-	const plateId = generateId();
+	const plateId = resolveId((data as Record<string, unknown>)?.id);
 
 	try {
 		db.prepare(`

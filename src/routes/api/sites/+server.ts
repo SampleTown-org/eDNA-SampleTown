@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb, resolveId } from '$lib/server/db';
 import { parseLatLon } from '$lib/mixs/validators';
 import { apiError } from '$lib/server/api-errors';
 
@@ -28,7 +28,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (!data?.site_name?.trim()) return json({ error: 'site_name is required' }, { status: 400 });
 
 		const db = getDb();
-		const id = generateId();
+		const id = resolveId(data?.id);
 		const coords = parseLatLon(data.lat_lon || '');
 
 		db.prepare(

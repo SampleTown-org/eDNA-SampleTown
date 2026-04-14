@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb, generateId, resolveId } from '$lib/server/db';
 
 export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
@@ -17,7 +17,7 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 
 function insertLibrary(db: ReturnType<typeof getDb>, data: Record<string, unknown>, userId: string | null) {
-	const id = generateId();
+	const id = resolveId(data?.id);
 	db.prepare(`
 		INSERT INTO library_preps (id, pcr_id, extract_id, library_name, library_type, library_prep_kit,
 			library_prep_date, platform, instrument_model, index_sequence_i7, index_sequence_i5,

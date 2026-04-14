@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb, generateId, resolveId } from '$lib/server/db';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -14,7 +14,7 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 
 function insertExtract(db: ReturnType<typeof getDb>, data: Record<string, unknown>, userId: string | null) {
-	const id = generateId();
+	const id = resolveId(data?.id);
 	db.prepare(`
 		INSERT INTO extracts (id, sample_id, extract_name, extraction_date, extraction_method, nucl_acid_type, nucl_acid_ext_kit,
 			nucl_acid_ext, samp_taxon_id, samp_vol_we_dna_ext, pool_dna_extracts,

@@ -6,5 +6,10 @@ export const load: PageServerLoad = async ({ url }) => {
 	const db = getDb();
 	const projects = db.prepare('SELECT id, project_name FROM projects ORDER BY project_name').all();
 	const picklists = getConstrainedValues('geo_loc_name', 'locality', 'env_broad_scale', 'env_local_scale');
-	return { projects, picklists, preselectedProjectId: url.searchParams.get('project_id') || '' };
+	return {
+		projects,
+		picklists,
+		preselectedProjectId: url.searchParams.get('project_id') || '',
+		scannedId: url.searchParams.get('id') || ''
+	};
 };

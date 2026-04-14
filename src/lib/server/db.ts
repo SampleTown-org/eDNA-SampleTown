@@ -137,6 +137,17 @@ export function generateId(): string {
 		.join('');
 }
 
+/** Use a client-supplied id if it matches our id format (32 lowercase hex),
+ *  otherwise mint a fresh one. Lets pre-printed QR codes flow through
+ *  POST endpoints as the row id for the scanner workflow. The DB will
+ *  reject duplicate ids via the primary-key constraint. */
+export function resolveId(suggested: unknown): string {
+	if (typeof suggested === 'string' && /^[0-9a-f]{32}$/.test(suggested)) {
+		return suggested;
+	}
+	return generateId();
+}
+
 /**
  * Seed a default `admin/admin` account if the users table is empty.
  *

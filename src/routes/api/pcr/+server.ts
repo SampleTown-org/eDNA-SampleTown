@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb, generateId, resolveId } from '$lib/server/db';
 
 export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
@@ -15,7 +15,7 @@ export const GET: RequestHandler = async ({ url }) => {
 };
 
 function insertPcr(db: ReturnType<typeof getDb>, data: Record<string, unknown>, userId: string | null) {
-	const id = generateId();
+	const id = resolveId(data?.id);
 	db.prepare(`
 		INSERT INTO pcr_amplifications (id, extract_id, pcr_name, primer_set_id, target_subfragment,
 			forward_primer_name, forward_primer_seq, reverse_primer_name, reverse_primer_seq,

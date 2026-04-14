@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+	const scannedId = $derived(page.url.searchParams.get('id') || '');
 
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 
@@ -28,7 +30,7 @@
 		const res = await fetch('/api/projects', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(form)
+			body: JSON.stringify({ ...(scannedId ? { id: scannedId } : {}), ...form })
 		});
 
 		if (res.ok) {
