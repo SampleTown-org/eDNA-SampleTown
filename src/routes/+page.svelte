@@ -344,12 +344,13 @@
 								Detail {sortKey === 'detail' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
 							</button>
 						</th>
+						<th class="px-3 py-2 text-left font-medium">By</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#if pagedActivities.length === 0}
 						<tr>
-							<td colspan="5" class="px-3 py-8 text-center text-slate-500">
+							<td colspan="6" class="px-3 py-8 text-center text-slate-500">
 								{selectedDates.size > 0 ? 'No activities on the selected date(s).' : 'No dated activities yet.'}
 							</td>
 						</tr>
@@ -380,6 +381,16 @@
 								{/if}
 							</td>
 							<td class="px-3 py-2 text-slate-500 text-xs">{act.detail ?? ''}</td>
+							<td class="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">
+								{#if act.created_by_username}
+									<span class="inline-flex items-center gap-1.5" title="Created by @{act.created_by_username}">
+										{#if act.created_by_avatar}<span class="text-sm leading-none">{act.created_by_avatar}</span>{/if}
+										<span>@{act.created_by_username}</span>
+									</span>
+								{:else}
+									<span class="text-slate-600">—</span>
+								{/if}
+							</td>
 						</tr>
 					{/each}
 				</tbody>
