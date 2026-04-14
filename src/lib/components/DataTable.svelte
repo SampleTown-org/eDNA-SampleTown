@@ -365,7 +365,8 @@
 			{/if}
 			{#each sortedRows as row, rowIdx}
 				<tr
-					class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors {selectable && selectedIds.has(row.id as string) ? 'bg-ocean-900/20' : ''} {selectable && focusedIndex === rowIdx ? 'outline outline-1 outline-ocean-500 -outline-offset-1' : ''}"
+					class="hover:bg-slate-800/30 transition-colors {selectable && selectedIds.has(row.id as string) ? 'bg-ocean-900/20' : ''}"
+					class:row-focused={selectable && focusedIndex === rowIdx}
 					style={rowStyle(row)}
 					onclick={() => { if (selectable) focusedIndex = rowIdx; }}
 				>
@@ -395,7 +396,7 @@
 					{#each columns as col, colIdx}
 						<td
 							class="px-4 py-3 {col.class || ''} {colIdx === 0 ? 'sticky z-10' : ''}"
-							style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px; background-color: {stickyBg(row)};` : ''}
+							style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px; background-color: ${stickyBg(row)};` : ''}
 						>
 							{#if href && col === columns[0]}
 								<a href={href(row)} class="text-ocean-400 hover:text-ocean-300 hover:underline">
@@ -417,4 +418,10 @@
 	   browsers) means borders have to live on the cells, not on the row. */
 	thead tr th { border-bottom: 1px solid rgb(30, 41, 59); } /* slate-800 */
 	tbody tr td { border-bottom: 1px solid rgba(30, 41, 59, 0.5); }
+	/* Focused-row highlight: inset top/bottom box-shadow on every cell so
+	   the blue line reads as continuous across the sticky / scrolling
+	   boundary (an `outline` on the <tr> is occluded by sticky cells). */
+	tbody tr.row-focused td {
+		box-shadow: inset 0 1px 0 0 rgb(14, 165, 233), inset 0 -1px 0 0 rgb(14, 165, 233);
+	}
 </style>
