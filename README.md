@@ -6,19 +6,32 @@ Tracks the full chain: **Project → Site → Sample → Extract → PCR → Lib
 
 ## Features
 
+### Data model
 - **MIxS 6.3 native** — column names mirror LinkML slot names 1:1; full GSC checklist family (MimarksS/C, Mims, MimsMisip, Mimag, Misag, MigsBa/Eu/Org/Pl/Vi, Miuvig) × 23 extensions (Water, Soil, Sediment, HostAssociated, …) = 276 materialized combination classes driving required-slot validation
 - **Live MIxS completeness** — pick a (checklist, extension) on a sample form and the UI reactively highlights required slots with a red `*`, shows "N of M filled" progress, and flags missing required slots; import validates each row with ajv against the materialized combination class
 - **Searchable MIxS glossary** — `/glossary` reference for all 786 slots, deep-linkable by slot name, ships baked-in for offline ship use
 - **NCBI-ready** — import the official BioSample xlsx templates with automatic SRA↔MIxS column translation; export TSV columns ordered and `*`-marked per the GSC combination-class template
 - **Mechanical MIxS upgrades** — `npm run mixs:update 6.4.0` fetches a new release, rebuilds runtime indices, and emits a diff report identifying renamed / added / removed / required-tightened slots by stable `slot_uri`
+
+### Entry workflows
 - **Plate-based batch entry** — PCR and library prep are organized around plates (not single reactions), with one form to create a whole plate of reactions in a transaction
+- **Transposed sample batch** — `/samples/batch` is the one-stop form for both single and bulk sample entry: parameters as rows, samples as columns, fill-right shortcuts, picklist widgets for every constrained slot, drag-paste from spreadsheets
 - **Constrained vocabularies** — picklist-driven for target genes, library types, pipelines, primers, protocols, kits, instruments, environments, storage locations, person roles; managed in-app via the Settings page. Only SRA/MIxS-mandated values have schema-level CHECK constraints; everything else is fully operator-managed.
 - **Linked composites** — primer sets (gene + region + F/R primer + sequence + reference) and PCR protocols (polymerase + annealing + cycles + conditions) live in dedicated tables and are selected as a unit
-- **Multi-person attribution** — every entity (sample/extract/PCR plate/library plate/run) can have any number of attributed personnel, each with a role label from the `person_role` picklist (collector, extractor, pcr operator, lab tech, etc.). PeoplePicker on forms, PeopleRoster chips on detail pages, text summary column on list pages.
-- **Hybrid auth + RBAC** — GitHub OAuth (`arctic`) for normal use, local bcrypt accounts as a LAN-only fallback. All `/api/*` mutations require a session; `/api/settings/*`, `/api/personnel`, `/api/db/*`, and the Settings page require `role=admin`. First admin is bootstrapped via a one-time `ADMIN_SETUP_TOKEN`.
+- **Multi-person attribution** — every entity can have any number of attributed personnel, each with a role label from the `person_role` picklist. PeoplePicker on forms, PeopleRoster chips on detail pages, text summary column on list pages
+
+### Field workflow
+- **QR scanner + label generator** — every entity gets an auto-generated QR on its detail page; `/settings` → Labels prints Avery 5160 sticker sheets as PDF (cart-backed labels with name/project/ID or blank pre-allocated UUIDs, optionally pre-typed so a scan skips the claim picker); an in-nav scanner opens the camera, decodes a pre-printed sticker, and routes to either the entity's detail page or its claim/create flow
+- **Photo galleries** — per-site and per-sample photo galleries (JPEG/PNG/WebP/GIF up to 15 MB), uploaded from the detail page or staged alongside batch sample entry; EntityQR and photo-count surface on list pages; click-to-enlarge lightbox
+- **Map tooling** — Leaflet map on `/sites` and `/samples` with click-to-place, shift+box-drag multi-select to cart, color-by via shift+click on a table header, rank-based hue gradient so ordered columns read as gradients
+- **Saved carts** — build a cart across any entity types, save it with a name, optionally make it public so other users can load it. Cart UI is a side column on desktop and a dismissible drawer on mobile
+- **Mobile browse** — read-only UI on phones: list pages, detail pages, maps, and the scanner all work; creation/edit buttons are hidden. Field data entry is desktop (or the future offline PWA) only
+
+### Ops
+- **Hybrid auth + RBAC** — GitHub OAuth (`arctic`) for normal use, local bcrypt accounts as a LAN-only fallback. All `/api/*` mutations require a session; settings writes require `role=admin`; `role=viewer` is read-only everywhere. First admin is bootstrapped by seeding `admin/admin` on an empty DB (forced password change on first login)
 - **Rate limited** — login (5/min/IP), feedback POST (5/min/IP), MIxS import (10/h/IP, 10 MB cap, 10 k row cap)
-- **Map picker** — click a location on a Leaflet map when adding a site; sites list shows all sites as markers with color-by support (shift+click a table header to tint both rows and pins)
-- **Feedback form** — single-line form on the bottom of every page captures the current URL for context
+- **Dashboard activity log** — every entity creation + modification flows into a single searchable activity list on the dashboard, with a calendar-grid view, per-user attribution, and full-text search across name/ID/type/date
+- **Feedback form** — single-line form on the bottom of every page captures the current URL for context; admins triage in `/settings` → Feedback
 - **GitHub-backed snapshots** — JSON exports of every table can be committed to a configured GitHub repo for version control
 
 ## Tech stack
@@ -27,6 +40,7 @@ Tracks the full chain: **Project → Site → Sample → Extract → PCR → Lib
 - **better-sqlite3** with WAL mode
 - **arctic** (OAuth) + **bcrypt** (local auth)
 - **Leaflet** (maps), **xlsx** / SheetJS (Excel I/O)
+- **html5-qrcode** (camera scanner), **qrcode** + **jspdf** (label generation)
 - Adapter: `@sveltejs/adapter-node`
 
 ## Quick start
@@ -60,6 +74,7 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
 | `GITHUB_TOKEN` | PAT used by Octokit to push JSON snapshots |
 | `DB_PATH` | SQLite file path (default `data/sampletown.db`) |
 | `ORIGIN` | Public origin URL — required for SvelteKit CSRF and Secure cookies |
+| `BODY_SIZE_LIMIT` | Max request body size in bytes (default 512 KB — bump to ≥15 MB if you use photo uploads) |
 
 ## Auth model
 
@@ -127,8 +142,9 @@ scripts/
 
 ## Documentation
 
+- [CHANGELOG.md](CHANGELOG.md) — release notes
 - [docs/SCHEMA.md](docs/SCHEMA.md) — data model and table relationships
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Arbutus VM + ship/LAN Docker deployment
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — long-running VM + ship/LAN install
 - [docs/MIXS.md](docs/MIXS.md) — MIxS import/export and NCBI submission flow
 
 ## License
