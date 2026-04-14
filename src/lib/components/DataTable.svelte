@@ -263,13 +263,13 @@
 	onkeydown={selectable ? handleKeydown : undefined}
 	role={selectable ? 'grid' : undefined}
 >
-	<table class="w-full text-sm">
+	<table class="w-full text-sm" style="border-collapse: separate; border-spacing: 0;">
 		<thead>
 			<tr class="border-b border-slate-800 bg-slate-900/50">
 				{#if selectable}
 					<th
-						class="px-2 py-3 w-8 sticky z-20 bg-slate-900"
-						style="left: {stickyOffsets.checkbox}px;"
+						class="px-2 py-3 sticky z-20 bg-slate-900"
+						style="left: {stickyOffsets.checkbox}px; width: 32px; min-width: 32px; max-width: 32px;"
 					>
 						<input
 							type="checkbox"
@@ -286,8 +286,8 @@
 					     and right next to the select-all checkbox. Hidden until
 					     ≥2 rows are selected + the parent provides the handlers. -->
 					<th
-						class="px-2 py-3 text-left font-medium text-slate-400 w-28 whitespace-nowrap sticky z-20 bg-slate-900"
-						style="left: {stickyOffsets.actions}px;"
+						class="px-2 py-3 text-left font-medium text-slate-400 whitespace-nowrap sticky z-20 bg-slate-900"
+						style="left: {stickyOffsets.actions}px; width: 112px; min-width: 112px; max-width: 112px;"
 					>
 						{#if selectable && selectedIds.size >= 2 && (onbulkduplicate || onbulkdelete)}
 							{@const selectedRows = sortedRows.filter((r) => selectedIds.has(r.id as string))}
@@ -312,8 +312,8 @@
 				{/if}
 				{#if showId}
 					<th
-						class="px-3 py-3 text-left font-medium text-slate-500 w-20 sticky z-20 bg-slate-900"
-						style="left: {stickyOffsets.id}px;"
+						class="px-3 py-3 text-left font-medium text-slate-500 sticky z-20 bg-slate-900"
+						style="left: {stickyOffsets.id}px; width: 80px; min-width: 80px; max-width: 80px;"
 					>ID</th>
 				{/if}
 				{#each columns as col, colIdx}
@@ -370,7 +370,7 @@
 					onclick={() => { if (selectable) focusedIndex = rowIdx; }}
 				>
 					{#if selectable}
-						<td class="px-2 py-3 sticky z-10" style="left: {stickyOffsets.checkbox}px; background-color: {stickyBg(row)};">
+						<td class="px-2 py-3 sticky z-10" style="left: {stickyOffsets.checkbox}px; width: 32px; min-width: 32px; max-width: 32px; background-color: {stickyBg(row)};">
 							<input
 								type="checkbox"
 								checked={selectedIds.has(row.id as string)}
@@ -380,7 +380,7 @@
 						</td>
 					{/if}
 					{#if hasActions}
-						<td class="px-2 py-3 whitespace-nowrap sticky z-10" style="left: {stickyOffsets.actions}px; background-color: {stickyBg(row)};">
+						<td class="px-2 py-3 whitespace-nowrap sticky z-10" style="left: {stickyOffsets.actions}px; width: 112px; min-width: 112px; max-width: 112px; background-color: {stickyBg(row)};">
 							{#if actions}{@render actions(row)}{/if}
 							{#if editHref}<a href={editHref(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Edit</a>{/if}
 							{#if onduplicate}<button onclick={() => onduplicate(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Dup</button>{/if}
@@ -388,7 +388,7 @@
 						</td>
 					{/if}
 					{#if showId}
-						<td class="px-3 py-3 sticky z-10" style="left: {stickyOffsets.id}px; background-color: {stickyBg(row)};">
+						<td class="px-3 py-3 sticky z-10" style="left: {stickyOffsets.id}px; width: 80px; min-width: 80px; max-width: 80px; background-color: {stickyBg(row)};">
 							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>
 						</td>
 					{/if}
@@ -411,3 +411,10 @@
 		</tbody>
 	</table>
 </div>
+
+<style>
+	/* border-collapse: separate on the table (needed for sticky td in all
+	   browsers) means borders have to live on the cells, not on the row. */
+	thead tr th { border-bottom: 1px solid rgb(30, 41, 59); } /* slate-800 */
+	tbody tr td { border-bottom: 1px solid rgba(30, 41, 59, 0.5); }
+</style>

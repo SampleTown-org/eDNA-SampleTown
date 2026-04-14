@@ -62,15 +62,20 @@
 
 			<div class="flex items-center gap-3">
 				{#if user}
-					<span class="text-sm text-slate-400 hidden sm:inline">{user.username}</span>
+					<!-- Order: sign out, emoji, user, cart -->
+					<form method="POST" action="/auth/logout" class="inline">
+						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
+					</form>
 					<a
 						href="/account"
 						class="text-base hover:opacity-80 transition-opacity"
 						title="{ROLE_LABEL[user.role] ?? user.role} — manage account"
 					>{user.avatar_emoji ?? ROLE_ICON[user.role] ?? '👤'}</a>
-					<form method="POST" action="/auth/logout" class="inline">
-						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
-					</form>
+					<a
+						href="/account"
+						class="text-sm text-slate-400 hover:text-white hidden sm:inline"
+						title="Manage account"
+					>{user.username}</a>
 				{:else}
 					<a href="/auth/login" class="text-sm text-ocean-400 hover:text-ocean-300">Sign in</a>
 				{/if}
