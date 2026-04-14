@@ -61,44 +61,54 @@ export async function buildLabelsPdf(
 			? `${origin}/id/${id}?t=${encodeURIComponent(type)}`
 			: `${origin}/id/${id}`;
 
-		// PNG at 300px so the QR stays crisp when printed at 300+ DPI.
+		// Code block hugs the top 0.4" of the 1" cell, leaving the lower
+		// 0.6" blank for handwritten annotations (date, depth, notes, etc.).
 		const png = await QRCode.toDataURL(target, {
 			margin: 1,
 			width: 300,
 			color: { dark: '#000000', light: '#ffffff' }
 		});
-		pdf.addImage(png, 'PNG', x + 0.05, y + 0.05, 0.9, 0.9);
+		pdf.addImage(png, 'PNG', x + 0.05, y + 0.05, 0.35, 0.35);
 
-		// Text column: uppercase type tag (if known) → primary → secondary
-		// → id. Falls back to a brand label when the label carries no
-		// entity context at all.
-		const textX = x + 1.05;
+		// Text column to the right of the small QR, vertically stacked:
+		//   TYPE (bold) · primary · secondary · id halves
+		const textX = x + 0.45;
 		pdf.setFont('courier', 'normal');
-		let cursor = y + 0.18;
+		let cursor = y + 0.12;
 		if (type) {
 			pdf.setFont('helvetica', 'bold');
-			pdf.setFontSize(10);
+			pdf.setFontSize(8);
 			pdf.text(type.toUpperCase().replace(/_/g, ' '), textX, cursor);
-			cursor += 0.18;
+			cursor += 0.11;
 			pdf.setFont('courier', 'normal');
 		}
 		if (primary) {
-			pdf.setFontSize(9);
-			pdf.text(truncate(primary, 18), textX, cursor);
-			cursor += 0.15;
+			pdf.setFontSize(7);
+			pdf.text(truncate(primary, 32), textX, cursor);
+			cursor += 0.1;
 			if (secondary) {
-				pdf.setFontSize(7);
-				pdf.text(truncate(secondary, 22), textX, cursor);
-				cursor += 0.14;
+				pdf.setFontSize(6);
+				pdf.text(truncate(secondary, 38), textX, cursor);
+				cursor += 0.09;
 			}
 		} else if (!type) {
-			pdf.setFontSize(8);
+			pdf.setFont('helvetica', 'normal');
+			pdf.setFontSize(7);
 			pdf.text('SampleTown', textX, cursor);
-			cursor += 0.18;
+			cursor += 0.1;
+			pdf.setFont('courier', 'normal');
 		}
-		pdf.setFontSize(6);
-		pdf.text(id.slice(0, 16), textX, y + 0.74);
-		pdf.text(id.slice(16), textX, y + 0.88);
+		pdf.setFontSize(5);
+		// Only emit id text if there's room in the top strip. When the
+		// label has a long primary+secondary the id falls on the line
+		// below; cap at y + 0.42 so we never encroach on the writing area.
+		if (cursor <= y + 0.34) {
+			pdf.text(id.slice(0, 16), textX, cursor);
+			cursor += 0.08;
+			if (cursor <= y + 0.42) {
+				pdf.text(id.slice(16), textX, cursor);
+			}
+		}
 	}
 	pdf.save(filename);
 }

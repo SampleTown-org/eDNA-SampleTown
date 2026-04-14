@@ -298,16 +298,27 @@
 	}
 	.label-cell {
 		display: flex;
-		align-items: center;
-		gap: 6px;
+		align-items: flex-start;
+		gap: 4px;
 		padding: 0.05in;
 		box-sizing: border-box;
 		overflow: hidden;
 		color: black;
+		/* Visual reminder of the handwriting strip: the bottom 60% of each
+		   label is left intentionally empty. A dashed rule marks the boundary. */
+		position: relative;
+	}
+	.label-cell::after {
+		content: '';
+		position: absolute;
+		left: 0.08in;
+		right: 0.08in;
+		top: 0.45in;
+		border-top: 1px dashed #cbd5e1;
 	}
 	.label-cell .qr {
-		width: 0.9in;
-		height: 0.9in;
+		width: 0.35in;
+		height: 0.35in;
 		flex-shrink: 0;
 	}
 	.label-cell .qr :global(svg) {
@@ -318,25 +329,26 @@
 		flex: 1;
 		min-width: 0;
 		font-family: ui-monospace, monospace;
-		line-height: 1.15;
+		line-height: 1.1;
 	}
 	.label-text .type-tag {
 		font-weight: 700;
-		font-size: 10px;
+		font-size: 8px;
 		color: #0369a1;
 		letter-spacing: 0.04em;
 		font-family: system-ui, sans-serif;
 	}
 	.label-text .brand {
 		font-weight: 600;
-		font-size: 9px;
+		font-size: 7px;
 		color: #475569;
+		font-family: system-ui, sans-serif;
 	}
 	.label-text .id {
-		font-size: 8px;
+		font-size: 6px;
 		word-break: break-all;
 		letter-spacing: -0.02em;
-		margin-top: 2px;
-		color: #0f172a;
+		margin-top: 1px;
+		color: #334155;
 	}
 </style>
