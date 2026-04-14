@@ -548,7 +548,7 @@
 			<thead>
 				<tr class="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
 					<th class="w-8 sticky left-0 bg-slate-900 z-20"></th>
-					<th class="px-2 py-2 text-left font-medium w-56 sticky left-8 bg-slate-900 z-10">Parameter</th>
+					<th class="px-2 py-2 text-left font-medium w-80 sticky left-8 bg-slate-900 z-10">Parameter</th>
 					{#each rows as _row, i}
 						<th class="px-2 py-2 text-left font-medium min-w-48">
 							<div class="flex items-center gap-1">
