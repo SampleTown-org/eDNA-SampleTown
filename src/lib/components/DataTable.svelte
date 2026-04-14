@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { makeRankedHueMap, hueToTableFill, hashHue } from '$lib/color-rank';
+	import { makeRankedHueMap, hashHue } from '$lib/color-rank';
 
 	interface Column {
 		key: string;
@@ -83,12 +83,38 @@
 		colorByKey = colorByKey === key ? '' : key;
 	}
 
-	function colorForValue(v: unknown): string {
-		if (v == null || v === '') return '';
+	/** Raw background color for a row (no `background-color:` prefix), or null
+	 *  when color-by is off / the value is missing. Used by both the <tr>
+	 *  inline style and the `--row-bg` CSS variable that feeds sticky cells. */
+	function rowBgColor(v: unknown): string | null {
+		if (v == null || v === '') return null;
 		const s = String(v);
 		const hue = colorRankMap?.get(s) ?? hashHue(s);
-		return hueToTableFill(hue);
+		return `hsl(${hue}, 30%, 22%)`;
 	}
+
+	/** Inline style for a <tr>: sets its background + a `--row-bg` variable
+	 *  that the sticky-left columns inherit, so they stay opaque when the user
+	 *  scrolls horizontally. Falls back to the body color so un-tinted rows
+	 *  still hide the content passing under the frozen columns. */
+	function rowStyle(row: Record<string, unknown>): string {
+		const bg = colorByKey ? rowBgColor(row[colorByKey]) : null;
+		if (bg) return `background-color: ${bg}; --row-bg: ${bg};`;
+		return '--row-bg: rgb(2, 6, 23);'; // slate-950
+	}
+
+	/** Left-offset (px) for each sticky column. Only the columns that actually
+	 *  render are allocated an offset, so tables that don't use selection or
+	 *  actions still line up correctly. */
+	const stickyOffsets = $derived.by(() => {
+		let x = 0;
+		const o = { checkbox: 0, actions: 0, id: 0, firstCol: 0 };
+		if (selectable) { o.checkbox = x; x += 32; }
+		if (hasActions) { o.actions = x; x += 112; }
+		if (showId) { o.id = x; x += 80; }
+		o.firstCol = x;
+		return o;
+	});
 
 	let filteredRows = $derived.by(() => {
 		const q = searchQuery.trim().toLowerCase();
@@ -235,7 +261,10 @@
 		<thead>
 			<tr class="border-b border-slate-800 bg-slate-900/50">
 				{#if selectable}
-					<th class="px-2 py-3 w-8">
+					<th
+						class="px-2 py-3 w-8 sticky z-20 bg-slate-900"
+						style="left: {stickyOffsets.checkbox}px;"
+					>
 						<input
 							type="checkbox"
 							checked={allVisibleSelected}
@@ -250,7 +279,10 @@
 					     they sit immediately above the per-row Edit/Dup/Del links
 					     and right next to the select-all checkbox. Hidden until
 					     ≥2 rows are selected + the parent provides the handlers. -->
-					<th class="px-2 py-3 text-left font-medium text-slate-400 w-28 whitespace-nowrap">
+					<th
+						class="px-2 py-3 text-left font-medium text-slate-400 w-28 whitespace-nowrap sticky z-20 bg-slate-900"
+						style="left: {stickyOffsets.actions}px;"
+					>
 						{#if selectable && selectedIds.size >= 2 && (onbulkduplicate || onbulkdelete)}
 							{@const selectedRows = sortedRows.filter((r) => selectedIds.has(r.id as string))}
 							{#if onbulkduplicate}
@@ -273,11 +305,15 @@
 					</th>
 				{/if}
 				{#if showId}
-					<th class="px-3 py-3 text-left font-medium text-slate-500 w-20">ID</th>
-				{/if}
-				{#each columns as col}
 					<th
-						class="px-4 py-3 text-left font-medium text-slate-400 {col.class || ''}"
+						class="px-3 py-3 text-left font-medium text-slate-500 w-20 sticky z-20 bg-slate-900"
+						style="left: {stickyOffsets.id}px;"
+					>ID</th>
+				{/if}
+				{#each columns as col, colIdx}
+					<th
+						class="px-4 py-3 text-left font-medium text-slate-400 {col.class || ''} {colIdx === 0 ? 'sticky z-20 bg-slate-900' : ''}"
+						style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px;` : ''}
 						title="Shift+click to color rows by this column"
 					>
 						<div class="flex items-center gap-2">
@@ -324,11 +360,11 @@
 			{#each sortedRows as row, rowIdx}
 				<tr
 					class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors {selectable && selectedIds.has(row.id as string) ? 'bg-ocean-900/20' : ''} {selectable && focusedIndex === rowIdx ? 'outline outline-1 outline-ocean-500 -outline-offset-1' : ''}"
-					style={colorByKey ? colorForValue(row[colorByKey]) : ''}
+					style={rowStyle(row)}
 					onclick={() => { if (selectable) focusedIndex = rowIdx; }}
 				>
 					{#if selectable}
-						<td class="px-2 py-3">
+						<td class="px-2 py-3 sticky z-10" style="left: {stickyOffsets.checkbox}px; background: var(--row-bg);">
 							<input
 								type="checkbox"
 								checked={selectedIds.has(row.id as string)}
@@ -338,7 +374,7 @@
 						</td>
 					{/if}
 					{#if hasActions}
-						<td class="px-2 py-3 whitespace-nowrap">
+						<td class="px-2 py-3 whitespace-nowrap sticky z-10" style="left: {stickyOffsets.actions}px; background: var(--row-bg);">
 							{#if actions}{@render actions(row)}{/if}
 							{#if editHref}<a href={editHref(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Edit</a>{/if}
 							{#if onduplicate}<button onclick={() => onduplicate(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Dup</button>{/if}
@@ -346,12 +382,15 @@
 						</td>
 					{/if}
 					{#if showId}
-						<td class="px-3 py-3">
+						<td class="px-3 py-3 sticky z-10" style="left: {stickyOffsets.id}px; background: var(--row-bg);">
 							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>
 						</td>
 					{/if}
-					{#each columns as col}
-						<td class="px-4 py-3 {col.class || ''}">
+					{#each columns as col, colIdx}
+						<td
+							class="px-4 py-3 {col.class || ''} {colIdx === 0 ? 'sticky z-10' : ''}"
+							style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px; background: var(--row-bg);` : ''}
+						>
 							{#if href && col === columns[0]}
 								<a href={href(row)} class="text-ocean-400 hover:text-ocean-300 hover:underline">
 									{row[col.key] ?? '—'}
