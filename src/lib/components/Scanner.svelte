@@ -56,16 +56,21 @@
 		scanner = null;
 	}
 
-	/** Extract a UUID (32 hex chars) from a scanned payload. Accepts either a
-	 *  bare UUID or a URL containing `/id/<uuid>`. The URL's host is ignored
-	 *  — codes printed against one origin (staging, old hostname, even the
-	 *  dev LAN IP) still route through whatever origin the scanner is open
-	 *  on. Anything else → null. */
-	function extractUuid(text: string): string | null {
+	/** Extract the SampleTown route from a scanned payload. Accepts a full
+	 *  URL, a bare `/id/<uuid>` path, or a bare UUID. Preserves the query
+	 *  string (so pre-typed labels' `?t=<type>` hint still routes through
+	 *  to auto-claim). The URL's host is ignored so codes printed against
+	 *  a different origin still work. */
+	function extractTarget(text: string): string | null {
 		const trimmed = text.trim();
-		const m = trimmed.match(/\/id\/([0-9a-f]{32})/i);
-		if (m) return m[1].toLowerCase();
-		if (/^[0-9a-f]{32}$/i.test(trimmed)) return trimmed.toLowerCase();
+		try {
+			const url = new URL(trimmed);
+			const m = url.pathname.match(/\/id\/([0-9a-f]{32})/i);
+			if (m) return `/id/${m[1].toLowerCase()}${url.search}`;
+		} catch { /* not a parseable URL — fall through */ }
+		const m = trimmed.match(/\/id\/([0-9a-f]{32})(\?[^\s]*)?/i);
+		if (m) return `/id/${m[1].toLowerCase()}${m[2] ?? ''}`;
+		if (/^[0-9a-f]{32}$/i.test(trimmed)) return `/id/${trimmed.toLowerCase()}`;
 		return null;
 	}
 
@@ -74,15 +79,15 @@
 		status = 'decoded';
 		decoded = text;
 		await stop();
-		const uuid = extractUuid(text);
-		if (!uuid) {
+		const target = extractTarget(text);
+		if (!target) {
 			errorMsg = `Scanned text doesn't look like a SampleTown code.`;
 			return;
 		}
-		// Route via /id/<uuid> so the server-side lookup + redirect handles
-		// the known/unknown split in one place.
+		// Route via /id/<uuid>[?t=<type>] so the server-side lookup handles
+		// the known/unknown split (and type-hint auto-claim) in one place.
 		onclose();
-		goto(`/id/${uuid}`);
+		goto(target);
 	}
 
 	$effect(() => {

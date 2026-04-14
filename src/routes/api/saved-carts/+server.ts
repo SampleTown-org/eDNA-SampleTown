@@ -15,7 +15,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const db = getDb();
 	const rows = db.prepare(`
 		SELECT sc.id, sc.name, sc.is_public, sc.created_at, sc.updated_at,
-			sc.user_id, u.username AS owner_username, u.avatar_emoji AS owner_avatar,
+			sc.user_id,
+			u.username AS owner_username,
+			u.display_name AS owner_display_name,
+			u.avatar_emoji AS owner_avatar,
 			(SELECT COUNT(*) FROM saved_cart_items WHERE cart_id = sc.id) AS item_count
 		FROM saved_carts sc
 		LEFT JOIN users u ON u.id = sc.user_id

@@ -37,6 +37,7 @@
 		is_public: number;
 		user_id: string;
 		owner_username: string | null;
+		owner_display_name: string | null;
 		owner_avatar: string | null;
 		item_count: number;
 		created_at: string;
@@ -285,7 +286,12 @@
 									<span class="text-[10px] text-slate-500 shrink-0">{c.item_count}</span>
 								</div>
 								<div class="text-[10px] text-slate-500 truncate" title={c.owner_username ?? ''}>
-									{c.owner_avatar ?? ''} @{c.owner_username ?? 'unknown'}
+									{c.owner_avatar ?? ''}
+									{#if c.owner_display_name}
+										{c.owner_display_name} <span class="text-slate-600">@{c.owner_username ?? 'unknown'}</span>
+									{:else}
+										@{c.owner_username ?? 'unknown'}
+									{/if}
 								</div>
 							</div>
 						{/each}
