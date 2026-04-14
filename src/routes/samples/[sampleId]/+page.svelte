@@ -236,10 +236,10 @@
 		</div>
 	{/if}
 
-	<!-- DNA Extracts -->
+	<!-- Extracts -->
 	<div>
 		<div class="flex items-center justify-between mb-3">
-			<h2 class="text-lg font-semibold text-white">DNA Extracts ({data.extracts.length})</h2>
+			<h2 class="text-lg font-semibold text-white">Extracts ({data.extracts.length})</h2>
 			<a
 				href="/extracts/new?sample_id={sample.id}"
 				class="px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"

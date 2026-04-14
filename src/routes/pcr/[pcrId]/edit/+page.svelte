@@ -83,6 +83,10 @@
 					pcr_date: (data.pcr as any).pcr_date || '',
 					band_observed: (data.pcr as any).band_observed || '',
 					concentration_ng_ul: (data.pcr as any).concentration_ng_ul ?? '',
+					total_volume_ul: (data.pcr as any).total_volume_ul ?? '',
+					a260_280: (data.pcr as any).a260_280 ?? '',
+					a260_230: (data.pcr as any).a260_230 ?? '',
+					quantification_method: (data.pcr as any).quantification_method || '',
 					notes: (data.pcr as any).notes || ''
 				}
 			: ({} as any)
@@ -126,7 +130,10 @@
 			...reactionForm,
 			annealing_temp_c: reactionForm.annealing_temp_c === '' ? null : Number(reactionForm.annealing_temp_c),
 			num_cycles: reactionForm.num_cycles === '' ? null : Number(reactionForm.num_cycles),
-			concentration_ng_ul: reactionForm.concentration_ng_ul === '' ? null : Number(reactionForm.concentration_ng_ul)
+			concentration_ng_ul: reactionForm.concentration_ng_ul === '' ? null : Number(reactionForm.concentration_ng_ul),
+			total_volume_ul: reactionForm.total_volume_ul === '' ? null : Number(reactionForm.total_volume_ul),
+			a260_280: reactionForm.a260_280 === '' ? null : Number(reactionForm.a260_280),
+			a260_230: reactionForm.a260_230 === '' ? null : Number(reactionForm.a260_230)
 		};
 		const res = await fetch(`/api/pcr/${(data.pcr as any).id}`, {
 			method: 'PUT',
@@ -299,8 +306,30 @@
 					</select>
 				</div>
 				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">Concentration (ng/uL)</label>
+					<label class="block text-sm font-medium text-slate-300 mb-1">Concentration (ng/µL)</label>
 					<input type="number" step="any" bind:value={reactionForm.concentration_ng_ul} class={inputCls} />
+				</div>
+			</div>
+			<!-- Post-PCR cleanup quantification — same fields as on /extracts so
+			     pre/post measurements live in the same record. -->
+			<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+				<div>
+					<label class="block text-sm font-medium text-slate-300 mb-1">Volume (µL)</label>
+					<input type="number" step="any" bind:value={reactionForm.total_volume_ul} class={inputCls} />
+				</div>
+				<div>
+					<label class="block text-sm font-medium text-slate-300 mb-1">260/280</label>
+					<input type="number" step="any" bind:value={reactionForm.a260_280} class={inputCls} />
+				</div>
+				<div>
+					<label class="block text-sm font-medium text-slate-300 mb-1">260/230</label>
+					<input type="number" step="any" bind:value={reactionForm.a260_230} class={inputCls} />
+				</div>
+				<div>
+					<label class="block text-sm font-medium text-slate-300 mb-1">Quantification</label>
+					<select bind:value={reactionForm.quantification_method} class={selectCls}>
+						<option value="">Select...</option><option>Qubit</option><option>NanoDrop</option><option>Bioanalyzer</option><option>Other</option>
+					</select>
 				</div>
 			</div>
 			<div>

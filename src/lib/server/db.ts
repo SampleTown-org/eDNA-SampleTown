@@ -59,6 +59,11 @@ function runMigrations(db: Database.Database) {
 	addColumn('pcr_amplifications', 'well_label TEXT');
 	addColumn('library_preps', 'well_label TEXT');
 	addColumn('users', 'avatar_emoji TEXT');
+	addColumn('extracts', 'nucl_acid_type TEXT');
+	addColumn('pcr_amplifications', 'total_volume_ul REAL');
+	addColumn('pcr_amplifications', 'a260_280 REAL');
+	addColumn('pcr_amplifications', 'a260_230 REAL');
+	addColumn('pcr_amplifications', 'quantification_method TEXT');
 	// MIxS audit (docs/MIXS_AUDIT.md) recommended column renames for exact
 	// alignment with MIxS v6.3 slot names.
 	renameColumn('extracts', 'extraction_kit', 'nucl_acid_ext_kit');

@@ -23,7 +23,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		const db = getDb();
 		db.prepare(
 			`UPDATE extracts SET
-				extract_name = ?, extraction_date = ?, extraction_method = ?, nucl_acid_ext_kit = ?,
+				extract_name = ?, extraction_date = ?, extraction_method = ?, nucl_acid_type = ?, nucl_acid_ext_kit = ?,
 				nucl_acid_ext = ?, samp_taxon_id = ?, samp_vol_we_dna_ext = ?, pool_dna_extracts = ?,
 				concentration_ng_ul = ?, total_volume_ul = ?, a260_280 = ?, a260_230 = ?,
 				quantification_method = ?, storage_location = ?, storage_room = ?, storage_box = ?,
@@ -34,6 +34,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			data.extract_name.trim(),
 			nn(data.extraction_date),
 			nn(data.extraction_method),
+			nn(data.nucl_acid_type),
 			nn(data.nucl_acid_ext_kit),
 			nn(data.nucl_acid_ext),
 			nn(data.samp_taxon_id),

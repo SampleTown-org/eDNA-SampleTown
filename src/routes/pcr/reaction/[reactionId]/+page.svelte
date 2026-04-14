@@ -19,6 +19,10 @@
 		['Cycles', data.pcr.num_cycles],
 		['Polymerase', data.pcr.polymerase],
 		['Concentration', data.pcr.concentration_ng_ul != null ? `${data.pcr.concentration_ng_ul} ng/µL` : null],
+		['Volume', data.pcr.total_volume_ul != null ? `${data.pcr.total_volume_ul} µL` : null],
+		['260/280', data.pcr.a260_280],
+		['260/230', data.pcr.a260_230],
+		['Quantification', data.pcr.quantification_method],
 		['Band', data.pcr.band_observed != null ? (data.pcr.band_observed ? 'Yes' : 'No') : null],
 		['Date', data.pcr.pcr_date]
 	];

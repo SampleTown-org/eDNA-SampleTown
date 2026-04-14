@@ -30,28 +30,45 @@ export const load: PageServerLoad = async () => {
 		})
 		.sort((a, b) => a.name.localeCompare(b.name));
 
-	const checklists = listChecklists().map((c) => ({
-		name: c.name,
-		title: c.title,
-		description: c.description ?? '',
-		properties: c.properties ?? []
-	}));
-	const extensions = listExtensions().map((c) => ({
-		name: c.name,
-		title: c.title,
-		description: c.description ?? '',
-		properties: c.properties ?? []
-	}));
+	const checklistRaw = listChecklists();
+	const extensionRaw = listExtensions();
 
-	// Precompute (checklist × extension) → slot-list for the "combo" filter.
+	// Precompute (checklist × extension) → slot-list for the combo filter.
 	// Keys are `${checklist}|${extension}` to avoid any `+` ambiguity.
 	const combos: Record<string, string[]> = {};
-	for (const c of checklists) {
-		for (const e of extensions) {
+	for (const c of checklistRaw) {
+		for (const e of extensionRaw) {
 			const props = allSlotsFor(c.name, e.name);
 			if (props.length > 0) combos[`${c.name}|${e.name}`] = props;
 		}
 	}
+
+	// Checklists are LinkML mixins — their .properties is empty (only the
+	// materialized combination class enumerates slots). Synthesize the
+	// checklist-only filter by unioning every combo that uses that checklist.
+	// Same belt-and-braces logic for extensions so the count is what shows
+	// up across all combos in either direction.
+	const unionAcross = (axis: 'checklist' | 'extension', name: string) => {
+		const set = new Set<string>();
+		for (const [key, props] of Object.entries(combos)) {
+			const [c, e] = key.split('|');
+			if ((axis === 'checklist' ? c : e) === name) for (const p of props) set.add(p);
+		}
+		return [...set];
+	};
+
+	const checklists = checklistRaw.map((c) => ({
+		name: c.name,
+		title: c.title,
+		description: c.description ?? '',
+		properties: unionAcross('checklist', c.name)
+	}));
+	const extensions = extensionRaw.map((e) => ({
+		name: e.name,
+		title: e.title,
+		description: e.description ?? '',
+		properties: unionAcross('extension', e.name)
+	}));
 
 	return {
 		version: MIXS_ACTIVE_VERSION,

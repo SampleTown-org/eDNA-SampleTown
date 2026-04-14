@@ -8,7 +8,7 @@
 		{ href: '/projects',  label: 'Projects',       count: data.counts.projects },
 		{ href: '/sites',     label: 'Sites',          count: data.counts.sites },
 		{ href: '/samples',   label: 'Samples',        count: data.counts.samples },
-		{ href: '/extracts',  label: 'DNA Extracts',   count: data.counts.extracts },
+		{ href: '/extracts',  label: 'Extracts',       count: data.counts.extracts },
 		{ href: '/pcr',       label: 'PCR Plates',     count: data.counts.pcrPlates },
 		{ href: '/libraries', label: 'Library Plates', count: data.counts.libraryPlates },
 		{ href: '/runs',      label: 'Sequencing Runs',count: data.counts.runs },
@@ -18,7 +18,7 @@
 	// --- Event calendar ---------------------------------------------------
 	const EVENT_COLORS: Record<string, { dot: string; label: string }> = {
 		sample:        { dot: 'bg-ocean-400',   label: 'Sample collection' },
-		extract:       { dot: 'bg-emerald-400', label: 'DNA extraction' },
+		extract:       { dot: 'bg-emerald-400', label: 'Extraction' },
 		pcr_plate:     { dot: 'bg-amber-400',   label: 'PCR plate' },
 		library_plate: { dot: 'bg-violet-400',  label: 'Library prep' },
 		run:           { dot: 'bg-rose-400',    label: 'Sequencing run' }

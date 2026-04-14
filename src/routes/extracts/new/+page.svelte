@@ -23,7 +23,8 @@
 	// Single mode
 	let form = $state({
 		sample_id: data.preselectedSampleId ?? '',
-		extract_name: '', extraction_date: '', extraction_method: '', nucl_acid_ext: '',
+		extract_name: '', extraction_date: '', extraction_method: '',
+		nucl_acid_type: 'DNA', nucl_acid_ext: '',
 		samp_taxon_id: '', samp_vol_we_dna_ext: '', pool_dna_extracts: '',
 		concentration_ng_ul: '', total_volume_ul: '', a260_280: '', a260_230: '',
 		quantification_method: '', storage_room: '', storage_box: '', notes: ''
@@ -33,6 +34,7 @@
 	let selectedSampleIds = $state<Set<string>>(new Set());
 	let shared = $state({
 		extraction_date: '', extraction_method: '',
+		nucl_acid_type: 'DNA',
 		quantification_method: '', storage_room: '', storage_box: '', notes: ''
 	});
 	type RowItem = { sample_id: string; samp_name: string; project_name: string; extract_name: string; concentration_ng_ul: string; total_volume_ul: string; a260_280: string; a260_230: string };
@@ -130,7 +132,7 @@
 <div class="max-w-5xl space-y-6">
 	<div>
 		<a href="/extracts" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Extracts</a>
-		<h1 class="text-2xl font-bold text-white mt-1">New DNA Extract</h1>
+		<h1 class="text-2xl font-bold text-white mt-1">New Nucleic Acid Extract</h1>
 	</div>
 
 	<!-- Mode toggle -->
@@ -159,14 +161,19 @@
 		</div>
 		<div class="grid grid-cols-3 gap-4">
 			<div>
-				<FieldLabel slot="extract_name" for="extract_name" label="Extract Name" required description="Human-readable name for this DNA extract. Unique within the lab." />
+				<FieldLabel slot="extract_name" for="extract_name" label="Extract Name" required description="Human-readable name for this nucleic acid extract. Unique within the lab." />
 				<input id="extract_name" type="text" bind:value={form.extract_name} class={inputCls} placeholder={data.namingTemplates?.extract_name || 'e.g., EXT-001'} />
 			</div>
 			<div>
 				<FieldLabel slot="extraction_date" for="extraction_date" label="Extraction Date" description="Date the extraction was performed." />
 				<input id="extraction_date" type="date" bind:value={form.extraction_date} class={inputCls} />
 			</div>
-			<div></div>
+			<div>
+				<FieldLabel slot="nucl_acid_type" for="nucl_acid_type" label="Nucleic Acid Type" picklistCategory="nucl_acid_type" description="DNA, RNA, total nucleic acid, or cDNA — what came out of the extraction." />
+				<select id="nucl_acid_type" bind:value={form.nucl_acid_type} class={selectCls}>
+					{#each data.picklists.nucl_acid_type as opt}<option value={opt.value}>{opt.label}</option>{/each}
+				</select>
+			</div>
 		</div>
 		<PeoplePicker
 			bind:people
@@ -293,6 +300,12 @@
 				<div>
 					<FieldLabel slot="extraction_date" label="Extraction Date" description="Date the extraction was performed." />
 					<input type="date" bind:value={shared.extraction_date} class={inputCls} />
+				</div>
+				<div>
+					<FieldLabel slot="nucl_acid_type" label="Nucleic Acid Type" picklistCategory="nucl_acid_type" description="DNA, RNA, total nucleic acid, or cDNA." />
+					<select bind:value={shared.nucl_acid_type} class={selectCls}>
+						{#each data.picklists.nucl_acid_type as opt}<option value={opt.value}>{opt.label}</option>{/each}
+					</select>
 				</div>
 				<div>
 					<FieldLabel slot="extraction_method" label="Extraction Method / Kit" picklistCategory="extraction_method" description="Kit or protocol used to extract nucleic acids." />

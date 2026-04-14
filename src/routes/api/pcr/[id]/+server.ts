@@ -24,7 +24,9 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				pcr_name = ?, primer_set_id = ?, target_subfragment = ?,
 				forward_primer_name = ?, forward_primer_seq = ?, reverse_primer_name = ?, reverse_primer_seq = ?,
 				pcr_cond = ?, annealing_temp_c = ?, num_cycles = ?, polymerase = ?, pcr_date = ?,
-				band_observed = ?, concentration_ng_ul = ?, notes = ?,
+				band_observed = ?, concentration_ng_ul = ?,
+				total_volume_ul = ?, a260_280 = ?, a260_230 = ?, quantification_method = ?,
+				notes = ?,
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
@@ -42,6 +44,10 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			nn(data.pcr_date),
 			data.band_observed ?? null,
 			data.concentration_ng_ul ?? null,
+			data.total_volume_ul ?? null,
+			data.a260_280 ?? null,
+			data.a260_230 ?? null,
+			nn(data.quantification_method),
 			nn(data.notes),
 			params.id
 		);

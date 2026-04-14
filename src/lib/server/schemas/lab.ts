@@ -164,6 +164,10 @@ const pcrReaction = z.object({
 	well_label: optionalShortText,
 	band_observed: optionalBoolish,
 	concentration_ng_ul: optionalNumber,
+	total_volume_ul: optionalNumber,
+	a260_280: optionalNumber,
+	a260_230: optionalNumber,
+	quantification_method: optionalShortText,
 	notes: optionalLongText
 });
 

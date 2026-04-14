@@ -227,6 +227,9 @@ CREATE TABLE IF NOT EXISTS extracts (
     extract_name TEXT NOT NULL,
     extraction_date TEXT,
     extraction_method TEXT,
+    -- DNA / RNA / Total nucleic acid / cDNA — what came out of the extraction.
+    -- Surfaced as a picklist on the form.
+    nucl_acid_type TEXT,
     nucl_acid_ext_kit TEXT,               -- MIxS nucl_acid_ext_kit: extraction kit product name
     nucl_acid_ext TEXT,                   -- MIxS nucleic acid extraction protocol (URL / DOI / PID)
     samp_taxon_id TEXT,                   -- MIxS: NCBI taxid of the DNA sample's source taxon
@@ -306,6 +309,11 @@ CREATE TABLE IF NOT EXISTS pcr_amplifications (
     pcr_date TEXT,
     band_observed INTEGER,
     concentration_ng_ul REAL,
+    -- Post-PCR cleanup quantification (mirrors the extracts QC fields).
+    total_volume_ul REAL,
+    a260_280 REAL,
+    a260_230 REAL,
+    quantification_method TEXT,
     notes TEXT,
     custom_fields TEXT,
 

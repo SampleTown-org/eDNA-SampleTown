@@ -91,7 +91,7 @@
 
 <div class="space-y-4">
 	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold text-white">DNA Extracts</h1>
+		<h1 class="text-2xl font-bold text-white">Extracts</h1>
 		<div class="flex items-center gap-2">
 			{#if selectionChanged}
 				<button onclick={updateCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">

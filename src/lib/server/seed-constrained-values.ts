@@ -200,6 +200,9 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'RB01', 'RB02', 'RB03', 'RB04', 'RB05', 'RB06', 'RB07', 'RB08',
 		'RB09', 'RB10', 'RB11', 'RB12'
 	],
+	// What came out of an extraction — discriminator for downstream processing
+	// (DNA vs cDNA goes to PCR; RNA needs reverse transcription).
+	nucl_acid_type: ['DNA', 'RNA', 'Total nucleic acid', 'cDNA'],
 	// Common NCBI Taxonomy taxids for environmental metagenome / eDNA samples.
 	// Values are bare taxids (what MIxS samp_taxon_id + SRA metadata want);
 	// labels pair the id with its NCBI taxon name for operator clarity.
