@@ -107,11 +107,29 @@
 		}
 	}
 
+	// Free-text search — matches against name, detail, type, username,
+	// date, and both short + full entity id so a scanned hash narrows
+	// the list.
+	let searchQuery = $state('');
+
 	// Filtered + sorted activities
 	let filteredActivities = $derived.by(() => {
 		let result = data.activities as typeof data.activities;
 		if (selectedDates.size > 0) {
 			result = result.filter((a) => selectedDates.has(a.date));
+		}
+		const q = searchQuery.trim().toLowerCase();
+		if (q) {
+			result = result.filter((a) => {
+				const bag = [
+					a.id, a.id?.slice(0, 8),
+					a.name, a.detail,
+					TYPE_LABEL[a.type] ?? a.type,
+					a.date, a.updated_at,
+					a.created_by_username ? '@' + a.created_by_username : ''
+				].filter(Boolean).join(' ').toLowerCase();
+				return bag.includes(q);
+			});
 		}
 		// Nulls / empty-string cells always go to the end regardless of direction.
 		const sorted = [...result].sort((a, b) => {
@@ -287,13 +305,19 @@
 
 	<!-- Activity list -->
 	<div class="space-y-3">
-		<div class="flex items-center justify-between">
+		<div class="flex items-center justify-between gap-3 flex-wrap">
 			<h2 class="text-lg font-semibold text-white">
 				Activities
 				<span class="text-sm font-normal text-slate-500">
-					({filteredActivities.length}{selectedDates.size > 0 ? ` of ${data.activities.length}` : ''})
+					({filteredActivities.length}{selectedDates.size > 0 || searchQuery ? ` of ${data.activities.length}` : ''})
 				</span>
 			</h2>
+			<input
+				type="text"
+				bind:value={searchQuery}
+				placeholder="Search name, type, hash…"
+				class="flex-1 min-w-0 sm:max-w-xs px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500 text-sm"
+			/>
 			<div class="flex items-center gap-2">
 				{#if selectedIds.size > 0}
 					<button
@@ -347,6 +371,7 @@
 								Name {sortKey === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
 							</button>
 						</th>
+						<th class="px-3 py-2 text-left font-medium text-slate-500">Hash</th>
 						<th class="px-3 py-2 text-left font-medium">
 							<button onclick={() => toggleSort('detail')} class="hover:text-white transition-colors">
 								Detail {sortKey === 'detail' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
@@ -363,7 +388,7 @@
 				<tbody>
 					{#if pagedActivities.length === 0}
 						<tr>
-							<td colspan="7" class="px-3 py-8 text-center text-slate-500">
+							<td colspan="8" class="px-3 py-8 text-center text-slate-500">
 								{selectedDates.size > 0 ? 'No activities on the selected date(s).' : 'No dated activities yet.'}
 							</td>
 						</tr>
@@ -393,6 +418,7 @@
 									<span class="text-slate-300">{act.name}</span>
 								{/if}
 							</td>
+							<td class="px-3 py-2 text-slate-500 font-mono text-xs whitespace-nowrap" title={act.id}>{act.id.slice(0, 8)}</td>
 							<td class="px-3 py-2 text-slate-500 text-xs">{act.detail ?? ''}</td>
 							<td class="px-3 py-2 text-slate-400 text-xs whitespace-nowrap">
 								{#if act.created_by_username}

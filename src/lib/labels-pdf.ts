@@ -61,9 +61,10 @@ export async function buildLabelsPdf(
 			? `${origin}/id/${id}?t=${encodeURIComponent(type)}`
 			: `${origin}/id/${id}`;
 
-		// Full-size QR at top-left. Text column to its right is anchored at
-		// the top of the cell and narrow enough to leave blank width on
-		// the right of the label for handwritten notes.
+		// Full-size QR at top-left; text column stacks top-down to its right.
+		// Cart labels (primary+secondary present) lay out as:
+		//   TYPE · project (secondary) · name (primary, up to 2 lines) · shortHash
+		// Blank labels without context fall back to TYPE/brand + shortHash.
 		const png = await QRCode.toDataURL(target, {
 			margin: 1,
 			width: 300,
@@ -72,6 +73,7 @@ export async function buildLabelsPdf(
 		pdf.addImage(png, 'PNG', x + 0.05, y + 0.05, 0.9, 0.9);
 
 		const textX = x + 1.05;
+		const textMaxW = 1.4; // inches of usable text width before writing area
 		pdf.setFont('courier', 'normal');
 		let cursor = y + 0.18;
 		if (type) {
@@ -79,26 +81,32 @@ export async function buildLabelsPdf(
 			pdf.setFontSize(10);
 			pdf.text(type.toUpperCase().replace(/_/g, ' '), textX, cursor);
 			cursor += 0.18;
-			pdf.setFont('courier', 'normal');
-		}
-		if (primary) {
-			pdf.setFontSize(9);
-			pdf.text(truncate(primary, 14), textX, cursor);
-			cursor += 0.15;
-			if (secondary) {
-				pdf.setFontSize(7);
-				pdf.text(truncate(secondary, 18), textX, cursor);
-				cursor += 0.14;
-			}
-		} else if (!type) {
+		} else if (!primary) {
+			pdf.setFont('helvetica', 'normal');
 			pdf.setFontSize(8);
 			pdf.text('SampleTown', textX, cursor);
-			cursor += 0.18;
+			cursor += 0.15;
 		}
-		pdf.setFontSize(6);
-		pdf.text(id.slice(0, 16), textX, cursor);
-		cursor += 0.12;
-		pdf.text(id.slice(16), textX, cursor);
+		if (secondary) {
+			pdf.setFont('courier', 'normal');
+			pdf.setFontSize(7);
+			pdf.text(truncate(secondary, 20), textX, cursor);
+			cursor += 0.13;
+		}
+		if (primary) {
+			pdf.setFont('courier', 'normal');
+			pdf.setFontSize(9);
+			// Let the name wrap onto a 2nd line; jsPDF's splitTextToSize
+			// honors the available width.
+			const lines = (pdf.splitTextToSize(primary, textMaxW) as string[]).slice(0, 2);
+			for (const line of lines) {
+				pdf.text(line, textX, cursor);
+				cursor += 0.14;
+			}
+		}
+		pdf.setFont('courier', 'normal');
+		pdf.setFontSize(7);
+		pdf.text(id.slice(0, 8), textX, cursor);
 	}
 	pdf.save(filename);
 }
