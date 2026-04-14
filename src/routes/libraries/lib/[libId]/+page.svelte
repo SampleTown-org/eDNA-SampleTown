@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -9,12 +10,12 @@
 		{ key: 'run_date', label: 'Date', sortable: true }
 	];
 
-	const fields = [
+	const fields: Array<[string, unknown, string?]> = [
 		['Well', data.library.well_label],
 		['Type', data.library.library_type],
 		['Platform', data.library.platform],
 		['Instrument', data.library.instrument_model],
-		['Prep Kit', data.library.library_prep_kit],
+		['Prep Kit', data.library.library_prep_kit, 'library_prep_kit'],
 		['i7 Index', data.library.index_sequence_i7],
 		['i5 Index', data.library.index_sequence_i5],
 		['Barcode', data.library.barcode],
@@ -46,10 +47,13 @@
 
 	<div class="rounded-lg border border-slate-800 p-5">
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-			{#each fields as [label, value]}
+			{#each fields as [label, value, slot]}
 				{#if value != null}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">{label}</dt><dd class="text-slate-200">{value}</dd>
+					<dt class="text-slate-400">
+						{#if slot}<GlossaryDoc {slot} {label} />{:else}{label}{/if}
+					</dt>
+					<dd class="text-slate-200">{value}</dd>
 				</div>
 				{/if}
 			{/each}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -38,21 +39,24 @@
 	<div class="rounded-lg border border-slate-800 p-5">
 		<dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm">
 			{#each [
-				['Date', data.plate.pcr_date],
-				['Target Gene', data.plate.target_gene],
-				['Region', data.plate.target_subfragment],
-				['Forward Primer', data.plate.forward_primer_name ? `${data.plate.forward_primer_name}` : null],
-				['Fwd Sequence', data.plate.forward_primer_seq],
-				['Reverse Primer', data.plate.reverse_primer_name ? `${data.plate.reverse_primer_name}` : null],
-				['Rev Sequence', data.plate.reverse_primer_seq],
-				['Anneal Temp', data.plate.annealing_temp_c != null ? `${data.plate.annealing_temp_c}°C` : null],
-				['Cycles', data.plate.num_cycles],
-				['Polymerase', data.plate.polymerase],
-				['Conditions', data.plate.pcr_cond]
-			] as [label, value]}
+				['Date', data.plate.pcr_date, undefined],
+				['Target Gene', data.plate.target_gene, 'target_gene'],
+				['Region', data.plate.target_subfragment, 'target_subfragment'],
+				['Forward Primer', data.plate.forward_primer_name ? `${data.plate.forward_primer_name}` : null, undefined],
+				['Fwd Sequence', data.plate.forward_primer_seq, undefined],
+				['Reverse Primer', data.plate.reverse_primer_name ? `${data.plate.reverse_primer_name}` : null, undefined],
+				['Rev Sequence', data.plate.reverse_primer_seq, undefined],
+				['Anneal Temp', data.plate.annealing_temp_c != null ? `${data.plate.annealing_temp_c}°C` : null, undefined],
+				['Cycles', data.plate.num_cycles, undefined],
+				['Polymerase', data.plate.polymerase, undefined],
+				['Conditions', data.plate.pcr_cond, 'pcr_cond'],
+				['Amplification Protocol (MIxS)', data.plate.nucl_acid_amp, 'nucl_acid_amp']
+			] as [label, value, slot]}
 				{#if value != null}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">{label}</dt>
+					<dt class="text-slate-400">
+						{#if slot}<GlossaryDoc {slot} {label} />{:else}{label}{/if}
+					</dt>
 					<dd class="text-slate-200 font-mono text-xs">{value}</dd>
 				</div>
 				{/if}
@@ -106,21 +110,28 @@
 	<div class="rounded-lg border border-slate-800 p-5">
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 			{#each [
-				['Well', data.pcr.well_label],
-				['Target Gene', data.pcr.target_gene],
-				['Region', data.pcr.target_subfragment],
-				['Forward Primer', data.pcr.forward_primer_name ? `${data.pcr.forward_primer_name} (${data.pcr.forward_primer_seq})` : data.pcr.forward_primer_seq],
-				['Reverse Primer', data.pcr.reverse_primer_name ? `${data.pcr.reverse_primer_name} (${data.pcr.reverse_primer_seq})` : data.pcr.reverse_primer_seq],
-				['Annealing Temp', data.pcr.annealing_temp_c != null ? `${data.pcr.annealing_temp_c}°C` : null],
-				['Cycles', data.pcr.num_cycles],
-				['Polymerase', data.pcr.polymerase],
-				['Concentration', data.pcr.concentration_ng_ul != null ? `${data.pcr.concentration_ng_ul} ng/µL` : null],
-				['Band', data.pcr.band_observed != null ? (data.pcr.band_observed ? 'Yes' : 'No') : null],
-				['Date', data.pcr.pcr_date]
-			] as [label, value]}
+				['Well', data.pcr.well_label, undefined],
+				['Target Gene', data.pcr.target_gene, 'target_gene'],
+				['Region', data.pcr.target_subfragment, 'target_subfragment'],
+				['Forward Primer', data.pcr.forward_primer_name ? `${data.pcr.forward_primer_name} (${data.pcr.forward_primer_seq})` : data.pcr.forward_primer_seq, undefined],
+				['Reverse Primer', data.pcr.reverse_primer_name ? `${data.pcr.reverse_primer_name} (${data.pcr.reverse_primer_seq})` : data.pcr.reverse_primer_seq, undefined],
+				['Annealing Temp', data.pcr.annealing_temp_c != null ? `${data.pcr.annealing_temp_c}°C` : null, undefined],
+				['Cycles', data.pcr.num_cycles, undefined],
+				['Polymerase', data.pcr.polymerase, undefined],
+				['Concentration', data.pcr.concentration_ng_ul != null ? `${data.pcr.concentration_ng_ul} ng/µL` : null, undefined],
+				['Volume', data.pcr.total_volume_ul != null ? `${data.pcr.total_volume_ul} µL` : null, undefined],
+				['260/280', data.pcr.a260_280, undefined],
+				['260/230', data.pcr.a260_230, undefined],
+				['Quantification', data.pcr.quantification_method, undefined],
+				['Band', data.pcr.band_observed != null ? (data.pcr.band_observed ? 'Yes' : 'No') : null, undefined],
+				['Date', data.pcr.pcr_date, undefined]
+			] as [label, value, slot]}
 				{#if value != null}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">{label}</dt><dd class="text-slate-200">{value}</dd>
+					<dt class="text-slate-400">
+						{#if slot}<GlossaryDoc {slot} {label} />{:else}{label}{/if}
+					</dt>
+					<dd class="text-slate-200">{value}</dd>
 				</div>
 				{/if}
 			{/each}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -39,16 +40,18 @@
 	<div class="rounded-lg border border-slate-800 p-5">
 		<dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm">
 			{#each [
-				['Type', data.plate.library_type],
-				['Platform', data.plate.platform],
-				['Instrument', data.plate.instrument_model],
-				['Prep Kit', data.plate.library_prep_kit],
-				['Fragment Size', data.plate.fragment_size_bp != null ? `${data.plate.fragment_size_bp} bp` : null],
-				['Prep Date', data.plate.library_prep_date]
-			] as [label, value]}
+				['Type', data.plate.library_type, undefined],
+				['Platform', data.plate.platform, undefined],
+				['Instrument', data.plate.instrument_model, undefined],
+				['Prep Kit', data.plate.library_prep_kit, 'library_prep_kit'],
+				['Fragment Size', data.plate.fragment_size_bp != null ? `${data.plate.fragment_size_bp} bp` : null, undefined],
+				['Prep Date', data.plate.library_prep_date, undefined]
+			] as [label, value, slot]}
 				{#if value != null}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">{label}</dt>
+					<dt class="text-slate-400">
+						{#if slot}<GlossaryDoc {slot} {label} />{:else}{label}{/if}
+					</dt>
 					<dd class="text-slate-200">{value}</dd>
 				</div>
 				{/if}
@@ -102,21 +105,24 @@
 	<div class="rounded-lg border border-slate-800 p-5">
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 			{#each [
-				['Well', data.library.well_label],
-				['Type', data.library.library_type],
-				['Platform', data.library.platform],
-				['Instrument', data.library.instrument_model],
-				['Prep Kit', data.library.library_prep_kit],
-				['i7 Index', data.library.index_sequence_i7],
-				['i5 Index', data.library.index_sequence_i5],
-				['Barcode', data.library.barcode],
-				['Fragment Size', data.library.fragment_size_bp != null ? `${data.library.fragment_size_bp} bp` : null],
-				['Concentration', data.library.final_concentration_ng_ul != null ? `${data.library.final_concentration_ng_ul} ng/µL` : null],
-				['Prep Date', data.library.library_prep_date]
-			] as [label, value]}
+				['Well', data.library.well_label, undefined],
+				['Type', data.library.library_type, undefined],
+				['Platform', data.library.platform, undefined],
+				['Instrument', data.library.instrument_model, undefined],
+				['Prep Kit', data.library.library_prep_kit, 'library_prep_kit'],
+				['i7 Index', data.library.index_sequence_i7, undefined],
+				['i5 Index', data.library.index_sequence_i5, undefined],
+				['Barcode', data.library.barcode, undefined],
+				['Fragment Size', data.library.fragment_size_bp != null ? `${data.library.fragment_size_bp} bp` : null, undefined],
+				['Concentration', data.library.final_concentration_ng_ul != null ? `${data.library.final_concentration_ng_ul} ng/µL` : null, undefined],
+				['Prep Date', data.library.library_prep_date, undefined]
+			] as [label, value, slot]}
 				{#if value != null}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
-					<dt class="text-slate-400">{label}</dt><dd class="text-slate-200">{value}</dd>
+					<dt class="text-slate-400">
+						{#if slot}<GlossaryDoc {slot} {label} />{:else}{label}{/if}
+					</dt>
+					<dd class="text-slate-200">{value}</dd>
 				</div>
 				{/if}
 			{/each}

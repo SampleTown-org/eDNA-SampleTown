@@ -32,9 +32,14 @@
 
 	// Batch mode
 	let selectedSampleIds = $state<Set<string>>(new Set());
+	// Shared across every extract created in batch mode. Mirrors the single-mode
+	// `form` shape so the two flows surface the same field set; per-row QC
+	// values (concentration, volume, A260 ratios) stay in `rows[i]` because
+	// those vary per extract.
 	let shared = $state({
 		extraction_date: '', extraction_method: '',
-		nucl_acid_type: 'DNA',
+		nucl_acid_type: 'DNA', nucl_acid_ext: '',
+		samp_taxon_id: '', samp_vol_we_dna_ext: '', pool_dna_extracts: '',
 		quantification_method: '', storage_room: '', storage_box: '', notes: ''
 	});
 	type RowItem = { sample_id: string; samp_name: string; project_name: string; extract_name: string; concentration_ng_ul: string; total_volume_ul: string; a260_280: string; a260_230: string };
@@ -150,6 +155,14 @@
 
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 
+	<!-- Shared across both modes so the batch shared-fields section can also
+	     attach `list="samp_taxon_id_options"` to its input. -->
+	<datalist id="samp_taxon_id_options">
+		{#each data.picklists.samp_taxon_id as opt}
+			<option value={opt.value} label={opt.label}></option>
+		{/each}
+	</datalist>
+
 	{#if mode === 'single'}
 	<form onsubmit={(e) => { e.preventDefault(); submitSingle(); }} class="space-y-4">
 		<div>
@@ -200,11 +213,6 @@
 				<input id="samp_taxon_id" type="text" bind:value={form.samp_taxon_id} class={inputCls}
 					list="samp_taxon_id_options"
 					placeholder="NCBI taxid, e.g. 408172" />
-				<datalist id="samp_taxon_id_options">
-					{#each data.picklists.samp_taxon_id as opt}
-						<option value={opt.value} label={opt.label}></option>
-					{/each}
-				</datalist>
 			</div>
 			<div>
 				<FieldLabel slot="samp_vol_we_dna_ext" for="samp_vol_we_dna_ext" />
@@ -313,6 +321,27 @@
 						<option value="">Select...</option>
 						{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select>
+				</div>
+				<div>
+					<FieldLabel slot="nucl_acid_ext" label="Extraction Protocol (MIxS)" />
+					<input type="text" bind:value={shared.nucl_acid_ext} class={inputCls}
+						placeholder="DOI or protocol URL" />
+				</div>
+				<div>
+					<FieldLabel slot="samp_taxon_id" picklistCategory="samp_taxon_id" />
+					<input type="text" bind:value={shared.samp_taxon_id} class={inputCls}
+						list="samp_taxon_id_options"
+						placeholder="NCBI taxid, e.g. 408172" />
+				</div>
+				<div>
+					<FieldLabel slot="samp_vol_we_dna_ext" />
+					<input type="text" bind:value={shared.samp_vol_we_dna_ext} class={inputCls}
+						placeholder="e.g. 1500 ml" />
+				</div>
+				<div>
+					<FieldLabel slot="pool_dna_extracts" />
+					<input type="text" bind:value={shared.pool_dna_extracts} class={inputCls}
+						placeholder="extract IDs if pooled" />
 				</div>
 				<div>
 					<FieldLabel slot="quantification_method" label="Quantification" description="Instrument used to measure DNA concentration." />
