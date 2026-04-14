@@ -242,6 +242,15 @@
 	let result = $state<{ imported: number; failed: number; errors: string[] } | null>(null);
 	let extraToAdd = $state('');
 
+	// Mirror-scroll state: topScrollEl (the thin bar above the table) and
+	// tableScrollEl (the real table scroll container) sync their scrollLeft.
+	// `syncing` is a reentrancy guard so each onscroll doesn't trigger its
+	// sibling's onscroll in an infinite loop.
+	let topScrollEl = $state<HTMLDivElement | null>(null);
+	let tableScrollEl = $state<HTMLDivElement | null>(null);
+	let tableWidth = $state(0);
+	let syncing = false;
+
 	// Site filtering by project per row
 	function sitesForProject(projectId: string): any[] {
 		if (!projectId) return data.sites as any[];
@@ -498,14 +507,20 @@
 		>
 			+ Sample
 		</button>
-		<button
-			type="button"
-			onclick={submit}
-			disabled={saving || nonEmptyRows.length === 0}
-			class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium"
-		>
-			{saving ? 'Creating...' : `Create ${nonEmptyRows.length} sample${nonEmptyRows.length === 1 ? '' : 's'}`}
-		</button>
+		{#if nonEmptyRows.length === 0 && result && result.failed === 0}
+			<div class="px-4 py-2 rounded-lg bg-green-900/30 border border-green-800 text-green-300 text-sm font-medium">
+				✓ {result.imported} sample{result.imported === 1 ? '' : 's'} created
+			</div>
+		{:else}
+			<button
+				type="button"
+				onclick={submit}
+				disabled={saving || nonEmptyRows.length === 0}
+				class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium"
+			>
+				{saving ? 'Creating...' : `Create ${nonEmptyRows.length} sample${nonEmptyRows.length === 1 ? '' : 's'}`}
+			</button>
+		{/if}
 		<a
 			href="/samples"
 			class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium"
@@ -543,8 +558,33 @@
 	     Storage / Other) with red * for MIxS-required and amber * for
 	     MIxS-recommended. Leftmost column hosts the per-row ✕ remove button
 	     so users can scan removable rows at a glance. -->
-	<div class="overflow-x-auto rounded-lg border border-slate-800">
-		<table class="w-full min-w-max text-sm border-collapse">
+	<!-- Mirror-scrollbar above the table so users can scroll right through
+	     many sample columns without reaching the bottom of a long parameter
+	     list first. The two containers sync scrollLeft via onscroll. -->
+	<div
+		class="overflow-x-scroll rounded-t-lg border border-slate-800 border-b-0"
+		style="height: 14px"
+		bind:this={topScrollEl}
+		onscroll={(e) => {
+			if (syncing) return;
+			syncing = true;
+			if (tableScrollEl) tableScrollEl.scrollLeft = e.currentTarget.scrollLeft;
+			syncing = false;
+		}}
+	>
+		<div style:width="{tableWidth}px" style="height: 1px"></div>
+	</div>
+	<div
+		class="overflow-x-auto rounded-b-lg border border-slate-800"
+		bind:this={tableScrollEl}
+		onscroll={(e) => {
+			if (syncing) return;
+			syncing = true;
+			if (topScrollEl) topScrollEl.scrollLeft = e.currentTarget.scrollLeft;
+			syncing = false;
+		}}
+	>
+		<table bind:clientWidth={tableWidth} class="w-full min-w-max text-sm border-collapse">
 			<thead>
 				<tr class="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
 					<th class="w-8 sticky left-0 bg-slate-900 z-20"></th>
@@ -572,9 +612,14 @@
 					<tr class="bg-slate-900/60">
 						<th
 							colspan={rows.length + 3}
-							class="sticky left-0 px-3 py-1.5 text-left text-[11px] uppercase tracking-wider font-semibold text-slate-300 border-y border-slate-800"
+							class="p-0 border-y border-slate-800 text-left"
 						>
-							{sec.title}
+							<!-- Sticky inner div so the section title stays glued to the
+							     left edge when the user scrolls right past the first few
+							     sample columns. -->
+							<span class="sticky left-0 inline-block px-3 py-1.5 text-[11px] uppercase tracking-wider font-semibold text-slate-300">
+								{sec.title}
+							</span>
 						</th>
 					</tr>
 					{#each sec.cols as col}
@@ -728,3 +773,22 @@
 		</table>
 	</div>
 </div>
+
+<style>
+	/* Force visible scrollbars on the mirror + main table containers, even on
+	   platforms that hide them by default (macOS trackpads), so the "scroll
+	   right for more samples" affordance is always obvious. */
+	:global(.overflow-x-scroll)::-webkit-scrollbar,
+	:global(.overflow-x-auto)::-webkit-scrollbar {
+		height: 12px;
+	}
+	:global(.overflow-x-scroll)::-webkit-scrollbar-thumb,
+	:global(.overflow-x-auto)::-webkit-scrollbar-thumb {
+		background: rgb(71 85 105);
+		border-radius: 6px;
+	}
+	:global(.overflow-x-scroll)::-webkit-scrollbar-thumb:hover,
+	:global(.overflow-x-auto)::-webkit-scrollbar-thumb:hover {
+		background: rgb(100 116 139);
+	}
+</style>
