@@ -64,6 +64,17 @@
 
 			<div class="flex items-center gap-3">
 				{#if user}
+					<a
+						href="/#dashboard-search"
+						class="text-slate-400 hover:text-white"
+						title="Search dashboard"
+						aria-label="Search"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+							<circle cx="11" cy="11" r="7" />
+							<path d="m20 20-3.5-3.5" />
+						</svg>
+					</a>
 					<!-- Order: sign out, emoji, user, cart -->
 					<form method="POST" action="/auth/logout" class="inline">
 						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>

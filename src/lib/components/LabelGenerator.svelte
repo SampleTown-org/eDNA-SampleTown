@@ -32,20 +32,27 @@
 	}
 
 	// ---- Blank-sheet state ----
-	let blankPages = $state(1);
+	/** One "set" = 30 fresh unique ids (a full Avery 5160 page of distinct
+	 *  uuids). Copies-each is the multiplicity: each uuid prints that many
+	 *  times, and duplicates are emitted adjacent so peel-off comes in
+	 *  contiguous groups. */
+	let blankSets = $state(1);
+	let blankCopies = $state(1);
 	let blankType = $state('');
 	let blankIds = $state<string[]>([]);
 	let blankPreviewSvgs = $state<string[]>([]);
 	let origin = $state('');
 	let busy = $state(false);
 
-	const blankTotal = $derived(blankPages * LABELS_PER_PAGE);
+	const blankUnique = $derived(blankSets * LABELS_PER_PAGE);
+	const blankTotal = $derived(blankUnique * blankCopies);
+	const blankPages = $derived(Math.max(1, Math.ceil(blankTotal / LABELS_PER_PAGE)));
 
 	async function generateBlank() {
 		busy = true;
 		try {
 			const { default: QRCode } = await import('qrcode');
-			const fresh = Array.from({ length: blankTotal }, mintId);
+			const fresh = Array.from({ length: blankUnique }, mintId);
 			const svgs = await Promise.all(
 				fresh.map((id) => {
 					const target = blankType
@@ -81,10 +88,11 @@
 		if (blankIds.length === 0) return;
 		busy = true;
 		try {
-			const labels: LabelInput[] = blankIds.map((id) => ({
+			const base: LabelInput[] = blankIds.map((id) => ({
 				id,
 				type: blankType || undefined
 			}));
+			const labels = expandWithCopies(base, blankCopies);
 			const ts = new Date().toISOString().slice(0, 10);
 			const suffix = blankType ? `-${blankType}` : '';
 			await buildLabelsPdf(labels, origin, `sampletown-labels${suffix}-${ts}.pdf`);
@@ -200,16 +208,28 @@
 				</select>
 			</label>
 			<label class="block">
-				<span class="block text-xs text-slate-400 mb-1">Pages (30 labels each)</span>
+				<span class="block text-xs text-slate-400 mb-1">Sets (30 ids each)</span>
 				<input
 					type="number"
 					min="1"
 					max="50"
-					bind:value={blankPages}
+					bind:value={blankSets}
 					class="w-24 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
 				/>
 			</label>
-			<div class="text-xs text-slate-500 pb-2">= {blankTotal} labels</div>
+			<label class="block">
+				<span class="block text-xs text-slate-400 mb-1">Copies each</span>
+				<input
+					type="number"
+					min="1"
+					max="50"
+					bind:value={blankCopies}
+					class="w-20 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
+				/>
+			</label>
+			<div class="text-xs text-slate-500 pb-2">
+				= {blankTotal} label{blankTotal === 1 ? '' : 's'} · {blankPages} page{blankPages === 1 ? '' : 's'}
+			</div>
 			<button
 				type="button"
 				onclick={generateBlank}
@@ -248,11 +268,11 @@
 					</span>
 				</h4>
 				<div class="label-sheet">
-					{#each blankIds.slice(0, LABELS_PER_PAGE) as id, i}
+					{#each expandWithCopies(blankIds.map((id, i) => ({ id, i })), blankCopies).slice(0, LABELS_PER_PAGE) as cell}
 						<div class="label-cell">
 							<div class="qr">
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-								{@html blankPreviewSvgs[i] ?? ''}
+								{@html blankPreviewSvgs[cell.i] ?? ''}
 							</div>
 							<div class="label-text">
 								{#if blankType}
@@ -260,7 +280,7 @@
 								{:else}
 									<div class="brand">SampleTown</div>
 								{/if}
-								<div class="id">{id.slice(0, 8)}</div>
+								<div class="id">{cell.id.slice(0, 8)}</div>
 							</div>
 						</div>
 					{/each}

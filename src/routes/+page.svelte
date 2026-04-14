@@ -108,9 +108,18 @@
 	}
 
 	// Free-text search — matches against name, detail, type, username,
-	// date, and both short + full entity id so a scanned hash narrows
-	// the list.
+	// date, and both short + full entity id so a scanned id narrows
+	// the list. The `#dashboard-search` hash lets the navbar magnifier
+	// deep-link straight to this field.
 	let searchQuery = $state('');
+	let searchInputEl: HTMLInputElement | undefined;
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		if (window.location.hash === '#dashboard-search' && searchInputEl) {
+			searchInputEl.focus();
+		}
+	});
 
 	// Filtered + sorted activities
 	let filteredActivities = $derived.by(() => {
@@ -313,9 +322,11 @@
 				</span>
 			</h2>
 			<input
+				id="dashboard-search"
+				bind:this={searchInputEl}
 				type="text"
 				bind:value={searchQuery}
-				placeholder="Search name, type, hash…"
+				placeholder="Search name, type, ID…"
 				class="flex-1 min-w-0 sm:max-w-xs px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500 text-sm"
 			/>
 			<div class="flex items-center gap-2">
@@ -371,7 +382,7 @@
 								Name {sortKey === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
 							</button>
 						</th>
-						<th class="px-3 py-2 text-left font-medium text-slate-500">Hash</th>
+						<th class="px-3 py-2 text-left font-medium text-slate-500">ID</th>
 						<th class="px-3 py-2 text-left font-medium">
 							<button onclick={() => toggleSort('detail')} class="hover:text-white transition-colors">
 								Detail {sortKey === 'detail' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
