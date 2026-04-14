@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
+	import EntityQR from '$lib/components/EntityQR.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -32,7 +33,10 @@
 		{:else}
 			<a href="/libraries" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Libraries</a>
 		{/if}
-		<h1 class="text-2xl font-bold text-white mt-1">{data.library.library_name}</h1>
+		<div class="flex items-start justify-between mt-1 gap-4">
+			<h1 class="text-2xl font-bold text-white">{data.library.library_name}</h1>
+			<EntityQR id={data.library.id} size={96} />
+		</div>
 		<p class="text-slate-400 mt-1">
 			{#if data.source}
 				<a href="/samples/{data.source.sample_id}" class="text-ocean-400 hover:text-ocean-300">{data.source.sample_name}</a>

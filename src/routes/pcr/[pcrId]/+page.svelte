@@ -2,6 +2,7 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
+	import EntityQR from '$lib/components/EntityQR.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -26,12 +27,15 @@
 	<!-- PLATE VIEW -->
 	<div>
 		<a href="/pcr" class="text-sm text-slate-400 hover:text-ocean-400">&larr; PCR Plates</a>
-		<div class="flex items-center justify-between mt-1">
-			<div class="flex items-center gap-3">
+		<div class="flex items-start justify-between mt-1 gap-4">
+			<div class="flex items-center gap-3 flex-wrap">
 				<h1 class="text-2xl font-bold text-white">{data.plate.plate_name}</h1>
 				<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{data.plate.target_gene}{data.plate.target_subfragment ? ` ${data.plate.target_subfragment}` : ''}</span>
 			</div>
-			<a href="/pcr/{data.plate.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<div class="flex items-center gap-3 shrink-0">
+				<EntityQR id={data.plate.id} size={96} />
+				<a href="/pcr/{data.plate.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			</div>
 		</div>
 	</div>
 
@@ -97,9 +101,12 @@
 	<!-- SINGLE REACTION VIEW (backward compat) -->
 	<div>
 		<a href="/pcr" class="text-sm text-slate-400 hover:text-ocean-400">&larr; PCR</a>
-		<div class="flex items-center justify-between mt-1">
+		<div class="flex items-start justify-between mt-1 gap-4">
 			<h1 class="text-2xl font-bold text-white">{data.pcr.pcr_name}</h1>
-			<a href="/pcr/{data.pcr.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<div class="flex items-center gap-3 shrink-0">
+				<EntityQR id={data.pcr.id} size={96} />
+				<a href="/pcr/{data.pcr.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			</div>
 		</div>
 		<p class="text-slate-400 mt-1">
 			<a href="/samples/{data.pcr.sample_id}" class="text-ocean-400 hover:text-ocean-300">{data.pcr.samp_name}</a>

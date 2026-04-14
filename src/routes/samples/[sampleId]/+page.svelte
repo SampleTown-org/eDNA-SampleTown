@@ -3,6 +3,7 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
+	import EntityQR from '$lib/components/EntityQR.svelte';
 	import { getSlot } from '$lib/mixs/schema-index';
 	import { slotTable } from '$lib/mixs/slot-ownership';
 	import { MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
@@ -167,14 +168,17 @@
 <div class="space-y-6">
 	<div>
 		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
-		<div class="flex items-center justify-between mt-1">
-			<div class="flex items-center gap-3">
+		<div class="flex items-start justify-between mt-1 gap-4">
+			<div class="flex items-center gap-3 flex-wrap">
 				<h1 class="text-2xl font-bold text-white">{sample.samp_name}</h1>
 				<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">
 					{sample.mixs_checklist}{sample.extension ? ' + ' + sample.extension : ''}
 				</span>
 			</div>
-			<a href="/samples/{sample.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<div class="flex items-center gap-3 shrink-0">
+				<EntityQR id={sample.id as string} size={96} />
+				<a href="/samples/{sample.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			</div>
 		</div>
 		<p class="text-slate-400 mt-1">
 			Project: <a href="/projects/{sample.project_id}" class="text-ocean-400 hover:text-ocean-300">{sample.project_name}</a>
