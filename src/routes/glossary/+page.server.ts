@@ -44,30 +44,35 @@ export const load: PageServerLoad = async () => {
 	}
 
 	// Checklists are LinkML mixins — their .properties is empty (only the
-	// materialized combination class enumerates slots). Synthesize the
-	// checklist-only filter by unioning every combo that uses that checklist.
-	// Same belt-and-braces logic for extensions so the count is what shows
-	// up across all combos in either direction.
-	const unionAcross = (axis: 'checklist' | 'extension', name: string) => {
-		const set = new Set<string>();
+	// materialized combination class enumerates slots). Synthesize each
+	// axis's "own" slot set as the INTERSECTION across every combo using
+	// it: a slot present in every (checklist, *) combo is checklist-owned;
+	// a slot in every (*, extension) combo is extension-owned. Union would
+	// double-count extension-specific slots into the checklist count and
+	// produce a 700+ list that doesn't match the GSC docs.
+	const intersectAcross = (axis: 'checklist' | 'extension', name: string) => {
+		let acc: Set<string> | null = null;
 		for (const [key, props] of Object.entries(combos)) {
 			const [c, e] = key.split('|');
-			if ((axis === 'checklist' ? c : e) === name) for (const p of props) set.add(p);
+			if ((axis === 'checklist' ? c : e) !== name) continue;
+			const here = new Set(props);
+			if (acc === null) acc = here;
+			else for (const s of [...acc]) if (!here.has(s)) acc.delete(s);
 		}
-		return [...set];
+		return acc ? [...acc] : [];
 	};
 
 	const checklists = checklistRaw.map((c) => ({
 		name: c.name,
 		title: c.title,
 		description: c.description ?? '',
-		properties: unionAcross('checklist', c.name)
+		properties: intersectAcross('checklist', c.name)
 	}));
 	const extensions = extensionRaw.map((e) => ({
 		name: e.name,
 		title: e.title,
 		description: e.description ?? '',
-		properties: unionAcross('extension', e.name)
+		properties: intersectAcross('extension', e.name)
 	}));
 
 	return {
