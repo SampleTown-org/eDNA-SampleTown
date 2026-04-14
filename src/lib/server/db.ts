@@ -46,6 +46,7 @@ function runMigrations(db: Database.Database) {
 	};
 	addColumn('pcr_amplifications', 'well_label TEXT');
 	addColumn('library_preps', 'well_label TEXT');
+	addColumn('users', 'avatar_emoji TEXT');
 
 	// Merge the lab-position roles (PI, Postdoc, etc.) that used to be a
 	// hardcoded list on the Personnel dropdown into the person_role picklist,

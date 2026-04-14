@@ -16,6 +16,53 @@
 		viewer: 'Viewer — read-only access to sample data'
 	};
 
+	// ----- Emoji avatar -----
+	// Curated palette for one-click picking; the text input still accepts
+	// anything the user types (ZWJ-joined emoji, skin tones, etc.).
+	const EMOJI_SUGGESTIONS = [
+		'🐙', '🐟', '🐚', '🦀', '🦞', '🦐', '🐠', '🐡', '🐳', '🐋', '🦑', '🐢',
+		'🪸', '🌊', '🏝️', '⛵', '🚢', '🛶', '⚓', '🧭',
+		'🧬', '🧪', '🔬', '🧫', '🦠', '🧑‍🔬', '👩‍🔬', '👨‍🔬',
+		'🌱', '🌿', '🍃', '🌾', '🌳', '🌲', '🍄', '🧑‍🌾',
+		'🐛', '🐜', '🐝', '🐞', '🦋', '🪲', '🪳', '🕷️',
+		'🐦', '🦉', '🦜', '🐧', '🦩', '🦢', '🦆', '🐓', '🐤',
+		'🗺️', '📍', '📡', '🛰️', '🌡️', '🧊', '☁️', '☀️', '🌧️', '❄️',
+		'⭐', '✨', '🌟', '🎯', '🎨', '📚', '☕', '🍵'
+	];
+
+	let avatarEmoji = $state<string>(data.user?.avatar_emoji ?? '');
+	let avatarSaving = $state(false);
+	let avatarSavedMsg = $state('');
+	let avatarErrorMsg = $state('');
+
+	async function saveAvatar(emoji: string) {
+		avatarSaving = true;
+		avatarErrorMsg = '';
+		avatarSavedMsg = '';
+		const res = await fetch('/api/account/avatar', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ emoji })
+		});
+		if (res.ok) {
+			const body = await res.json();
+			avatarEmoji = body.avatar_emoji ?? '';
+			avatarSavedMsg = emoji ? 'Avatar saved.' : 'Avatar cleared.';
+		} else {
+			const err = await res.json().catch(() => null);
+			avatarErrorMsg = err?.error || `Failed (${res.status})`;
+		}
+		avatarSaving = false;
+	}
+	function pickEmoji(emoji: string) {
+		avatarEmoji = emoji;
+		saveAvatar(emoji);
+	}
+	function clearEmoji() {
+		avatarEmoji = '';
+		saveAvatar('');
+	}
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		errorMsg = '';
@@ -59,7 +106,11 @@
 	<!-- Identity card -->
 	<div class="p-4 rounded-lg bg-slate-800/50 border border-slate-800 space-y-3">
 		<div class="flex items-center gap-3">
-			{#if data.user?.avatar_url}
+			{#if avatarEmoji}
+				<div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-2xl leading-none">
+					{avatarEmoji}
+				</div>
+			{:else if data.user?.avatar_url}
 				<img src={data.user.avatar_url} alt="" class="w-10 h-10 rounded-full" />
 			{:else}
 				<div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-400">
@@ -84,6 +135,66 @@
 				{data.user?.role}
 			</span>
 			<span class="text-slate-500 ml-2">{ROLE_LABELS[data.user?.role ?? 'user']}</span>
+		</div>
+	</div>
+
+	<!-- Avatar emoji -->
+	<div class="space-y-3">
+		<div>
+			<h2 class="text-base font-semibold text-white">Avatar emoji</h2>
+			<p class="text-xs text-slate-500 mt-0.5">
+				Shown in the navbar + personnel roster. Overrides a GitHub profile
+				picture when set. Pick from the palette below, type your own, or
+				clear to fall back to the role icon.
+			</p>
+		</div>
+
+		{#if avatarErrorMsg}
+			<div class="p-2 rounded bg-red-900/30 border border-red-800 text-red-300 text-xs">{avatarErrorMsg}</div>
+		{/if}
+		{#if avatarSavedMsg}
+			<div class="p-2 rounded bg-green-900/30 border border-green-800 text-green-300 text-xs">{avatarSavedMsg}</div>
+		{/if}
+
+		<div class="flex items-center gap-3">
+			<input
+				type="text"
+				bind:value={avatarEmoji}
+				maxlength="8"
+				placeholder="🐙"
+				class="w-20 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-center text-2xl focus:outline-none focus:border-ocean-500"
+			/>
+			<button
+				type="button"
+				disabled={avatarSaving}
+				onclick={() => saveAvatar(avatarEmoji.trim())}
+				class="px-3 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 text-sm font-medium"
+			>
+				{avatarSaving ? 'Saving…' : 'Save'}
+			</button>
+			{#if data.user?.avatar_emoji || avatarEmoji}
+				<button
+					type="button"
+					disabled={avatarSaving}
+					onclick={clearEmoji}
+					class="px-3 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 disabled:opacity-50 text-sm"
+				>Clear</button>
+			{/if}
+		</div>
+
+		<div class="flex flex-wrap gap-1.5">
+			{#each EMOJI_SUGGESTIONS as e}
+				<button
+					type="button"
+					onclick={() => pickEmoji(e)}
+					disabled={avatarSaving}
+					class="w-9 h-9 rounded-lg text-xl leading-none flex items-center justify-center transition-colors
+						{avatarEmoji === e
+							? 'bg-ocean-600 ring-2 ring-ocean-400'
+							: 'bg-slate-800 hover:bg-slate-700'}"
+					title={e}
+				>{e}</button>
+			{/each}
 		</div>
 	</div>
 

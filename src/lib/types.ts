@@ -9,6 +9,7 @@ export interface User {
 	display_name: string | null;
 	email: string | null;
 	avatar_url: string | null;
+	avatar_emoji: string | null;
 	role: 'admin' | 'user' | 'viewer';
 	is_local_account: number;
 	is_approved: number;

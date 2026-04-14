@@ -828,7 +828,9 @@
 					<div class="p-3 rounded-lg bg-slate-800/50 border {u.is_approved ? 'border-slate-800' : 'border-amber-700'}">
 						<div class="flex items-start justify-between gap-3">
 							<div class="flex items-center gap-3 flex-1">
-								{#if u.avatar_url}
+								{#if u.avatar_emoji}
+									<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-lg leading-none">{u.avatar_emoji}</div>
+								{:else if u.avatar_url}
 									<img src={u.avatar_url} alt="" class="w-8 h-8 rounded-full" />
 								{:else}
 									<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm text-slate-400">
@@ -923,7 +925,9 @@
 			<div class="p-3 rounded-lg bg-slate-800/50 {person.is_active ? '' : 'opacity-50'}">
 				<div class="flex items-start justify-between gap-3">
 					<div class="flex items-center gap-3">
-						{#if person.avatar_url}
+						{#if person.avatar_emoji}
+							<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-lg leading-none">{person.avatar_emoji}</div>
+						{:else if person.avatar_url}
 							<img src={person.avatar_url} alt="" class="w-8 h-8 rounded-full" />
 						{:else}
 							<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm text-slate-400">{person.full_name.charAt(0)}</div>

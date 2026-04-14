@@ -67,7 +67,7 @@
 						href="/account"
 						class="text-base hover:opacity-80 transition-opacity"
 						title="{ROLE_LABEL[user.role] ?? user.role} — manage account"
-					>{ROLE_ICON[user.role] ?? '👤'}</a>
+					>{user.avatar_emoji ?? ROLE_ICON[user.role] ?? '👤'}</a>
 					<form method="POST" action="/auth/logout" class="inline">
 						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
 					</form>

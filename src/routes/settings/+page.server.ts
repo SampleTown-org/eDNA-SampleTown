@@ -27,7 +27,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const naming: Record<string, string> = {};
 	for (const r of namingRows) naming[r.value] = r.label || '';
 
-	const personnel = db.prepare('SELECT p.*, u.username AS github_username, u.avatar_url FROM personnel p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.sort_order, p.full_name').all();
+	const personnel = db.prepare('SELECT p.*, u.username AS github_username, u.avatar_url, u.avatar_emoji FROM personnel p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.sort_order, p.full_name').all();
 
 	// Admin-only data: feedback queue + full user list. Don't load these
 	// for non-admins — both contain potentially sensitive content (other
@@ -38,7 +38,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const users = isAdmin
 		? db
 				.prepare(
-					`SELECT id, github_id, username, display_name, email, avatar_url,
+					`SELECT id, github_id, username, display_name, email, avatar_url, avatar_emoji,
 					        role, is_local_account, is_approved, must_change_password,
 					        (password_hash IS NOT NULL) AS has_password,
 					        created_at, updated_at

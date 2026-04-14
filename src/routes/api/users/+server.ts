@@ -11,7 +11,7 @@ import { UserCreateBody } from '$lib/server/schemas/auth';
 // User row shape returned to admins. Includes is_approved + must_change_password
 // + auth-source flags but NOT password_hash.
 const SAFE_USER_LIST_COLS = `
-	id, github_id, username, display_name, email, avatar_url,
+	id, github_id, username, display_name, email, avatar_url, avatar_emoji,
 	role, is_local_account, is_approved, must_change_password,
 	created_at, updated_at,
 	(password_hash IS NOT NULL) AS has_password

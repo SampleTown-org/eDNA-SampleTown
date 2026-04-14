@@ -9,8 +9,8 @@ export const GET: RequestHandler = async ({ url }) => {
 	const db = getDb();
 	const activeOnly = url.searchParams.get('active') !== '0';
 	const query = activeOnly
-		? 'SELECT p.*, u.username AS github_username, u.avatar_url FROM personnel p LEFT JOIN users u ON u.id = p.user_id WHERE p.is_active = 1 ORDER BY p.sort_order, p.full_name'
-		: 'SELECT p.*, u.username AS github_username, u.avatar_url FROM personnel p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.sort_order, p.full_name';
+		? 'SELECT p.*, u.username AS github_username, u.avatar_url, u.avatar_emoji FROM personnel p LEFT JOIN users u ON u.id = p.user_id WHERE p.is_active = 1 ORDER BY p.sort_order, p.full_name'
+		: 'SELECT p.*, u.username AS github_username, u.avatar_url, u.avatar_emoji FROM personnel p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.sort_order, p.full_name';
 	return json(db.prepare(query).all());
 };
 

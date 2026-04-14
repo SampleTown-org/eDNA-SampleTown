@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
     display_name TEXT,
     email TEXT,
     avatar_url TEXT,
+    -- User-chosen emoji avatar shown in the navbar / people roster when no
+    -- GitHub avatar_url is set. Free-form single-grapheme string.
+    avatar_emoji TEXT,
     password_hash TEXT,                  -- for local accounts only
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
     is_local_account INTEGER NOT NULL DEFAULT 0,

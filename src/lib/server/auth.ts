@@ -11,7 +11,7 @@ import type { User } from '$lib/types';
 // inside JOINs (e.g. validateSession joins sessions s × users u, where both
 // tables have an `id` column).
 const SAFE_USER_COLS = `
-	u.id, u.github_id, u.username, u.display_name, u.email, u.avatar_url,
+	u.id, u.github_id, u.username, u.display_name, u.email, u.avatar_url, u.avatar_emoji,
 	u.role, u.is_local_account, u.is_approved, u.must_change_password,
 	u.created_at, u.updated_at
 `;
