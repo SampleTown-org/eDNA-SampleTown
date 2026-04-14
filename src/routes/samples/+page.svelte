@@ -223,8 +223,22 @@
 		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={replaceFromBox} />
 	{/if}
 
-	<!-- Optional columns: drawn from MIxS parameters that have data on ≥1 sample -->
+	<!-- Optional columns: drawn from MIxS parameters that have data on ≥1 sample.
+	     + parameter picker lives on the left; newly-added pills grow to its right. -->
 	<div class="flex flex-wrap items-center gap-2 text-xs">
+		{#if pickableParameters.length > 0}
+			<select
+				bind:value={addParamValue}
+				onchange={onAddParameter}
+				class="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-ocean-500"
+			>
+				<option value="">+ parameter</option>
+				{#each pickableParameters as p (p.slot)}
+					<option value={p.slot}>{p.title}{p.isCustom ? ' (custom)' : ''}</option>
+				{/each}
+			</select>
+		{/if}
+
 		{#each extraColumnSlots as slot (slot)}
 			{@const p = data.availableParameters.find((x: any) => x.slot === slot)}
 			{#if p}
@@ -241,18 +255,7 @@
 			{/if}
 		{/each}
 
-		{#if pickableParameters.length > 0}
-			<select
-				bind:value={addParamValue}
-				onchange={onAddParameter}
-				class="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-ocean-500"
-			>
-				<option value="">+ parameter</option>
-				{#each pickableParameters as p (p.slot)}
-					<option value={p.slot}>{p.title}{p.isCustom ? ' (custom)' : ''}</option>
-				{/each}
-			</select>
-		{:else if extraColumnSlots.length === 0}
+		{#if pickableParameters.length === 0 && extraColumnSlots.length === 0}
 			<span class="text-slate-600 italic">No extra parameters have data on any sample yet.</span>
 		{/if}
 	</div>

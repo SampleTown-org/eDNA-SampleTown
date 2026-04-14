@@ -81,7 +81,7 @@ export const load: PageServerLoad = async () => {
 		FROM samples s
 		JOIN projects p ON p.id = s.project_id
 		LEFT JOIN users u ON u.id = s.created_by
-		WHERE s.is_deleted = 0 AND date(s.collection_date) IS NOT NULL
+		WHERE s.is_deleted = 0
 
 		UNION ALL
 
@@ -92,7 +92,7 @@ export const load: PageServerLoad = async () => {
 		FROM extracts e
 		JOIN samples s ON s.id = e.sample_id
 		LEFT JOIN users u ON u.id = e.created_by
-		WHERE e.is_deleted = 0 AND date(e.extraction_date) IS NOT NULL
+		WHERE e.is_deleted = 0
 
 		UNION ALL
 
@@ -103,7 +103,7 @@ export const load: PageServerLoad = async () => {
 		FROM pcr_plates p
 		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
 		LEFT JOIN users u ON u.id = p.created_by
-		WHERE p.is_deleted = 0 AND date(p.pcr_date) IS NOT NULL
+		WHERE p.is_deleted = 0
 
 		UNION ALL
 
@@ -113,7 +113,7 @@ export const load: PageServerLoad = async () => {
 			lp.updated_at AS updated_at
 		FROM library_plates lp
 		LEFT JOIN users u ON u.id = lp.created_by
-		WHERE lp.is_deleted = 0 AND date(lp.library_prep_date) IS NOT NULL
+		WHERE lp.is_deleted = 0
 
 		UNION ALL
 
@@ -123,7 +123,7 @@ export const load: PageServerLoad = async () => {
 			r.updated_at AS updated_at
 		FROM sequencing_runs r
 		LEFT JOIN users u ON u.id = r.created_by
-		WHERE r.is_deleted = 0 AND date(r.run_date) IS NOT NULL
+		WHERE r.is_deleted = 0
 
 		UNION ALL
 

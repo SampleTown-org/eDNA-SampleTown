@@ -93,14 +93,20 @@
 		return `hsl(${hue}, 30%, 22%)`;
 	}
 
-	/** Inline style for a <tr>: sets its background + a `--row-bg` variable
-	 *  that the sticky-left columns inherit, so they stay opaque when the user
-	 *  scrolls horizontally. Falls back to the body color so un-tinted rows
-	 *  still hide the content passing under the frozen columns. */
+	/** Inline style for a <tr>: tints the whole row when color-by is on,
+	 *  otherwise leaves the bg to class-based hover/selected styling. */
 	function rowStyle(row: Record<string, unknown>): string {
 		const bg = colorByKey ? rowBgColor(row[colorByKey]) : null;
-		if (bg) return `background-color: ${bg}; --row-bg: ${bg};`;
-		return '--row-bg: rgb(2, 6, 23);'; // slate-950
+		return bg ? `background-color: ${bg};` : '';
+	}
+
+	/** Solid opaque background for a sticky left cell. Needed because sticky
+	 *  cells sit over horizontally-scrolling siblings — without an explicit
+	 *  fill, the right-side cells bleed through. Matches the row's color-by
+	 *  tint when active so the gradient still reads across the whole row. */
+	function stickyBg(row: Record<string, unknown>): string {
+		const bg = colorByKey ? rowBgColor(row[colorByKey]) : null;
+		return bg ?? 'rgb(2, 6, 23)'; // slate-950
 	}
 
 	/** Left-offset (px) for each sticky column. Only the columns that actually
@@ -364,7 +370,7 @@
 					onclick={() => { if (selectable) focusedIndex = rowIdx; }}
 				>
 					{#if selectable}
-						<td class="px-2 py-3 sticky z-10" style="left: {stickyOffsets.checkbox}px; background: var(--row-bg);">
+						<td class="px-2 py-3 sticky z-10" style="left: {stickyOffsets.checkbox}px; background-color: {stickyBg(row)};">
 							<input
 								type="checkbox"
 								checked={selectedIds.has(row.id as string)}
@@ -374,7 +380,7 @@
 						</td>
 					{/if}
 					{#if hasActions}
-						<td class="px-2 py-3 whitespace-nowrap sticky z-10" style="left: {stickyOffsets.actions}px; background: var(--row-bg);">
+						<td class="px-2 py-3 whitespace-nowrap sticky z-10" style="left: {stickyOffsets.actions}px; background-color: {stickyBg(row)};">
 							{#if actions}{@render actions(row)}{/if}
 							{#if editHref}<a href={editHref(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Edit</a>{/if}
 							{#if onduplicate}<button onclick={() => onduplicate(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Dup</button>{/if}
@@ -382,14 +388,14 @@
 						</td>
 					{/if}
 					{#if showId}
-						<td class="px-3 py-3 sticky z-10" style="left: {stickyOffsets.id}px; background: var(--row-bg);">
+						<td class="px-3 py-3 sticky z-10" style="left: {stickyOffsets.id}px; background-color: {stickyBg(row)};">
 							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>
 						</td>
 					{/if}
 					{#each columns as col, colIdx}
 						<td
 							class="px-4 py-3 {col.class || ''} {colIdx === 0 ? 'sticky z-10' : ''}"
-							style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px; background: var(--row-bg);` : ''}
+							style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px; background-color: {stickyBg(row)};` : ''}
 						>
 							{#if href && col === columns[0]}
 								<a href={href(row)} class="text-ocean-400 hover:text-ocean-300 hover:underline">
