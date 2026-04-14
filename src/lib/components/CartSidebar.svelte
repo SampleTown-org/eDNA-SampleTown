@@ -171,7 +171,20 @@
 	const publicCarts = $derived(savedCarts.filter((c) => c.user_id !== currentUserId));
 </script>
 
-<aside class="w-72 shrink-0 border-l border-slate-800 bg-slate-900/60 overflow-y-auto sticky top-14 h-[calc(100vh-3.5rem)]">
+<!-- Mobile: full-width overlay drawer anchored below the navbar, with a
+     backdrop you can tap to dismiss. Desktop (md+): sticky side column. -->
+<button
+	type="button"
+	aria-label="Close cart"
+	onclick={() => cart.toggleSidebar()}
+	class="fixed inset-0 top-14 z-30 bg-slate-950/60 md:hidden"
+></button>
+<aside
+	class="fixed md:sticky top-14 right-0 bottom-0 md:bottom-auto z-40 md:z-auto
+	       w-full sm:w-96 md:w-72 md:shrink-0
+	       h-[calc(100vh-3.5rem)]
+	       border-l border-slate-800 bg-slate-900 md:bg-slate-900/60 overflow-y-auto"
+>
 	<div class="p-3 border-b border-slate-800 flex items-center justify-between">
 		<span class="text-sm font-semibold text-white">Cart ({cart.count})</span>
 		<div class="flex items-center gap-2">
