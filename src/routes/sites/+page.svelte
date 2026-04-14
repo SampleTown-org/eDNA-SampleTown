@@ -157,6 +157,13 @@
 	<div class="flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-white">Sites</h1>
 		<div class="flex items-center gap-2">
+			{#if selectedIds.size > 0}
+				<button
+					onclick={() => (selectedIds = new Set())}
+					class="px-3 py-2 border border-slate-700 text-slate-400 rounded-lg hover:bg-slate-800 hover:text-white transition-colors text-sm"
+					title="Clear the current selection"
+				>Clear ({selectedIds.size})</button>
+			{/if}
 			{#if selectionChanged}
 				<button onclick={updateCart} class="px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
 					Update Cart ({selectedIds.size})

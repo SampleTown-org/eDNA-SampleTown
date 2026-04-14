@@ -205,11 +205,14 @@
 			if (rect) { rect.remove(); rect = null; }
 			startLatLng = null;
 			map.dragging.enable();
+			// Always fire onboxselect, even with no pins inside — drawing an
+			// empty box is the user's "clear selection" gesture under the
+			// replace-on-drag model.
 			if (bounds && onboxselect) {
 				const ids = markers
 					.filter((m) => m.id && bounds.contains([m.lat, m.lng]))
 					.map((m) => m.id as string);
-				if (ids.length > 0) onboxselect(ids);
+				onboxselect(ids);
 			}
 		});
 	}
