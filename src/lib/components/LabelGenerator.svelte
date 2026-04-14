@@ -60,43 +60,13 @@
 		if (ids.length === 0) return;
 		busy = true;
 		try {
-			const [{ default: jsPDF }, { default: QRCode }] = await Promise.all([
-				import('jspdf'),
-				import('qrcode')
-			]);
-			const pdf = new jsPDF({ unit: 'in', format: 'letter' });
-			for (let i = 0; i < ids.length; i++) {
-				const pageIdx = Math.floor(i / LABELS_PER_PAGE);
-				const slot = i % LABELS_PER_PAGE;
-				if (slot === 0 && pageIdx > 0) pdf.addPage();
-
-				const col = slot % COLS;
-				const row = Math.floor(slot / COLS);
-				const x = MARGIN_LEFT + col * (CELL_W + GAP_X);
-				const y = MARGIN_TOP + row * CELL_H;
-
-				// Render QR as PNG data URL at 3x the display resolution so it
-				// stays crisp when the PDF is printed at 300+ DPI.
-				const png = await QRCode.toDataURL(`${origin}/id/${ids[i]}`, {
-					margin: 1,
-					width: 300,
-					color: { dark: '#000000', light: '#ffffff' }
-				});
-
-				// QR fills the left 0.9" square of the 1" × 2.625" cell, padded
-				// by 0.05" so it doesn't touch the label edge.
-				pdf.addImage(png, 'PNG', x + 0.05, y + 0.05, 0.9, 0.9);
-
-				// Text block to the right of the QR.
-				pdf.setFont('courier', 'normal');
-				pdf.setFontSize(8);
-				pdf.text('SampleTown', x + 1.05, y + 0.18);
-				pdf.setFontSize(7);
-				pdf.text(ids[i].slice(0, 16), x + 1.05, y + 0.55);
-				pdf.text(ids[i].slice(16), x + 1.05, y + 0.72);
-			}
+			const { buildLabelsPdf } = await import('$lib/labels-pdf');
 			const ts = new Date().toISOString().slice(0, 10);
-			pdf.save(`sampletown-labels-${ts}.pdf`);
+			await buildLabelsPdf(
+				ids.map((id) => ({ id })),
+				origin,
+				`sampletown-labels-${ts}.pdf`
+			);
 		} finally {
 			busy = false;
 		}

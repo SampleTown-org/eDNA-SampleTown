@@ -1,6 +1,28 @@
 <script lang="ts">
 	import { cart, type CartEntityType, type CartItem } from '$lib/stores/cart.svelte';
 
+	let printing = $state(false);
+
+	async function printLabels() {
+		if (cart.count === 0) return;
+		printing = true;
+		try {
+			const { buildLabelsPdf } = await import('$lib/labels-pdf');
+			// One label per cart item, in the order the cart lists them.
+			// Primary = item.label (entity name), secondary = item.sublabel
+			// (project/site context).
+			const labels = Array.from(cart.items).map((it) => ({
+				id: it.id,
+				primary: it.label,
+				secondary: it.sublabel
+			}));
+			const ts = new Date().toISOString().slice(0, 10);
+			await buildLabelsPdf(labels, window.location.origin, `sampletown-cart-${ts}.pdf`);
+		} finally {
+			printing = false;
+		}
+	}
+
 	/** Ordered entity type sections matching the lab workflow chain. */
 	const SECTIONS: {
 		type: CartEntityType;
@@ -36,6 +58,12 @@
 		<span class="text-sm font-semibold text-white">Cart ({cart.count})</span>
 		<div class="flex items-center gap-2">
 			{#if cart.count > 0}
+				<button
+					onclick={printLabels}
+					disabled={printing}
+					class="text-xs text-ocean-400 hover:text-ocean-300 disabled:opacity-50"
+					title="Download an Avery 5160 PDF with a QR label per cart item"
+				>{printing ? 'Building…' : 'Labels'}</button>
 				<button onclick={() => cart.clearAll()} class="text-xs text-slate-500 hover:text-red-400">Clear</button>
 			{/if}
 			<button
