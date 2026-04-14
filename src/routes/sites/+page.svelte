@@ -161,16 +161,16 @@
 			{#if selectedIds.size > 0}
 				<button
 					onclick={() => (selectedIds = new Set())}
-					class="hidden sm:inline-flex px-3 py-2 border border-slate-700 text-slate-400 rounded-lg hover:bg-slate-800 hover:text-white transition-colors text-sm"
+					class="hidden sm:inline-flex write-only px-3 py-2 border border-slate-700 text-slate-400 rounded-lg hover:bg-slate-800 hover:text-white transition-colors text-sm"
 					title="Clear the current selection"
 				>Clear ({selectedIds.size})</button>
 			{/if}
 			{#if selectionChanged}
-				<button onclick={updateCart} class="hidden sm:inline-flex px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
+				<button onclick={updateCart} class="hidden sm:inline-flex write-only px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
 					Update Cart ({selectedIds.size})
 				</button>
 			{/if}
-			<a href="/sites/new" class="hidden sm:inline-flex px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Site</a>
+			<a href="/sites/new" class="hidden sm:inline-flex write-only px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Site</a>
 		</div>
 	</div>
 

@@ -20,7 +20,7 @@
 			<h1 class="text-2xl font-bold text-white">{data.project.project_name}</h1>
 			<div class="flex items-center gap-3 shrink-0">
 				<EntityQR id={data.project.id} size={96} />
-				<a href="/projects/{data.project.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+				<a href="/projects/{data.project.id}/edit" class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 			</div>
 		</div>
 		{#if data.project.description}
@@ -41,7 +41,7 @@
 		<h2 class="text-lg font-semibold text-white">Samples ({data.samples.length})</h2>
 		<a
 			href="/samples/new?project_id={data.project.id}"
-			class="hidden sm:inline-flex px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
+			class="hidden sm:inline-flex write-only px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
 		>
 			Add Sample
 		</a>

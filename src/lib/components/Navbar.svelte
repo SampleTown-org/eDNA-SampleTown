@@ -21,7 +21,7 @@
 
 	/** `desktopOnly` links are hidden on <sm screens — reserved for flows that
 	 *  don't make sense on mobile (bulk import/export, etc.). */
-	const navLinks: { href: string; label: string; desktopOnly?: boolean }[] = [
+	const navLinks: { href: string; label: string; desktopOnly?: boolean; writerOnly?: boolean }[] = [
 		{ href: '/', label: 'Dashboard' },
 		{ href: '/projects', label: 'Projects' },
 		{ href: '/sites', label: 'Sites' },
@@ -33,7 +33,7 @@
 		{ href: '/analysis', label: 'Analysis' },
 		{ href: '/export', label: 'Import/Export', desktopOnly: true },
 		{ href: '/glossary', label: 'Glossary' },
-		{ href: '/settings', label: 'Settings' }
+		{ href: '/settings', label: 'Settings', writerOnly: true }
 	];
 
 	let mobileOpen = $state(false);
@@ -52,7 +52,7 @@
 
 			<!-- Desktop nav -->
 			<div class="hidden md:flex items-center gap-1">
-				{#each navLinks as link}
+				{#each navLinks.filter((l) => !l.writerOnly || user?.role !== 'viewer') as link}
 					<a
 						href={link.href}
 						class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
@@ -126,7 +126,7 @@
 		<!-- Mobile nav -->
 		{#if mobileOpen}
 			<div class="md:hidden pb-3 border-t border-slate-800 mt-1 pt-2">
-				{#each navLinks.filter((l) => !l.desktopOnly) as link}
+				{#each navLinks.filter((l) => !l.desktopOnly && (!l.writerOnly || user?.role !== 'viewer')) as link}
 					<a
 						href={link.href}
 						class="block px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded"

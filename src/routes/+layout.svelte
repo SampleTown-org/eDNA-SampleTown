@@ -15,7 +15,7 @@
 	let { data, children }: Props = $props();
 </script>
 
-<div class="min-h-screen flex flex-col">
+<div class="min-h-screen flex flex-col" class:role-viewer={data.user?.role === 'viewer'}>
 	<Navbar user={data.user} />
 	<div class="flex flex-1">
 		<main class="flex-1 min-w-0 max-w-7xl mx-auto w-full px-4 py-6">
@@ -33,3 +33,13 @@
 		SampleTown &middot; MIxS-compliant eDNA sample tracking
 	</footer>
 </div>
+
+<style>
+	/* Read-only viewers don't see any mutation affordances in the UI.
+	   Mutation buttons are tagged with `write-only` (via sed across the
+	   mobile-browse pass) and the DataTable action column also opts in.
+	   Back-end hooks already 403 their API writes; this matches the UI. */
+	:global(.role-viewer .write-only) {
+		display: none !important;
+	}
+</style>

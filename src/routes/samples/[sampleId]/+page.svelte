@@ -177,7 +177,7 @@
 			</div>
 			<div class="flex items-center gap-3 shrink-0">
 				<EntityQR id={sample.id as string} size={96} />
-				<a href="/samples/{sample.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+				<a href="/samples/{sample.id}/edit" class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 			</div>
 		</div>
 		<p class="text-slate-400 mt-1">
@@ -297,7 +297,7 @@
 	<div>
 		<div class="flex items-center justify-between mb-3">
 			<h2 class="text-lg font-semibold text-white">Photos ({photos.length})</h2>
-			<label class="hidden sm:inline-flex px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium cursor-pointer {uploading ? 'opacity-50 pointer-events-none' : ''}">
+			<label class="hidden sm:inline-flex write-only px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium cursor-pointer {uploading ? 'opacity-50 pointer-events-none' : ''}">
 				{uploading ? 'Uploading…' : 'Add Photos'}
 				<input
 					bind:this={fileInput}
@@ -389,7 +389,7 @@
 			<h2 class="text-lg font-semibold text-white">Extracts ({data.extracts.length})</h2>
 			<a
 				href="/extracts/new?sample_id={sample.id}"
-				class="hidden sm:inline-flex px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
+				class="hidden sm:inline-flex write-only px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
 			>
 				Add Extract
 			</a>
