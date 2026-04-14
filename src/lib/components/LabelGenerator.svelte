@@ -263,11 +263,11 @@
 					</span>
 				</h4>
 				<div class="label-sheet">
-					{#each blankIds.slice(0, LABELS_PER_PAGE) as id, i}
+					{#each expandWithCopies(blankIds.map((id, i) => ({ id, i })), blankCopies).slice(0, LABELS_PER_PAGE) as cell}
 						<div class="label-cell">
 							<div class="qr">
 								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-								{@html blankPreviewSvgs[i] ?? ''}
+								{@html blankPreviewSvgs[cell.i] ?? ''}
 							</div>
 							<div class="label-text">
 								{#if blankType}
@@ -275,7 +275,7 @@
 								{:else}
 									<div class="brand">SampleTown</div>
 								{/if}
-								<div class="id">{id}</div>
+								<div class="id">{cell.id}</div>
 							</div>
 						</div>
 					{/each}
