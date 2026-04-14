@@ -237,6 +237,10 @@
 
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 	let rows = $state<Row[]>([initialRow()]);
+	/** Per-row staged photos. Index-aligned with `rows`; upload happens after
+	 *  the sample POST succeeds. Kept in sync with row add/remove/partial-fail
+	 *  so a photo attached to "Sample #3" travels with that row. */
+	let rowPhotos = $state<File[][]>([[]]);
 	let saving = $state(false);
 	let errorMsg = $state('');
 	let result = $state<{ imported: number; failed: number; errors: string[] } | null>(null);
@@ -284,10 +288,26 @@
 		return (s as any)?.id ?? '';
 	}
 
-	function addRow() { rows = [...rows, emptyRow()]; }
+	function addRow() {
+		rows = [...rows, emptyRow()];
+		rowPhotos = [...rowPhotos, []];
+	}
 	function removeRow(i: number) {
 		if (rows.length <= 1) return;
 		rows = rows.filter((_, idx) => idx !== i);
+		rowPhotos = rowPhotos.filter((_, idx) => idx !== i);
+	}
+
+	function addRowPhotos(i: number, files: FileList | null) {
+		if (!files || files.length === 0) return;
+		const next = rowPhotos.slice();
+		next[i] = [...(next[i] ?? []), ...Array.from(files)];
+		rowPhotos = next;
+	}
+	function removeRowPhoto(rowIdx: number, photoIdx: number) {
+		const next = rowPhotos.slice();
+		next[rowIdx] = (next[rowIdx] ?? []).filter((_, i) => i !== photoIdx);
+		rowPhotos = next;
 	}
 
 	function addColumn() {
@@ -377,7 +397,11 @@
 		const startFieldIdx = fieldOrder.indexOf(field);
 
 		const newRows = [...rows];
-		while (newRows.length < rowIdx + lines.length) newRows.push(emptyRow());
+		const newPhotos = [...rowPhotos];
+		while (newRows.length < rowIdx + lines.length) {
+			newRows.push(emptyRow());
+			newPhotos.push([]);
+		}
 
 		lines.forEach((line, li) => {
 			const cells = line.split('\t');
@@ -389,6 +413,7 @@
 		});
 
 		rows = newRows;
+		rowPhotos = newPhotos;
 	}
 
 	const nonEmptyRows = $derived(
@@ -438,6 +463,25 @@
 				imported++;
 				const idx = rows.indexOf(row);
 				if (idx >= 0) successIdx.add(idx);
+				// Upload any staged photos for this row. Failures are collected
+				// into `errors` but don't undo the sample creation.
+				const created = await res.json().catch(() => null) as { id?: string } | null;
+				const photoIdx = rows.indexOf(row);
+				const photos = photoIdx >= 0 ? rowPhotos[photoIdx] ?? [] : [];
+				if (created?.id && photos.length > 0) {
+					for (const file of photos) {
+						const fd = new FormData();
+						fd.append('file', file);
+						const up = await fetch(`/api/samples/${created.id}/photos`, {
+							method: 'POST',
+							body: fd
+						});
+						if (!up.ok) {
+							const err = await up.json().catch(() => ({}));
+							errors.push(`${row.samp_name} photo ${file.name}: ${err.error ?? `HTTP ${up.status}`}`);
+						}
+					}
+				}
 			} else {
 				const err = await res.json().catch(() => ({}));
 				errors.push(`${row.samp_name}: ${err.error ?? `HTTP ${res.status}`}`);
@@ -448,9 +492,17 @@
 		result = { imported, failed: errors.length, errors };
 		// Drop only the rows that POSTed successfully; rows that failed stay
 		// on deck so users can correct the offending cells and retry without
-		// re-entering the ones that passed. Empty rows are always kept.
-		const remaining = rows.filter((_, i) => !successIdx.has(i));
-		rows = remaining.length > 0 ? remaining : [emptyRow()];
+		// re-entering the ones that passed. Photos travel with their row.
+		const keep = rows.map((_, i) => !successIdx.has(i));
+		const remaining = rows.filter((_, i) => keep[i]);
+		const remainingPhotos = rowPhotos.filter((_, i) => keep[i]);
+		if (remaining.length > 0) {
+			rows = remaining;
+			rowPhotos = remainingPhotos;
+		} else {
+			rows = [emptyRow()];
+			rowPhotos = [[]];
+		}
 	}
 
 	const inputCls =
@@ -745,6 +797,52 @@
 						</tr>
 					{/each}
 				{/each}
+
+				<!-- Photos row (penultimate). One uploader per sample column;
+				     files stage client-side and upload after the sample POSTs. -->
+				<tr class="border-b border-slate-800/50 bg-slate-900/20">
+					<td class="w-8 px-1 py-1 sticky left-0 bg-slate-950 z-10"></td>
+					<th class="px-2 py-1 text-left font-medium sticky left-8 bg-slate-950 z-10 align-top">
+						<span class="text-slate-200 leading-tight">Photos</span>
+					</th>
+					<td class="px-1 py-1"></td>
+					{#each rows as _row, i}
+						<td class="px-2 py-1 align-top">
+							<label class="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-ocean-400 cursor-pointer">
+								<span>+&nbsp;Photo</span>
+								{#if (rowPhotos[i]?.length ?? 0) > 0}
+									<span class="px-1.5 rounded bg-ocean-900/60 text-ocean-300 text-[10px]">{rowPhotos[i].length}</span>
+								{/if}
+								<input
+									type="file"
+									accept="image/jpeg,image/png,image/webp,image/gif"
+									multiple
+									class="hidden"
+									onchange={(e) => {
+										const inp = e.currentTarget;
+										addRowPhotos(i, inp.files);
+										inp.value = '';
+									}}
+								/>
+							</label>
+							{#if (rowPhotos[i]?.length ?? 0) > 0}
+								<ul class="mt-1 space-y-0.5">
+									{#each rowPhotos[i] as file, pi}
+										<li class="flex items-center gap-1 text-[11px] text-slate-500">
+											<span class="truncate flex-1" title={file.name}>{file.name}</span>
+											<button
+												type="button"
+												onclick={() => removeRowPhoto(i, pi)}
+												class="text-slate-600 hover:text-red-400"
+												title="Remove"
+											>✕</button>
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						</td>
+					{/each}
+				</tr>
 
 				<!-- +Add parameter: last row. Input lives in the parameter-label
 				     column so it reads as the bottom of the list rather than a
