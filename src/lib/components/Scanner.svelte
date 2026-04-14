@@ -57,7 +57,10 @@
 	}
 
 	/** Extract a UUID (32 hex chars) from a scanned payload. Accepts either a
-	 *  bare UUID or a URL containing `/id/<uuid>`. Anything else → null. */
+	 *  bare UUID or a URL containing `/id/<uuid>`. The URL's host is ignored
+	 *  — codes printed against one origin (staging, old hostname, even the
+	 *  dev LAN IP) still route through whatever origin the scanner is open
+	 *  on. Anything else → null. */
 	function extractUuid(text: string): string | null {
 		const trimmed = text.trim();
 		const m = trimmed.match(/\/id\/([0-9a-f]{32})/i);
