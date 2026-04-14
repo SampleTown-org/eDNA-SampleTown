@@ -49,6 +49,12 @@
 	let savedError = $state<string | null>(null);
 	let currentUserId = $state<string | null>(null);
 
+	// Inline save form state (no prompt()/confirm() dialogs).
+	let saveFormOpen = $state(false);
+	let saveName = $state('');
+	let saveIsPublic = $state(false);
+	let saveNameEl = $state<HTMLInputElement | undefined>(undefined);
+
 	async function refreshSaved() {
 		savedLoading = true;
 		savedError = null;
@@ -80,18 +86,33 @@
 		if (savedOpen) refreshSaved();
 	});
 
-	async function saveCurrent() {
+	function openSaveForm() {
 		if (cart.count === 0) return;
-		const name = prompt('Name this cart:');
-		if (!name?.trim()) return;
-		const makePublic = confirm('Share publicly?\n\nOK = visible to everyone\nCancel = keep private');
+		savedError = null;
+		saveName = '';
+		saveIsPublic = false;
+		saveFormOpen = true;
+		savedOpen = true;
+		// Focus the name input on the next tick, after the form renders.
+		queueMicrotask(() => saveNameEl?.focus());
+	}
+
+	function cancelSave() {
+		saveFormOpen = false;
+		saveName = '';
+		saveIsPublic = false;
+	}
+
+	async function submitSave() {
+		const name = saveName.trim();
+		if (!name) return;
 		savedError = null;
 		const res = await fetch('/api/saved-carts', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				name: name.trim(),
-				is_public: makePublic,
+				name,
+				is_public: saveIsPublic,
 				items: cart.items
 			})
 		});
@@ -100,7 +121,9 @@
 			savedError = body.error ?? `HTTP ${res.status}`;
 			return;
 		}
-		savedOpen = true;
+		saveFormOpen = false;
+		saveName = '';
+		saveIsPublic = false;
 		await refreshSaved();
 	}
 
@@ -153,7 +176,7 @@
 		<div class="flex items-center gap-2">
 			{#if cart.count > 0}
 				<button
-					onclick={saveCurrent}
+					onclick={openSaveForm}
 					class="text-xs text-ocean-400 hover:text-ocean-300"
 					title="Save this cart with a name for later"
 				>Save</button>
@@ -185,6 +208,37 @@
 		</button>
 		{#if savedOpen}
 			<div class="px-3 pb-3 space-y-2">
+				{#if saveFormOpen}
+					<form
+						onsubmit={(e) => { e.preventDefault(); submitSave(); }}
+						class="rounded border border-ocean-900/60 bg-slate-900/80 p-2 space-y-2"
+					>
+						<input
+							bind:this={saveNameEl}
+							bind:value={saveName}
+							type="text"
+							placeholder="Cart name"
+							maxlength="120"
+							class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs placeholder-slate-500 focus:outline-none focus:border-ocean-500"
+						/>
+						<label class="flex items-center gap-2 text-xs text-slate-300">
+							<input type="checkbox" bind:checked={saveIsPublic} class="accent-ocean-500" />
+							<span>Public <span class="text-slate-500">(visible to everyone)</span></span>
+						</label>
+						<div class="flex items-center gap-2">
+							<button
+								type="submit"
+								disabled={!saveName.trim()}
+								class="px-2 py-1 bg-ocean-600 text-white rounded text-xs hover:bg-ocean-500 disabled:opacity-40"
+							>Save</button>
+							<button
+								type="button"
+								onclick={cancelSave}
+								class="px-2 py-1 text-xs text-slate-400 hover:text-white"
+							>Cancel</button>
+						</div>
+					</form>
+				{/if}
 				{#if savedError}
 					<div class="text-xs text-red-400">{savedError}</div>
 				{/if}
