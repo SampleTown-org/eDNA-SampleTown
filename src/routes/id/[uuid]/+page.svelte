@@ -5,10 +5,13 @@
 	/** Entity types a user can claim a scanned UUID for. Offline-eligible
 	 *  entities (project/site/sample) are listed first; the rest require
 	 *  an online connection since their forms load server-side data. */
+	/** Order mirrors the top-level app nav: Projects → Sites → Samples →
+	 *  Extracts → PCR → Libraries → Runs. The `offline` flag just decorates
+	 *  the card for the field-use scenario — routing is identical. */
 	const CLAIMABLE = [
-		{ type: 'sample', label: 'Sample', offline: true, href: `/samples/new?id=${data.uuid}` },
-		{ type: 'site', label: 'Site', offline: true, href: `/sites/new?id=${data.uuid}` },
 		{ type: 'project', label: 'Project', offline: true, href: `/projects/new?id=${data.uuid}` },
+		{ type: 'site', label: 'Site', offline: true, href: `/sites/new?id=${data.uuid}` },
+		{ type: 'sample', label: 'Sample', offline: true, href: `/samples/new?id=${data.uuid}` },
 		{ type: 'extract', label: 'Extract', offline: false, href: `/extracts/new?id=${data.uuid}` },
 		{ type: 'pcr_plate', label: 'PCR Plate', offline: false, href: `/pcr/new?id=${data.uuid}` },
 		{ type: 'library_plate', label: 'Library Plate', offline: false, href: `/libraries/new?id=${data.uuid}` },

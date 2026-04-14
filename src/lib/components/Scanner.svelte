@@ -23,12 +23,20 @@
 			const mod = await import('html5-qrcode');
 			const { Html5Qrcode } = mod;
 			scanner = new Html5Qrcode(containerEl.id);
-			await scanner.start(
-				{ facingMode: 'environment' },
-				{ fps: 10, qrbox: { width: 240, height: 240 } },
-				(text: string) => handleDecoded(text),
-				() => {} // ignore per-frame "not found" noise
-			);
+			const config = { fps: 10, qrbox: { width: 240, height: 240 } };
+			const onDecode = (text: string) => handleDecoded(text);
+			const onError = () => {}; // ignore per-frame "not found" noise
+			// Prefer the rear camera (phones); on desktops that typically
+			// don't have one, fall back to whatever camera the device exposes.
+			try {
+				await scanner.start({ facingMode: 'environment' }, config, onDecode, onError);
+			} catch {
+				const cameras = await Html5Qrcode.getCameras();
+				if (!cameras || cameras.length === 0) {
+					throw new Error('No camera available');
+				}
+				await scanner.start(cameras[0].id, config, onDecode, onError);
+			}
 			status = 'running';
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
