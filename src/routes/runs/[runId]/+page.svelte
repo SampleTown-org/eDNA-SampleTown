@@ -32,7 +32,7 @@
 		<a href="/runs" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Runs</a>
 		<div class="flex items-center justify-between mt-1">
 			<h1 class="text-2xl font-bold text-white">{data.run.run_name}</h1>
-			<a href="/runs/{data.run.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<a href="/runs/{data.run.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 	</div>
 

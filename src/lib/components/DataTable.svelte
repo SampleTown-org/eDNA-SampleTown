@@ -268,7 +268,7 @@
 			<tr class="border-b border-slate-800 bg-slate-900/50">
 				{#if selectable}
 					<th
-						class="px-2 py-3 sticky z-20 bg-slate-900"
+						class="hidden sm:table-cell px-2 py-3 sm:sticky sm:z-20 bg-slate-900"
 						style="left: {stickyOffsets.checkbox}px; width: 32px; min-width: 32px; max-width: 32px;"
 					>
 						<input
@@ -286,7 +286,7 @@
 					     and right next to the select-all checkbox. Hidden until
 					     ≥2 rows are selected + the parent provides the handlers. -->
 					<th
-						class="px-2 py-3 text-left font-medium text-slate-400 whitespace-nowrap sticky z-20 bg-slate-900"
+						class="hidden sm:table-cell px-2 py-3 text-left font-medium text-slate-400 whitespace-nowrap sm:sticky sm:z-20 bg-slate-900"
 						style="left: {stickyOffsets.actions}px; width: 112px; min-width: 112px; max-width: 112px;"
 					>
 						{#if selectable && selectedIds.size >= 2 && (onbulkduplicate || onbulkdelete)}
@@ -312,13 +312,13 @@
 				{/if}
 				{#if showId}
 					<th
-						class="px-3 py-3 text-left font-medium text-slate-500 sticky z-20 bg-slate-900"
+						class="hidden sm:table-cell px-3 py-3 text-left font-medium text-slate-500 sm:sticky sm:z-20 bg-slate-900"
 						style="left: {stickyOffsets.id}px; width: 80px; min-width: 80px; max-width: 80px;"
 					>ID</th>
 				{/if}
 				{#each columns as col, colIdx}
 					<th
-						class="px-4 py-3 text-left font-medium text-slate-400 {col.class || ''} {colIdx === 0 ? 'sticky z-20 bg-slate-900' : ''}"
+						class="px-4 py-3 text-left font-medium text-slate-400 {col.class || ''} {colIdx === 0 ? 'sm:sticky sm:z-20 bg-slate-900' : ''}"
 						style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px;` : ''}
 						title="Shift+click to color rows by this column"
 					>
@@ -371,7 +371,7 @@
 					onclick={() => { if (selectable) focusedIndex = rowIdx; }}
 				>
 					{#if selectable}
-						<td class="px-2 py-3 sticky z-10" style="left: {stickyOffsets.checkbox}px; width: 32px; min-width: 32px; max-width: 32px; background-color: {stickyBg(row)};">
+						<td class="hidden sm:table-cell px-2 py-3 sm:sticky sm:z-10" style="left: {stickyOffsets.checkbox}px; width: 32px; min-width: 32px; max-width: 32px; background-color: {stickyBg(row)};">
 							<input
 								type="checkbox"
 								checked={selectedIds.has(row.id as string)}
@@ -381,7 +381,7 @@
 						</td>
 					{/if}
 					{#if hasActions}
-						<td class="px-2 py-3 whitespace-nowrap sticky z-10" style="left: {stickyOffsets.actions}px; width: 112px; min-width: 112px; max-width: 112px; background-color: {stickyBg(row)};">
+						<td class="hidden sm:table-cell px-2 py-3 whitespace-nowrap sm:sticky sm:z-10" style="left: {stickyOffsets.actions}px; width: 112px; min-width: 112px; max-width: 112px; background-color: {stickyBg(row)};">
 							{#if actions}{@render actions(row)}{/if}
 							{#if editHref}<a href={editHref(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Edit</a>{/if}
 							{#if onduplicate}<button onclick={() => onduplicate(row)} class="text-xs text-slate-500 hover:text-ocean-400 mr-2">Dup</button>{/if}
@@ -389,13 +389,13 @@
 						</td>
 					{/if}
 					{#if showId}
-						<td class="px-3 py-3 sticky z-10" style="left: {stickyOffsets.id}px; width: 80px; min-width: 80px; max-width: 80px; background-color: {stickyBg(row)};">
+						<td class="hidden sm:table-cell px-3 py-3 sm:sticky sm:z-10" style="left: {stickyOffsets.id}px; width: 80px; min-width: 80px; max-width: 80px; background-color: {stickyBg(row)};">
 							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>
 						</td>
 					{/if}
 					{#each columns as col, colIdx}
 						<td
-							class="px-4 py-3 {col.class || ''} {colIdx === 0 ? 'sticky z-10' : ''}"
+							class="px-4 py-3 {col.class || ''} {colIdx === 0 ? 'sm:sticky sm:z-10' : ''}"
 							style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px; background-color: ${stickyBg(row)};` : ''}
 						>
 							{#if href && col === columns[0]}

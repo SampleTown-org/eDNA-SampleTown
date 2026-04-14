@@ -17,7 +17,7 @@
 		<a href="/projects" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Projects</a>
 		<div class="flex items-center justify-between mt-1">
 			<h1 class="text-2xl font-bold text-white">{data.project.project_name}</h1>
-			<a href="/projects/{data.project.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<a href="/projects/{data.project.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 		{#if data.project.description}
 			<p class="text-slate-400 mt-1">{data.project.description}</p>
@@ -37,7 +37,7 @@
 		<h2 class="text-lg font-semibold text-white">Samples ({data.samples.length})</h2>
 		<a
 			href="/samples/new?project_id={data.project.id}"
-			class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
+			class="hidden sm:inline-flex px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
 		>
 			Add Sample
 		</a>

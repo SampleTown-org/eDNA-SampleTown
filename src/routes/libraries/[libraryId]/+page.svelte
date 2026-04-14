@@ -30,7 +30,7 @@
 				<h1 class="text-2xl font-bold text-white">{data.plate.plate_name}</h1>
 				<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{data.plate.library_type}</span>
 			</div>
-			<a href="/libraries/{data.plate.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<a href="/libraries/{data.plate.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 		{#if data.plate.pcr_plate_name}
 			<p class="text-slate-400 mt-1">From PCR Plate: <a href="/pcr/{data.plate.pcr_plate_id}" class="text-ocean-400 hover:text-ocean-300">{data.plate.pcr_plate_name}</a></p>
@@ -91,7 +91,7 @@
 		<a href="/libraries" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Libraries</a>
 		<div class="flex items-center justify-between mt-1">
 			<h1 class="text-2xl font-bold text-white">{data.library.library_name}</h1>
-			<a href="/libraries/{data.library.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<a href="/libraries/{data.library.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 		{#if data.source}
 			<p class="text-slate-400 mt-1">

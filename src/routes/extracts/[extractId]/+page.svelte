@@ -76,7 +76,7 @@
 		<a href="/extracts" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Extracts</a>
 		<div class="flex items-center justify-between mt-1">
 			<h1 class="text-2xl font-bold text-white">{ext.extract_name}</h1>
-			<a href="/extracts/{ext.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<a href="/extracts/{ext.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 		<p class="text-slate-400 mt-1">Sample: <a href="/samples/{ext.sample_id}" class="text-ocean-400 hover:text-ocean-300">{ext.samp_name}</a></p>
 	</div>
@@ -126,7 +126,7 @@
 	<div>
 		<div class="flex items-center justify-between mb-3">
 			<h2 class="text-lg font-semibold text-white">PCR Amplifications ({data.pcrs.length})</h2>
-			<a href="/pcr/new?extract_id={data.extract.id}" class="px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">Add PCR</a>
+			<a href="/pcr/new?extract_id={data.extract.id}" class="hidden sm:inline-flex px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">Add PCR</a>
 		</div>
 		<DataTable columns={pcrColumns} rows={data.pcrs} href={(row) => `/pcr/${row.id}`} empty="No PCR amplifications yet." />
 	</div>
@@ -134,7 +134,7 @@
 	<div>
 		<div class="flex items-center justify-between mb-3">
 			<h2 class="text-lg font-semibold text-white">Direct Library Preps ({data.libraries.length})</h2>
-			<a href="/libraries/new?extract_id={data.extract.id}" class="px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">Add Library</a>
+			<a href="/libraries/new?extract_id={data.extract.id}" class="hidden sm:inline-flex px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">Add Library</a>
 		</div>
 		<DataTable columns={libColumns} rows={data.libraries} href={(row) => `/libraries/${row.id}`} empty="No direct library preps yet." />
 	</div>

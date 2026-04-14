@@ -92,7 +92,7 @@
 			<div class="flex items-center gap-3">
 				<h1 class="text-2xl font-bold text-white">{data.site.site_name}</h1>
 				</div>
-			<a href="/sites/{data.site.id}/edit" class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
+			<a href="/sites/{data.site.id}/edit" class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 		</div>
 		<p class="text-slate-400 mt-1">
 			Project: <a href="/projects/{data.site.project_id}" class="text-ocean-400 hover:text-ocean-300">{data.site.project_name}</a>
@@ -156,7 +156,7 @@
 	<div>
 		<div class="flex items-center justify-between mb-3">
 			<h2 class="text-lg font-semibold text-white">Photos ({photos.length})</h2>
-			<label class="px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium cursor-pointer {uploading ? 'opacity-50 pointer-events-none' : ''}">
+			<label class="hidden sm:inline-flex px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium cursor-pointer {uploading ? 'opacity-50 pointer-events-none' : ''}">
 				{uploading ? 'Uploading…' : 'Add Photos'}
 				<input
 					bind:this={fileInput}
@@ -248,7 +248,7 @@
 			<h2 class="text-lg font-semibold text-white">Samples ({data.samples.length})</h2>
 			<a
 				href="/samples/new?site_id={data.site.id}&project_id={data.site.project_id}"
-				class="px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
+				class="hidden sm:inline-flex px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
 			>
 				Add Sample
 			</a>
