@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import MapPicker from '$lib/components/MapPicker.svelte';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -52,7 +53,7 @@
 			{#each locationFields as [label, value, slot]}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
 					<dt class="text-slate-400">
-						{#if slot}<a href="/glossary#{slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{label}</a>{:else}{label}{/if}
+						{#if slot}<GlossaryDoc {slot} {label} />{:else}{label}{/if}
 					</dt>
 					<dd class="text-slate-200">{value}</dd>
 				</div>
@@ -68,7 +69,7 @@
 			{#each envFields as [label, value, slot]}
 				<div class="flex justify-between py-1 border-b border-slate-800/50">
 					<dt class="text-slate-400">
-						{#if slot}<a href="/glossary#{slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{label}</a>{:else}{label}{/if}
+						{#if slot}<GlossaryDoc {slot} {label} />{:else}{label}{/if}
 					</dt>
 					<dd class="text-slate-200">{value}</dd>
 				</div>

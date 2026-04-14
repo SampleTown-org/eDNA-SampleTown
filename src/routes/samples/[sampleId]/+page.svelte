@@ -1,6 +1,7 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import { getSlot } from '$lib/mixs/schema-index';
 	import { slotTable } from '$lib/mixs/slot-ownership';
 	import { MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
@@ -135,15 +136,11 @@
 		<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Identity</h2>
 		<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 			<div class={fieldRowCls}>
-				<dt class={labelCls}>
-					<a href="/glossary#samp_name" target="_blank" rel="noopener" class="hover:text-ocean-400">Sample Name</a>
-				</dt>
+				<dt class={labelCls}><GlossaryDoc slot="samp_name" label="Sample Name" /></dt>
 				<dd class={valueCls}>{sample.samp_name || '—'}</dd>
 			</div>
 			<div class={fieldRowCls}>
-				<dt class={labelCls}>
-					<a href="/glossary#collection_date" target="_blank" rel="noopener" class="hover:text-ocean-400">Collection Date</a>
-				</dt>
+				<dt class={labelCls}><GlossaryDoc slot="collection_date" label="Collection Date" /></dt>
 				<dd class={valueCls}>{sample.collection_date || '—'}</dd>
 			</div>
 		</dl>
@@ -159,9 +156,7 @@
 			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 				{#each filledSiteFields as f}
 					<div class={fieldRowCls}>
-						<dt class={labelCls}>
-							<a href="/glossary#{f.key}" target="_blank" rel="noopener" class="hover:text-ocean-400">{slotTitle(f.key)}</a>
-						</dt>
+						<dt class={labelCls}><GlossaryDoc slot={f.key} label={slotTitle(f.key)} /></dt>
 						<dd class={valueCls}>{val(f.key)}</dd>
 					</div>
 				{/each}
@@ -176,9 +171,7 @@
 			<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
 				{#each filledSampleColumns as c}
 					<div class={fieldRowCls}>
-						<dt class={labelCls}>
-							<a href="/glossary#{c.key}" target="_blank" rel="noopener" class="hover:text-ocean-400">{slotTitle(c.key)}</a>
-						</dt>
+						<dt class={labelCls}><GlossaryDoc slot={c.key} label={slotTitle(c.key)} /></dt>
 						<dd class={valueCls}>{val(c.key)}{c.unit ? ' ' + c.unit : ''}</dd>
 					</div>
 				{/each}
@@ -197,7 +190,7 @@
 				{#each mixsExtras as e}
 					<div class={fieldRowCls}>
 						<dt class={labelCls}>
-							<a href="/glossary#{e.slot}" target="_blank" rel="noopener" class="hover:text-ocean-400">{e.title}</a>
+							<GlossaryDoc slot={e.slot} label={e.title} />
 							<span class="text-xs text-slate-600 ml-1 font-mono">{e.slot}</span>
 						</dt>
 						<dd class={valueCls}>{e.value}</dd>

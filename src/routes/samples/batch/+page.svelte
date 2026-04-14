@@ -1,27 +1,27 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { allSlotsFor, getSlot, requiredSlotsFor } from '$lib/mixs/schema-index';
+	import { allSlotsFor, getSlot, recommendedSlotsFor, requiredSlotsFor } from '$lib/mixs/schema-index';
 	import { slotTable } from '$lib/mixs/slot-ownership';
-	import { cart } from '$lib/stores/cart.svelte';
+	import { organizeForm, type Picklists } from '$lib/mixs/sample-form';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	/** MIxS checklist + extension applied to every row created here. Matches
-	 *  the picker on the single-sample form so batch-created rows agree
-	 *  on which combination class drives validation/required slots. */
+	/** MIxS checklist + extension applied to every sample created here. */
 	let batchChecklist = $state('MimarksS');
 	let batchExtension = $state('Water');
 
-	/** Resolve a header label to its MIxS slot title for nicer column headers. */
+	/** Resolve a key to its MIxS slot title for nicer parameter labels. */
 	function slotLabel(key: string, fallback: string): string {
 		return getSlot(key)?.title ?? fallback;
 	}
 
 	type Row = Record<string, string>;
+
+	type Section = 'Required' | 'Sampling & Storage' | 'Other';
 
 	type ColumnDef = {
 		key: string;
@@ -29,61 +29,81 @@
 		placeholder?: string;
 		width?: string;
 		required?: boolean;
-		/** 'select-project' | 'select-site' for dropdown columns */
+		recommended?: boolean;
+		section: Section;
+		/** 'select-project' | 'select-site' for dropdown columns. */
 		widget?: string;
 	};
 
+	/** Always-present entries at the top of Required. Project/Site are
+	 *  SampleTown-local concepts; samp_name/collection_date/env_medium are
+	 *  the MIxS core the single-sample form also pinned to the Identity block. */
 	const CORE_COLUMNS: ColumnDef[] = [
-		{ key: 'project_id', label: 'Project *', width: 'w-40', required: true, widget: 'select-project' },
-		{ key: 'site_id', label: 'Site *', width: 'w-40', required: true, widget: 'select-site' },
-		{ key: 'samp_name', label: 'Sample name *', required: true },
-		{ key: 'collection_date', label: 'Collection date', placeholder: 'YYYY-MM-DD', width: 'w-36' },
-		{ key: 'notes', label: 'Notes' }
+		{ key: 'project_id', label: 'Project', required: true, section: 'Required', widget: 'select-project', width: 'w-48' },
+		{ key: 'site_id', label: 'Site', required: true, section: 'Required', widget: 'select-site', width: 'w-48' },
+		{ key: 'samp_name', label: 'Sample name', required: true, section: 'Required' },
+		{ key: 'collection_date', label: 'Collection date', placeholder: 'YYYY-MM-DD', width: 'w-40', required: true, section: 'Required' }
 	];
 
-	/** Shortcut labels/widths/placeholders for a handful of common slots —
-	 *  everything else falls back to the MIxS schema title and default sizing. */
+	/** SampleTown-specific label/width/placeholder shortcuts for common MIxS
+	 *  slots; everything else picks up its title from the schema. */
 	const COLUMN_HINTS: Record<string, Partial<ColumnDef>> = {
-		env_medium: { label: 'Env medium', width: 'w-40' },
-		depth: { label: 'Depth (m)', width: 'w-24' },
-		elev: { label: 'Elevation (m)', width: 'w-24' },
-		temp: { label: 'Temp (°C)', width: 'w-24' },
-		salinity: { label: 'Salinity', width: 'w-24' },
+		env_medium: { label: 'Env medium', width: 'w-48' },
+		depth: { label: 'Depth (m)', width: 'w-28' },
+		elev: { label: 'Elevation (m)', width: 'w-28' },
+		temp: { label: 'Temp (°C)', width: 'w-28' },
+		salinity: { label: 'Salinity', width: 'w-28' },
 		ph: { label: 'pH', width: 'w-20' },
-		filter_type: { label: 'Filter type', width: 'w-32' },
-		samp_store_sol: { label: 'Preservation', width: 'w-32' }
+		filter_type: { label: 'Filter type', width: 'w-36' },
+		samp_store_sol: { label: 'Preservation', width: 'w-36' }
 	};
 
-	/** Build a ColumnDef for an arbitrary MIxS slot, using COLUMN_HINTS for
-	 *  friendly labels and slotLabel() as fallback. */
+	const CORE_KEYS = new Set(CORE_COLUMNS.map((c) => c.key));
+
+	/** Route a MIxS slot into one of the three Section buckets, mirroring the
+	 *  single-sample organizeForm() grouping. Required and sample_taxon_id are
+	 *  routed by their cardinality; everything else uses the organizeForm
+	 *  bucket (Sampling & Storage or Other). */
+	function sectionForSlot(slot: string): Section {
+		if (requiredSlotsFor(batchChecklist, batchExtension).includes(slot)) return 'Required';
+		const organized = organizeForm(batchChecklist, batchExtension, data.picklists as Picklists);
+		for (const [bucket, items] of Object.entries(organized.optional)) {
+			if (items.some((i) => i.slot === slot)) {
+				return bucket === 'Sampling & Storage' ? 'Sampling & Storage' : 'Other';
+			}
+		}
+		return 'Other';
+	}
+
+	/** Build a ColumnDef for a MIxS slot — pulls label/width from COLUMN_HINTS,
+	 *  required/recommended from the active combination class, section from the
+	 *  organizeForm buckets. */
 	function columnDefForSlot(key: string): ColumnDef {
 		const hint = COLUMN_HINTS[key] ?? {};
-		const required =
-			hint.required ??
-			requiredSlotsFor(batchChecklist, batchExtension).includes(key);
+		const required = requiredSlotsFor(batchChecklist, batchExtension).includes(key);
+		const recommended = recommendedSlotsFor(batchChecklist, batchExtension).has(key);
 		return {
 			key,
 			label: hint.label ?? slotLabel(key, key),
 			width: hint.width,
 			placeholder: hint.placeholder,
-			required
+			required,
+			recommended,
+			section: sectionForSlot(key)
 		};
 	}
 
 	let extraColumnKeys = $state<string[]>([]);
 
 	/** Auto-add every MIxS-required slot for the active (checklist, extension)
-	 *  that (a) isn't already a core column, (b) isn't already a user-added
-	 *  extra, and (c) actually lives on the samples table. Required slots
-	 *  that belong on extracts / pcr_plates / library_preps / runs get
-	 *  surfaced on those entities' own forms instead of being entered
-	 *  per-row here. User-chosen extras stay put; this only grows the list. */
-	const coreKeys = new Set(CORE_COLUMNS.map((c) => c.key));
+	 *  that (a) isn't already core, (b) isn't already added, (c) lives on the
+	 *  samples table. Required slots owned by extracts / pcr_plates /
+	 *  library_preps / runs are surfaced on those entities' own forms. */
 	$effect(() => {
 		const required = requiredSlotsFor(batchChecklist, batchExtension);
 		const toAdd = required.filter(
 			(slot) =>
-				!coreKeys.has(slot) &&
+				!CORE_KEYS.has(slot) &&
 				!extraColumnKeys.includes(slot) &&
 				slotTable(slot) === 'samples'
 		);
@@ -92,25 +112,51 @@
 			rows = rows.map((r) => ({ ...r, ...Object.fromEntries(toAdd.map((k) => [k, r[k] ?? ''])) }));
 		}
 	});
+
 	let columns = $derived<ColumnDef[]>([
 		...CORE_COLUMNS,
 		...extraColumnKeys.map(columnDefForSlot)
 	]);
 
-	/** Slots valid for the selected (checklist, extension) — drives the
-	 *  searchable +Add column picker. Drops anything already in the table. */
-	let availableExtraSlots = $derived.by<string[]>(() => {
-		const inTable = new Set<string>([...CORE_COLUMNS.map((c) => c.key), ...extraColumnKeys]);
-		const all = allSlotsFor(batchChecklist, batchExtension);
-		return all.filter((s) => !inTable.has(s)).sort();
+	/** Group columns into the three display sections in the order Required →
+	 *  Sampling & Storage → Other, matching the single-sample form. */
+	const SECTION_ORDER: Section[] = ['Required', 'Sampling & Storage', 'Other'];
+	let sections = $derived.by<{ title: Section; cols: ColumnDef[] }[]>(() => {
+		const grouped: Record<Section, ColumnDef[]> = {
+			Required: [],
+			'Sampling & Storage': [],
+			Other: []
+		};
+		for (const c of columns) grouped[c.section].push(c);
+		return SECTION_ORDER.filter((s) => grouped[s].length > 0).map((s) => ({
+			title: s,
+			cols: grouped[s]
+		}));
 	});
 
+	/** Slots valid for the selected (checklist, extension), minus anything
+	 *  already in the table — drives the searchable +Add parameter picker. */
+	let availableExtraSlots = $derived.by<string[]>(() => {
+		const inTable = new Set<string>([...CORE_KEYS, ...extraColumnKeys]);
+		const all = allSlotsFor(batchChecklist, batchExtension);
+		return all
+			.filter((s) => !inTable.has(s))
+			.filter((s) => slotTable(s) === 'samples')
+			.sort();
+	});
+
+	function initialRow(): Row {
+		const row = Object.fromEntries(columns.map((c) => [c.key, ''])) as Row;
+		if (data.preselectedProjectId) row.project_id = data.preselectedProjectId;
+		if (data.preselectedSiteId) row.site_id = data.preselectedSiteId;
+		return row;
+	}
 	function emptyRow(): Row {
-		return Object.fromEntries(columns.map((c) => [c.key, '']));
+		return Object.fromEntries(columns.map((c) => [c.key, ''])) as Row;
 	}
 
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
-	let rows = $state<Row[]>([emptyRow(), emptyRow(), emptyRow(), emptyRow(), emptyRow()]);
+	let rows = $state<Row[]>([initialRow()]);
 	let saving = $state(false);
 	let errorMsg = $state('');
 	let result = $state<{ imported: number; failed: number; errors: string[] } | null>(null);
@@ -151,7 +197,7 @@
 
 	function addRow() { rows = [...rows, emptyRow()]; }
 	function removeRow(i: number) {
-		if (i === 0) return;
+		if (rows.length <= 1) return;
 		rows = rows.filter((_, idx) => idx !== i);
 	}
 
@@ -170,7 +216,28 @@
 		});
 	}
 
-	function applyTemplate() {
+	/** Fill rows[0][field] across every other row (overwrites). Used by the
+	 *  per-parameter "fill →" button so users can broadcast one value across
+	 *  every sample without the (now-dropped) template-row concept. */
+	function fillRight(field: string) {
+		if (rows.length <= 1) return;
+		const value = rows[0][field];
+		rows = rows.map((row, i) => {
+			if (i === 0) return row;
+			const next = { ...row, [field]: value };
+			if (field === 'project_id' && next.site_id) {
+				const ok = (data.sites as any[]).some(
+					(s: any) => s.id === next.site_id && s.project_id === value
+				);
+				if (!ok) next.site_id = '';
+			}
+			return next;
+		});
+	}
+
+	/** Copy every non-empty value from rows[0] to every other row's empty
+	 *  cells. Non-destructive sibling to fillRight. */
+	function applyFirstToEmpty() {
 		const tpl = rows[0];
 		if (!tpl) return;
 		rows = rows.map((row, i) => {
@@ -211,35 +278,8 @@
 	}
 
 	const nonEmptyRows = $derived(
-		rows.slice(1).filter((r) => r.samp_name?.trim())
+		rows.filter((r) => r.samp_name?.trim())
 	);
-
-	function onTemplateKeydown(e: KeyboardEvent, field: string) {
-		if (e.key !== 'Enter') return;
-		e.preventDefault();
-		fillColumnFromTemplate(field);
-	}
-
-	/** Copy the template row's value for a field into every other row. Used by
-	 *  the Enter key in text inputs and by onchange for the dropdown columns
-	 *  (project/site) — selects don't produce a useful Enter event. */
-	function fillColumnFromTemplate(field: string) {
-		const value = rows[0][field];
-		rows = rows.map((row, i) => {
-			if (i === 0) return row;
-			const next = { ...row, [field]: value };
-			// If project_id changed and the current site_id isn't in the new
-			// project, blank the site so the row doesn't end up referencing a
-			// site from a different project.
-			if (field === 'project_id' && next.site_id) {
-				const ok = (data.sites as any[]).some(
-					(s: any) => s.id === next.site_id && s.project_id === value
-				);
-				if (!ok) next.site_id = '';
-			}
-			return next;
-		});
-	}
 
 	async function submit() {
 		errorMsg = '';
@@ -288,7 +328,7 @@
 		saving = false;
 		result = { imported, failed: errors.length, errors };
 		if (errors.length === 0) {
-			rows = [{ ...rows[0] }, emptyRow(), emptyRow(), emptyRow(), emptyRow()];
+			rows = [emptyRow()];
 		}
 	}
 
@@ -301,19 +341,13 @@
 <div class="max-w-6xl space-y-6">
 	<div>
 		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
-		<h1 class="text-2xl font-bold text-white mt-1">New Sample</h1>
+		<h1 class="text-2xl font-bold text-white mt-1">New Sample{nonEmptyRows.length > 1 ? 's' : ''}</h1>
 	</div>
 
-	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
-		<a href="/samples/new" class="px-4 py-1.5 rounded text-sm font-medium text-slate-400 hover:text-white transition-colors">Single</a>
-		<span class="px-4 py-1.5 rounded text-sm font-medium bg-ocean-600 text-white">Batch</span>
-	</div>
-
-	<!-- MIxS checklist + extension applied to every row. Matches the picker
-	     on the single-sample form so the two stay aligned. -->
+	<!-- MIxS checklist + extension applied to every sample created here. -->
 	<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/40">
 		<div>
-			<FieldLabel slot="mixs_checklist" for="batch_checklist" label="MIxS Checklist" description="Selects the MIxS LinkML class (MIGS, MIMS, MIMARKS-S, MIMARKS-C, etc.) that defines required/recommended slots for every row created here." />
+			<FieldLabel slot="mixs_checklist" for="batch_checklist" label="MIxS Checklist" description="Selects the MIxS LinkML class (MIGS, MIMS, MIMARKS-S, MIMARKS-C, etc.) that defines required/recommended parameters for every sample created here." />
 			<select id="batch_checklist" bind:value={batchChecklist} class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500">
 				{#each CHECKLIST_OPTIONS as opt}
 					<option value={opt.value}>{opt.label}</option>
@@ -321,7 +355,7 @@
 			</select>
 		</div>
 		<div>
-			<FieldLabel slot="extension" for="batch_extension" label="MIxS Extension" description="Environmental extension (formerly env_package) — water / soil / host-associated / etc. Narrows required slots further." />
+			<FieldLabel slot="extension" for="batch_extension" label="MIxS Extension" description="Environmental extension (formerly env_package) — water / soil / host-associated / etc. Narrows required parameters further." />
 			<select id="batch_extension" bind:value={batchExtension} class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500">
 				<option value="">None</option>
 				{#each EXTENSION_OPTIONS as opt}
@@ -329,9 +363,6 @@
 				{/each}
 			</select>
 		</div>
-		<p class="text-xs text-slate-500 sm:col-span-2">
-			Applied to every row created here. Equivalent to picking these on the single-sample form.
-		</p>
 	</div>
 
 	{#if errorMsg}
@@ -353,7 +384,7 @@
 		</div>
 	{/if}
 
-	<!-- Controls: buttons on top, then add-column + tips -->
+	<!-- Controls: submit / cancel / +Sample / +parameter picker -->
 	<div class="flex items-center gap-3 flex-wrap">
 		<button
 			type="button"
@@ -408,40 +439,38 @@
 			bind:people
 			personnel={data.personnel}
 			roleOptions={data.picklists.person_role}
-			label="People (applied to all rows)"
+			label="People (applied to all samples)"
 		/>
 		<p class="text-xs text-slate-500 flex-1 min-w-48">
-			Column <span class="text-ocean-400">⭐</span> is a template —
-			<kbd class="text-ocean-400">Enter</kbd> fills the parameter across every sample, or
-			<button type="button" onclick={applyTemplate} class="text-ocean-400 hover:text-ocean-300 underline">
-				apply all to empty cells
+			Each column is a sample. Use the <span class="text-ocean-400">fill&nbsp;→</span> button on a parameter
+			to broadcast sample #1's value across the row, or
+			<button type="button" onclick={applyFirstToEmpty} class="text-ocean-400 hover:text-ocean-300 underline">
+				copy #1 into empty cells
 			</button>.
 			Paste from a spreadsheet to auto-fill.
 		</p>
 	</div>
 
-	<!-- Shared across rows — per-row site datalist is inline because it filters
-	     by the row's current project. -->
+	<!-- Shared datalist for the Project combobox in every row. Per-row site
+	     datalists are rendered inline since they filter by the row's project. -->
 	<datalist id="batch-projects">
 		{#each data.projects as p}<option value={p.project_name}></option>{/each}
 	</datalist>
 
 	<!-- Transposed layout: each tbody row is one parameter, each sample is a
-	     column. Column ⭐ is the template — Enter on any cell fills that
-	     parameter across every sample to the right. -->
+	     column. Sections mirror the single-sample form (Required / Sampling &
+	     Storage / Other) with red ★ for MIxS-required and amber ★ for
+	     MIxS-recommended. -->
 	<div class="overflow-x-auto rounded-lg border border-slate-800">
 		<table class="text-sm border-collapse">
 			<thead>
 				<tr class="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
-					<th class="px-2 py-2 text-left font-medium w-48 sticky left-0 bg-slate-900 z-10">Parameter</th>
+					<th class="px-2 py-2 text-left font-medium w-56 sticky left-0 bg-slate-900 z-10">Parameter</th>
 					{#each rows as _row, i}
-						{@const isTpl = i === 0}
-						<th class="px-2 py-2 text-left font-medium min-w-40 {isTpl ? 'bg-ocean-900/20' : ''}">
+						<th class="px-2 py-2 text-left font-medium min-w-48">
 							<div class="flex items-center gap-1">
-								{#if isTpl}
-									<span class="text-ocean-400" title="Template — Enter fills this parameter across every sample">⭐ template</span>
-								{:else}
-									<span class="font-mono text-slate-500">#{i}</span>
+								<span class="font-mono text-slate-400">Sample #{i + 1}</span>
+								{#if rows.length > 1}
 									<button
 										type="button"
 										onclick={() => removeRow(i)}
@@ -455,88 +484,95 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each columns as col}
-					<tr class="border-b border-slate-800/50">
-						<!-- Parameter label (leftmost column, sticky so it stays visible when scrolling right) -->
-						<th class="px-2 py-1 text-left font-medium sticky left-0 bg-slate-950 z-10">
-							<div class="flex items-center gap-1">
-								<span class={col.required ? 'text-red-400' : 'text-slate-200'}>{col.label}</span>
-								{#if getSlot(col.key)}
-									<a
-										href="/glossary#{col.key}"
-										target="_blank"
-										rel="noopener"
-										class="text-slate-500 hover:text-ocean-400 text-xs"
-										title="Open {col.key} in glossary"
-										aria-label="Open {col.key} in glossary"
-									>&#9432;</a>
-								{/if}
-								{#if extraColumnKeys.includes(col.key)}
-									<button
-										type="button"
-										onclick={() => removeColumn(col.key)}
-										class="text-slate-600 hover:text-red-400 text-xs ml-auto"
-										title="Remove parameter"
-									>×</button>
-								{/if}
-							</div>
+				{#each sections as sec}
+					<tr class="bg-slate-900/60">
+						<th
+							colspan={rows.length + 1}
+							class="sticky left-0 px-3 py-1.5 text-left text-[11px] uppercase tracking-wider font-semibold text-slate-300 border-y border-slate-800"
+						>
+							{sec.title}
 						</th>
-						{#each rows as _row, i}
-							{@const isTpl = i === 0}
-							<td class="px-2 py-1 {isTpl ? 'bg-ocean-900/20' : ''}">
-								{#if col.widget === 'select-project'}
-									<input
-										type="text"
-										list="batch-projects"
-										value={projectNameFromId(rows[i][col.key])}
-										onchange={(e) => {
-											const name = e.currentTarget.value;
-											rows[i][col.key] = name ? projectIdFromName(name) : '';
-											if (rows[i].site_id && !sitesForProject(rows[i][col.key]).some((s: any) => s.id === rows[i].site_id)) {
-												rows[i].site_id = '';
-											}
-											if (isTpl) fillColumnFromTemplate(col.key);
-										}}
-										placeholder="Project…"
-										class="{inputCls} {!isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
-									/>
-								{:else if col.widget === 'select-site'}
-									<input
-										type="text"
-										list="batch-sites-{i}"
-										value={siteNameFromId(rows[i][col.key])}
-										onchange={(e) => {
-											const name = e.currentTarget.value;
-											rows[i][col.key] = name ? siteIdFromName(name, rows[i].project_id) : '';
-											if (isTpl) fillColumnFromTemplate(col.key);
-										}}
-										placeholder={rows[i].project_id ? 'Site…' : 'Pick project first'}
-										class="{inputCls} {!isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
-									/>
-									<datalist id="batch-sites-{i}">
-										{#each sitesForProject(rows[i].project_id) as s}<option value={s.site_name}></option>{/each}
-									</datalist>
-								{:else if col.key === 'collection_date'}
-									<input
-										type="date"
-										bind:value={rows[i][col.key]}
-										onpaste={(e) => handlePaste(e, i, col.key)}
-										onkeydown={isTpl ? (e) => onTemplateKeydown(e, col.key) : undefined}
-										class="{inputCls} {col.required && !isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
-									/>
-								{:else}
-									<input
-										type="text"
-										bind:value={rows[i][col.key]}
-										onpaste={(e) => handlePaste(e, i, col.key)}
-										onkeydown={isTpl ? (e) => onTemplateKeydown(e, col.key) : undefined}
-										placeholder={col.placeholder}
-										class="{inputCls} {col.required && !isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
-									/>
-								{/if}
-							</td>
-						{/each}
 					</tr>
+					{#each sec.cols as col}
+						<tr class="border-b border-slate-800/50">
+							<!-- Parameter label cell (sticky for horizontal scrolling). -->
+							<th class="px-2 py-1 text-left font-medium sticky left-0 bg-slate-950 z-10 align-top">
+								<div class="flex items-start gap-1">
+									<span class="text-slate-200 leading-tight">{col.label}</span>
+									{#if col.required}<span class="text-rose-400" title="Required by MIxS" aria-label="required">★</span>{:else if col.recommended}<span class="text-amber-400" title="Recommended by MIxS" aria-label="recommended">★</span>{/if}
+									{#if getSlot(col.key)}
+										<GlossaryDoc slot={col.key} iconOnly class="ml-0.5" />
+									{/if}
+									{#if rows.length > 1}
+										<button
+											type="button"
+											onclick={() => fillRight(col.key)}
+											class="ml-auto text-[11px] text-slate-500 hover:text-ocean-400"
+											title="Fill this parameter across every sample"
+										>fill&nbsp;→</button>
+									{/if}
+									{#if extraColumnKeys.includes(col.key)}
+										<button
+											type="button"
+											onclick={() => removeColumn(col.key)}
+											class="text-slate-600 hover:text-red-400 text-xs"
+											title="Remove parameter"
+										>×</button>
+									{/if}
+								</div>
+							</th>
+							{#each rows as _row, i}
+								<td class="px-2 py-1 align-top">
+									{#if col.widget === 'select-project'}
+										<input
+											type="text"
+											list="batch-projects"
+											value={projectNameFromId(rows[i][col.key])}
+											onchange={(e) => {
+												const name = e.currentTarget.value;
+												rows[i][col.key] = name ? projectIdFromName(name) : '';
+												if (rows[i].site_id && !sitesForProject(rows[i][col.key]).some((s: any) => s.id === rows[i].site_id)) {
+													rows[i].site_id = '';
+												}
+											}}
+											placeholder="Project…"
+											class="{inputCls} {!rows[i][col.key] && col.required ? 'border-red-800' : ''}"
+										/>
+									{:else if col.widget === 'select-site'}
+										<input
+											type="text"
+											list="batch-sites-{i}"
+											value={siteNameFromId(rows[i][col.key])}
+											onchange={(e) => {
+												const name = e.currentTarget.value;
+												rows[i][col.key] = name ? siteIdFromName(name, rows[i].project_id) : '';
+											}}
+											placeholder={rows[i].project_id ? 'Site…' : 'Pick project first'}
+											class="{inputCls} {!rows[i][col.key] && col.required ? 'border-red-800' : ''}"
+										/>
+										<datalist id="batch-sites-{i}">
+											{#each sitesForProject(rows[i].project_id) as s}<option value={s.site_name}></option>{/each}
+										</datalist>
+									{:else if col.key === 'collection_date'}
+										<input
+											type="date"
+											bind:value={rows[i][col.key]}
+											onpaste={(e) => handlePaste(e, i, col.key)}
+											class="{inputCls} {col.required && !rows[i][col.key] ? 'border-red-800' : ''}"
+										/>
+									{:else}
+										<input
+											type="text"
+											bind:value={rows[i][col.key]}
+											onpaste={(e) => handlePaste(e, i, col.key)}
+											placeholder={col.placeholder}
+											class="{inputCls} {col.required && !rows[i][col.key] ? 'border-red-800' : ''}"
+										/>
+									{/if}
+								</td>
+							{/each}
+						</tr>
+					{/each}
 				{/each}
 			</tbody>
 		</table>

@@ -55,7 +55,7 @@
 </script>
 
 <label for={forAttr ?? slot} class="block text-sm font-medium text-slate-300 mb-1 relative {cls}">
-	{displayLabel}{#if suffix} {suffix}{/if}{#if required}<span class="text-rose-400 ml-0.5">*</span>{:else if recommended}<span class="text-amber-400 ml-0.5" title="Recommended by MIxS">*</span>{/if}
+	{displayLabel}{#if suffix} {suffix}{/if}{#if required}<span class="text-rose-400 ml-0.5" title="Required by MIxS" aria-label="required">★</span>{:else if recommended}<span class="text-amber-400 ml-0.5" title="Recommended by MIxS" aria-label="recommended">★</span>{/if}
 
 	{#if hasDoc}
 		<button
