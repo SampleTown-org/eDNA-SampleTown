@@ -327,7 +327,7 @@
 				type="text"
 				bind:value={searchQuery}
 				placeholder="Search name, type, ID…"
-				class="flex-1 min-w-0 sm:max-w-xs px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500 text-sm"
+				class="flex-1 min-w-0 sm:max-w-xs px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500 text-sm scroll-mt-24"
 			/>
 			<div class="flex items-center gap-2">
 				{#if selectedIds.size > 0}
