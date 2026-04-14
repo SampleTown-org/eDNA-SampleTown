@@ -540,7 +540,7 @@
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 
 	<!-- Top-level tabs -->
-	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
+	<div class="flex flex-wrap gap-1 p-1 bg-slate-800 rounded-lg w-fit max-w-full">
 		<button onclick={() => { tabType = 'naming'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'naming' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Naming</button>
 		<button onclick={() => { tabType = 'category'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'category' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Picklists</button>
 		<button onclick={() => { tabType = 'primers'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'primers' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Primer Sets</button>
@@ -615,7 +615,7 @@
 
 	{:else if tabType === 'category'}
 	<!-- Vocabulary group tabs -->
-	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
+	<div class="flex flex-wrap gap-1 p-1 bg-slate-800 rounded-lg w-fit max-w-full">
 		{#each VOCAB_GROUPS as group}
 			<button onclick={() => { activeVocabGroup = group.label; activeCategory = group.categories[0]; clearMsg(); }}
 				class="px-4 py-1.5 rounded text-sm font-medium transition-colors {activeVocabGroup === group.label ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">

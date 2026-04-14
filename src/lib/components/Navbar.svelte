@@ -1,6 +1,9 @@
 <script lang="ts">
 	import type { User } from '$lib/types';
 	import { cart } from '$lib/stores/cart.svelte';
+	import Scanner from './Scanner.svelte';
+
+	let scanOpen = $state(false);
 
 	interface Props {
 		user: User | null;
@@ -77,6 +80,18 @@
 							<path d="m20 20-3.5-3.5" />
 						</svg>
 					</a>
+					<button
+						type="button"
+						onclick={() => (scanOpen = true)}
+						class="text-slate-400 hover:text-white"
+						title="Scan QR code"
+						aria-label="Scan QR code"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+							<path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/>
+							<path d="M7 8h3v3H7zM14 8h3v3h-3zM7 13h3v3H7zM14 13h3v3h-3z"/>
+						</svg>
+					</button>
 					<!-- Order: sign out, emoji, user, cart -->
 					<form method="POST" action="/auth/logout" class="inline">
 						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
@@ -141,3 +156,5 @@
 		{/if}
 	</div>
 </nav>
+
+<Scanner bind:open={scanOpen} onclose={() => (scanOpen = false)} />
