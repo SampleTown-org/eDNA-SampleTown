@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -148,18 +149,14 @@
 
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="library_type" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=library_strategy" target="_blank" class="hover:text-ocean-400">Library Strategy (SRA)</a>
-					</label>
+					<FieldLabel slot="library_strategy" for="library_type" label="Library Strategy (SRA)" picklistCategory="library_strategy" description="SRA library strategy — AMPLICON, WGS, RNA-Seq, etc." />
 					<select id="library_type" bind:value={plateForm.library_type} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.library_strategy ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select>
 				</div>
 				<div>
-					<label for="library_prep_kit" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=library_prep_kit" target="_blank" class="hover:text-ocean-400">Prep Kit</a>
-					</label>
+					<FieldLabel slot="library_prep_kit" for="library_prep_kit" label="Prep Kit" picklistCategory="library_prep_kit" description="Commercial kit used for library preparation." />
 					<select id="library_prep_kit" bind:value={plateForm.library_prep_kit} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.library_prep_kit ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
@@ -169,18 +166,14 @@
 
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="library_source" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=library_source" target="_blank" class="hover:text-ocean-400">Source (SRA)</a>
-					</label>
+					<FieldLabel slot="library_source" for="library_source" label="Source (SRA)" picklistCategory="library_source" description="SRA library source — GENOMIC, METAGENOMIC, TRANSCRIPTOMIC, etc." />
 					<select id="library_source" bind:value={plateForm.library_source} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.library_source ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
 					</select>
 				</div>
 				<div>
-					<label for="library_selection" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=library_selection" target="_blank" class="hover:text-ocean-400">Selection (SRA)</a>
-					</label>
+					<FieldLabel slot="library_selection" for="library_selection" label="Selection (SRA)" picklistCategory="library_selection" description="SRA library selection — RANDOM, PCR, cDNA, etc." />
 					<select id="library_selection" bind:value={plateForm.library_selection} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.library_selection ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}
@@ -229,9 +222,7 @@
 			</div>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
-					<label for="barcode" class="block text-sm font-medium text-slate-300 mb-1">
-						<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Barcode</a>
-					</label>
+					<FieldLabel slot="barcode" for="barcode" label="Barcode" picklistCategory="barcode" description="Barcode ID from the library prep kit (ONT BC01–BC96, Illumina i7 label, etc.)." />
 					<select id="barcode" bind:value={form.barcode} class={selectCls}>
 						<option value="">—</option>
 						{#each data.picklists.barcode ?? [] as opt}<option value={opt.value}>{opt.label}</option>{/each}

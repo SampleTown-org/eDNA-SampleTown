@@ -11,6 +11,7 @@
 	 * person can appear twice with different roles (e.g. "collector" + "lab
 	 * tech").
 	 */
+	import GlossaryDoc from './GlossaryDoc.svelte';
 
 	type Personnel = {
 		id: string;
@@ -74,9 +75,10 @@
 </script>
 
 <div class="space-y-2">
-	<label class="block text-sm font-medium text-slate-300">
-		<a href="/settings?tab=people" target="_blank" class="hover:text-ocean-400">{label}</a>
-	</label>
+	<div class="flex items-center gap-1 text-sm font-medium text-slate-300">
+		<span>{label}</span>
+		<GlossaryDoc slot="personnel" iconOnly description="People who worked on this record — attribution exported alongside the entity. Manage the roster under Settings → People." />
+	</div>
 
 	<div class="flex flex-wrap gap-2 items-center">
 		{#each people as p, idx}
@@ -125,9 +127,10 @@
 				</select>
 			</div>
 			<div class="flex-1 min-w-36">
-				<label class="block text-xs text-slate-500 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Role</a>
-				</label>
+				<div class="flex items-center gap-1 text-xs text-slate-500 mb-1">
+					<span>Role</span>
+					<GlossaryDoc slot="person_role" iconOnly description="Per-record role (collector, extractor, PCR operator, etc.). Manage the picklist under Settings → Picklists → Person Roles." />
+				</div>
 				<select
 					bind:value={pickerRole}
 					class="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"

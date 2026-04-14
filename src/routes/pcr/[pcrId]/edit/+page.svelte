@@ -182,10 +182,7 @@
 
 			<!-- Primer Set picker (mirrors pcr/new) -->
 			<div>
-				<label class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=primers" target="_blank" class="hover:text-ocean-400">Primer Set</a>
-					{#if plateGene}<span class="text-xs text-slate-500 font-normal">— {plateGene}{plateForm.target_subfragment ? ` ${plateForm.target_subfragment}` : ''}</span>{/if}
-				</label>
+				<FieldLabel slot="primer_set" label="Primer Set" description="Pre-defined forward + reverse primer pair. Manage via Settings → Primer Sets." suffix={plateGene ? `— ${plateGene}${plateForm.target_subfragment ? ` ${plateForm.target_subfragment}` : ''}` : ''} />
 				<select bind:value={plateForm.primer_set_id} onchange={onPrimerSetChange} class={selectCls}>
 					<option value="">Select primer set...</option>
 					{#each data.primerSets ?? [] as ps}
@@ -207,9 +204,7 @@
 
 			<!-- PCR Protocol picker (mirrors pcr/new) -->
 			<div>
-				<label class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=protocols" target="_blank" class="hover:text-ocean-400">PCR Protocol</a>
-				</label>
+				<FieldLabel slot="pcr_protocol" label="PCR Protocol" description="Named polymerase + cycling-conditions preset. Manage via Settings → PCR Protocols." />
 				<select bind:value={selectedProtocolId} onchange={onProtocolChange} class={selectCls}>
 					<option value="">Keep current ({plateForm.polymerase || '—'} · {plateForm.annealing_temp_c || '—'}°C · {plateForm.num_cycles || '—'} cycles)</option>
 					{#each data.pcrProtocols ?? [] as proto}

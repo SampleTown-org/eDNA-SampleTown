@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -117,18 +118,14 @@
 
 		<div class="grid grid-cols-3 gap-4">
 			<div>
-				<label class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Platform</a>
-				</label>
+				<FieldLabel slot="seq_platform" label="Platform" picklistCategory="seq_platform" description="SRA/INSDC sequencing platform (Illumina, Oxford Nanopore, PacBio, Ion Torrent)." />
 				<select bind:value={form.platform} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.seq_platform as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 			<div>
-				<label class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Instrument</a>
-				</label>
+				<FieldLabel slot="seq_instrument" label="Instrument" picklistCategory="seq_instrument" description="Specific instrument model." />
 				<select bind:value={form.instrument_model} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.seq_instrument as opt}<option value={opt.value}>{opt.label}</option>{/each}

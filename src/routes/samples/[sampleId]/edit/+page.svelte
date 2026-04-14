@@ -124,9 +124,7 @@
 		<!-- Top: checklist + extension drive every bucket below. -->
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/40">
 			<div>
-				<label for="mixs_checklist" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Checklist</a>
-				</label>
+				<FieldLabel slot="mixs_checklist" for="mixs_checklist" label="MIxS Checklist" description="Selects the MIxS LinkML class (MIGS, MIMS, MIMARKS-S, MIMARKS-C, etc.) that defines required/recommended parameters for this sample." />
 				<select id="mixs_checklist" bind:value={form.mixs_checklist} class={selectCls}>
 					{#each CHECKLIST_OPTIONS as opt}
 						<option value={opt.value}>{opt.label}</option>
@@ -135,9 +133,7 @@
 				<p class="text-xs text-slate-500 mt-1">{CHECKLIST_OPTIONS.find(o => o.value === form.mixs_checklist)?.description}</p>
 			</div>
 			<div>
-				<label for="extension" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary" target="_blank" class="hover:text-ocean-400">MIxS Extension</a>
-				</label>
+				<FieldLabel slot="extension" for="extension" label="MIxS Extension" description="Environmental extension (formerly env_package) — water / soil / host-associated / etc. Narrows required parameters further." />
 				<select id="extension" bind:value={form.extension} class={selectCls}>
 					<option value="">None</option>
 					{#each EXTENSION_OPTIONS as opt}

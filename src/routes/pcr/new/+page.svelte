@@ -224,7 +224,7 @@
 
 			<!-- Primer Set selector -->
 			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=primers" target="_blank" class="hover:text-ocean-400">Primer Set</a></label>
+				<FieldLabel slot="primer_set" label="Primer Set" description="Pre-defined forward + reverse primer pair (16S V4, 18S V9, CO1 Leray, etc.). Manage via Settings → Primer Sets." />
 				<select bind:value={plate.primer_set_id} onchange={onPrimerSetChange} class={selectCls}>
 					<option value="">Select primer set...</option>
 					{#each data.primerSets as ps}
@@ -248,7 +248,7 @@
 
 			<!-- Protocol selector -->
 			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=protocols" target="_blank" class="hover:text-ocean-400">PCR Protocol</a></label>
+				<FieldLabel slot="pcr_protocol" label="PCR Protocol" description="Named polymerase + cycling-conditions preset. Manage via Settings → PCR Protocols." />
 				<select bind:value={selectedProtocolId} onchange={onProtocolChange} class={selectCls}>
 					<option value="">Select protocol...</option>
 					{#each data.pcrProtocols as proto}

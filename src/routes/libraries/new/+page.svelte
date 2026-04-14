@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import PlateView from '$lib/components/PlateView.svelte';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
 	import { nameFromTemplate } from '$lib/naming';
 	import type { PageData } from './$types';
@@ -293,10 +295,14 @@
 		<!-- Plate fields -->
 		<div class="lg:col-span-2 space-y-4">
 			<div class="grid grid-cols-2 gap-4">
-				<div><label class="block text-xs font-medium text-slate-400 mb-1">Plate Name</label>
-					<input type="text" bind:value={plate.plate_name} class={inputCls} placeholder={data.namingTemplates?.library_plate_name || 'e.g., 16S_LIB_001'} /></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1">Prep Date</label>
-					<input type="date" bind:value={plate.library_prep_date} class={inputCls} /></div>
+				<div>
+					<FieldLabel slot="plate_name" label="Plate Name" description="Human-readable name for this library plate. Unique within the lab." />
+					<input type="text" bind:value={plate.plate_name} class={inputCls} placeholder={data.namingTemplates?.library_plate_name || 'e.g., 16S_LIB_001'} />
+				</div>
+				<div>
+					<FieldLabel slot="library_prep_date" label="Prep Date" description="Date the library prep was performed." />
+					<input type="date" bind:value={plate.library_prep_date} class={inputCls} />
+				</div>
 			</div>
 			<PeoplePicker
 				bind:people
@@ -306,31 +312,41 @@
 				label="People"
 			/>
 			<div class="grid grid-cols-2 gap-4">
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_strategy" target="_blank" class="hover:text-ocean-400">Library Strategy (SRA)</a></label>
+				<div>
+					<FieldLabel slot="library_strategy" label="Library Strategy (SRA)" picklistCategory="library_strategy" description="SRA library strategy — AMPLICON, WGS, RNA-Seq, etc. Controls how reads are interpreted at submission." />
 					<select bind:value={plate.library_type} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.library_strategy as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_prep_kit" target="_blank" class="hover:text-ocean-400">Prep Kit</a></label>
+					</select>
+				</div>
+				<div>
+					<FieldLabel slot="library_prep_kit" label="Prep Kit" picklistCategory="library_prep_kit" description="Commercial kit used for library preparation (e.g., NEBNext Ultra II, Nextera XT)." />
 					<select bind:value={plate.library_prep_kit} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.library_prep_kit as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
+					</select>
+				</div>
 			</div>
 			<div class="grid grid-cols-2 gap-4">
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_source" target="_blank" class="hover:text-ocean-400">Source (SRA)</a></label>
+				<div>
+					<FieldLabel slot="library_source" label="Source (SRA)" picklistCategory="library_source" description="SRA library source — GENOMIC, METAGENOMIC, TRANSCRIPTOMIC, etc." />
 					<select bind:value={plate.library_source} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.library_source as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
-				<div><label class="block text-xs font-medium text-slate-400 mb-1"><a href="/settings?tab=library_selection" target="_blank" class="hover:text-ocean-400">Selection (SRA)</a></label>
+					</select>
+				</div>
+				<div>
+					<FieldLabel slot="library_selection" label="Selection (SRA)" picklistCategory="library_selection" description="SRA library selection — RANDOM, PCR, cDNA, etc." />
 					<select bind:value={plate.library_selection} class={selectCls}>
 						<option value="">Select...</option>
 						{#each data.picklists.library_selection as opt}<option value={opt.value}>{opt.label}</option>{/each}
-					</select></div>
+					</select>
+				</div>
 			</div>
-			<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
-				<input type="text" bind:value={plate.notes} class={inputCls} /></div>
+			<div>
+				<FieldLabel slot="notes" label="Notes" description="Free-form notes about this library plate." />
+				<input type="text" bind:value={plate.notes} class={inputCls} />
+			</div>
 		</div>
 	</div>
 
@@ -364,7 +380,12 @@
 					<th class="text-left pb-2 pr-3 font-medium min-w-36">Library Name</th>
 					<th class="text-left pb-2 pr-3 font-medium w-36">i7 Index</th>
 					<th class="text-left pb-2 pr-3 font-medium w-36">i5 Index</th>
-					<th class="text-left pb-2 pr-3 font-medium w-24"><a href="/settings?tab=barcode" target="_blank" class="hover:text-ocean-400">Barcode</a></th>
+					<th class="text-left pb-2 pr-3 font-medium w-24">
+						<span class="inline-flex items-center gap-1">
+							Barcode
+							<GlossaryDoc slot="barcode" iconOnly description="Barcode ID from the library prep kit. Manage the picklist under Settings → Picklists → Barcodes." />
+						</span>
+					</th>
 					<th class="text-left pb-2 pr-3 font-medium w-24">Conc. ng/µL</th>
 					<th class="pb-2 w-8"></th>
 				</tr>

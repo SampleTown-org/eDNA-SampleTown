@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
@@ -107,16 +108,20 @@
 			label="People"
 		/>
 		<div class="grid grid-cols-3 gap-4">
-			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=seq_platform" target="_blank" class="hover:text-ocean-400">Platform</a></label>
+			<div>
+				<FieldLabel slot="seq_platform" label="Platform" picklistCategory="seq_platform" description="SRA/INSDC sequencing platform (Illumina, Oxford Nanopore, PacBio, Ion Torrent)." />
 				<select bind:value={form.platform} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.seq_platform as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select></div>
-			<div><label class="block text-sm font-medium text-slate-300 mb-1"><a href="/settings?tab=seq_instrument" target="_blank" class="hover:text-ocean-400">Instrument</a></label>
+				</select>
+			</div>
+			<div>
+				<FieldLabel slot="seq_instrument" label="Instrument" picklistCategory="seq_instrument" description="Specific instrument model (MiSeq, NovaSeq 6000, MinION, etc.)." />
 				<select bind:value={form.instrument_model} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.seq_instrument as opt}<option value={opt.value}>{opt.label}</option>{/each}
-				</select></div>
+				</select>
+			</div>
 		</div>
 		<div class="grid grid-cols-2 gap-4">
 			<div><label for="flow_cell_id" class="block text-sm font-medium text-slate-300 mb-1">Flow Cell ID</label>

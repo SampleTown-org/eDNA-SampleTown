@@ -160,18 +160,14 @@
 				</select>
 			</div>
 			<div>
-				<label for="storage_room" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Room/Freezer</a>
-				</label>
+				<FieldLabel slot="storage_room" for="storage_room" label="Room/Freezer" picklistCategory="storage_room" description="Physical room or freezer where this extract is stored." />
 				<select id="storage_room" bind:value={form.storage_room} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.storage_room as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 			<div>
-				<label for="storage_box" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=category" target="_blank" class="hover:text-ocean-400">Storage Box</a>
-				</label>
+				<FieldLabel slot="storage_box" for="storage_box" label="Storage Box" picklistCategory="storage_box" description="Labeled box or rack within the freezer." />
 				<select id="storage_box" bind:value={form.storage_box} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.storage_box as opt}<option value={opt.value}>{opt.label}</option>{/each}
