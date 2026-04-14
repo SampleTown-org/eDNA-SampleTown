@@ -27,6 +27,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- Force password change on next login (used for the seeded admin/admin
     -- account and for admin-created users with a temporary password).
     must_change_password INTEGER NOT NULL DEFAULT 0,
+    -- Soft delete. Deleted users stay in the table so their created_by /
+    -- user_id references elsewhere still resolve for attribution; they just
+    -- can't log in and don't appear in the admin user list.
+    is_deleted INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

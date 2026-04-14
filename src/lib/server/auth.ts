@@ -72,6 +72,7 @@ export function validateSession(sessionId: string): User | null {
 		WHERE s.id = ?
 		  AND s.expires_at > datetime('now')
 		  AND u.is_approved = 1
+		  AND u.is_deleted = 0
 	`).get(sessionId) as User | undefined;
 	return row ?? null;
 }
@@ -119,8 +120,11 @@ export function upsertGitHubUser(githubUser: {
 	avatar_url: string | null;
 }): User {
 	const db = getDb();
+	// A soft-deleted row blocks GitHub re-link — the admin has to restore
+	// it first (directly in the DB) rather than having the callback
+	// silently un-delete them.
 	const existing = db
-		.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.github_id = ?`)
+		.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.github_id = ? AND u.is_deleted = 0`)
 		.get(githubUser.id) as User | undefined;
 
 	if (existing) {
@@ -204,7 +208,7 @@ const DUMMY_BCRYPT_HASH = bcrypt.hashSync('does-not-matter', 10);
 export async function verifyLocalUser(username: string, password: string): Promise<User | null> {
 	const db = getDb();
 	const row = db
-		.prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_local_account = 1')
+		.prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_local_account = 1 AND is_deleted = 0')
 		.get(username) as { id: string; password_hash: string } | undefined;
 
 	// Always run bcrypt.compare so unknown-username and wrong-password take

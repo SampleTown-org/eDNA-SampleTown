@@ -56,6 +56,7 @@ function runMigrations(db: Database.Database) {
 			if (!msg.includes('no such column') && !msg.includes('duplicate column')) throw err;
 		}
 	};
+	addColumn('users', 'is_deleted INTEGER NOT NULL DEFAULT 0');
 	addColumn('pcr_amplifications', 'well_label TEXT');
 	addColumn('library_preps', 'well_label TEXT');
 	addColumn('users', 'avatar_emoji TEXT');

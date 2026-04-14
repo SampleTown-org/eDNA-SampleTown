@@ -64,30 +64,11 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	}
 };
 
-/** Every table that has a non-cascading `created_by` / `user_id` →
- *  users(id) reference. When deleting a user we NULL these out inside
- *  the same transaction so the FK constraint doesn't block the delete.
- *  (Sessions and saved_carts cascade automatically.) */
-const USER_NULLABLE_REFS: { table: string; col: string }[] = [
-	{ table: 'projects', col: 'created_by' },
-	{ table: 'sites', col: 'created_by' },
-	{ table: 'samples', col: 'created_by' },
-	{ table: 'extracts', col: 'created_by' },
-	{ table: 'pcr_plates', col: 'created_by' },
-	{ table: 'pcr_amplifications', col: 'created_by' },
-	{ table: 'library_plates', col: 'created_by' },
-	{ table: 'library_preps', col: 'created_by' },
-	{ table: 'sequencing_runs', col: 'created_by' },
-	{ table: 'analyses', col: 'created_by' },
-	{ table: 'site_photos', col: 'created_by' },
-	{ table: 'sample_photos', col: 'created_by' },
-	{ table: 'personnel', col: 'user_id' },
-	{ table: 'feedback', col: 'user_id' }
-];
-
-/** Delete a user. Cannot delete self. Nulls out created_by/user_id
- *  references across the data tables (so historical records persist
- *  as authored-by-nobody); cascades sessions + saved_carts via FK. */
+/** Soft-delete a user. Keeps the row (so created_by / user_id
+ *  references to it still resolve for attribution — dashboard
+ *  activities, people rosters, etc.) but flips is_deleted=1,
+ *  revokes all sessions, and clears the password so a resurrected
+ *  row can't still log in with the old credential. */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const me = requireAdmin(locals);
 	if (params.id === me.id) {
@@ -96,10 +77,16 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
 		const db = getDb();
 		const deleted = db.transaction(() => {
-			for (const { table, col } of USER_NULLABLE_REFS) {
-				db.prepare(`UPDATE ${table} SET ${col} = NULL WHERE ${col} = ?`).run(params.id);
-			}
-			return db.prepare('DELETE FROM users WHERE id = ?').run(params.id).changes;
+			db.prepare('DELETE FROM sessions WHERE user_id = ?').run(params.id);
+			return db.prepare(
+				`UPDATE users
+				   SET is_deleted = 1,
+				       password_hash = NULL,
+				       is_approved = 0,
+				       must_change_password = 0,
+				       updated_at = datetime('now')
+				 WHERE id = ? AND is_deleted = 0`
+			).run(params.id).changes;
 		})();
 		if (deleted === 0) throw error(404, 'User not found');
 		return json({ ok: true });

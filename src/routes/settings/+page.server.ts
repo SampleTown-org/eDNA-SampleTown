@@ -43,6 +43,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 					        (password_hash IS NOT NULL) AS has_password,
 					        created_at, updated_at
 					   FROM users
+					   WHERE is_deleted = 0
 					   ORDER BY is_approved ASC, username`
 				)
 				.all()

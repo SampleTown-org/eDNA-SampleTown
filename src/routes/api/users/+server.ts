@@ -19,7 +19,9 @@ const SAFE_USER_LIST_COLS = `
 
 export const GET: RequestHandler = async () => {
 	const db = getDb();
-	const users = db.prepare(`SELECT ${SAFE_USER_LIST_COLS} FROM users ORDER BY username`).all();
+	const users = db.prepare(
+		`SELECT ${SAFE_USER_LIST_COLS} FROM users WHERE is_deleted = 0 ORDER BY username`
+	).all();
 	return json(users);
 };
 
