@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import LabelGenerator from '$lib/components/LabelGenerator.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -82,7 +83,7 @@
 		return 'MIxS';
 	}
 
-	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback';
+	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback' | 'labels';
 
 	// --- Search filter (shared across the list-based tabs, reset on tab switch) ---
 	let searchQuery = $state('');
@@ -290,7 +291,7 @@
 
 	// Support ?tab= URL parameter to deep-link to a category
 	const urlTab = $page.url.searchParams.get('tab');
-	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'feedback' ? 'feedback' : 'category';
+	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : 'category';
 	const initialCategory = (urlTab && urlTab in CATEGORY_LABELS) ? urlTab : 'geo_loc_name';
 
 	let tabType = $state<TabType>(initialTab);
@@ -545,6 +546,7 @@
 		<button onclick={() => { tabType = 'primers'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'primers' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Primer Sets</button>
 		<button onclick={() => { tabType = 'protocols'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'protocols' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">PCR Protocols</button>
 		<button onclick={() => { tabType = 'people'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'people' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">People</button>
+		<button onclick={() => { tabType = 'labels'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'labels' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Labels</button>
 		{#if data.isAdmin}
 			<button onclick={() => { tabType = 'feedback'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'feedback' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">
 				Feedback
@@ -555,8 +557,8 @@
 		{/if}
 	</div>
 
-	<!-- Search filter — applies to list-based tabs (skipped on Naming + Picklists, which have their own navigation). -->
-	{#if tabType !== 'naming' && tabType !== 'category'}
+	<!-- Search filter — applies to list-based tabs (skipped on Naming + Picklists + Labels, which have their own navigation). -->
+	{#if tabType !== 'naming' && tabType !== 'category' && tabType !== 'labels'}
 		<div class="flex">
 			<input
 				type="text"
@@ -1057,5 +1059,8 @@
 			</div>
 		{/if}
 	</div>
+
+	{:else if tabType === 'labels'}
+	<LabelGenerator />
 	{/if}
 </div>
