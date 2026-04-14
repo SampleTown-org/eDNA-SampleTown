@@ -3,6 +3,7 @@
 	import MapPicker from '$lib/components/MapPicker.svelte';
 	import { goto } from '$app/navigation';
 	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
+	import { makeRankedHueMap, hueToMapPin, hashHue } from '$lib/color-rank';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -116,13 +117,14 @@
 	/** Mirrored from the DataTable so the map pins can adopt the same tint. */
 	let colorByKey = $state('');
 
+	/** Rank-based pin coloring — consistent with the DataTable's tint so
+	 *  gradients line up across the map and the table. */
+	const pinRankMap = $derived(colorByKey ? makeRankedHueMap(displaySamples, colorByKey) : null);
 	function pinColorForValue(v: unknown): string | undefined {
 		if (v == null || v === '') return undefined;
 		const s = String(v);
-		let h = 0;
-		for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-		const hue = Math.abs(h) % 360;
-		return `hsl(${hue}, 65%, 55%)`;
+		const hue = pinRankMap?.get(s) ?? hashHue(s);
+		return hueToMapPin(hue);
 	}
 
 	/** Friendly column label for the color-by tooltip line. Columns are the

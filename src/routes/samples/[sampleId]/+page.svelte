@@ -34,16 +34,17 @@
 		uploadError = null;
 		uploading = true;
 		try {
+			const failures: string[] = [];
 			for (const file of files) {
 				const fd = new FormData();
 				fd.append('file', file);
 				const res = await fetch(`/api/samples/${sample.id}/photos`, { method: 'POST', body: fd });
 				if (!res.ok) {
 					const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-					uploadError = `${file.name}: ${body.error ?? 'Upload failed'}`;
-					break;
+					failures.push(`${file.name}: ${body.error ?? 'Upload failed'}`);
 				}
 			}
+			if (failures.length > 0) uploadError = failures.join('\n');
 			await invalidateAll();
 		} finally {
 			uploading = false;
@@ -306,7 +307,7 @@
 			</label>
 		</div>
 		{#if uploadError}
-			<div class="mb-3 px-3 py-2 rounded border border-red-900 bg-red-950/40 text-sm text-red-300">{uploadError}</div>
+			<div class="mb-3 px-3 py-2 rounded border border-red-900 bg-red-950/40 text-sm text-red-300 whitespace-pre-line">{uploadError}</div>
 		{/if}
 		{#if photos.length === 0}
 			<div class="rounded-lg border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">

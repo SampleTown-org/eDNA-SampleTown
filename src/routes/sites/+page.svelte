@@ -3,6 +3,7 @@
 	import MapPicker from '$lib/components/MapPicker.svelte';
 	import { goto } from '$app/navigation';
 	import { cart, type CartEntityType } from '$lib/stores/cart.svelte';
+	import { makeRankedHueMap, hueToMapPin, hashHue } from '$lib/color-rank';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -71,16 +72,15 @@
 		{ key: 'photo_count', label: 'Photos', sortable: true }
 	];
 
-	/** Same hash → HSL hue function as DataTable.colorForValue, but shaped for
-	 *  Leaflet circleMarker fills (slightly more saturation/lightness so the
-	 *  tint reads against tile imagery). */
+	/** Rank-based pin coloring — same ordering as the DataTable's color tint,
+	 *  so the map reads as a visual gradient when the color-by column is
+	 *  numeric (e.g. sample_count, depth). */
+	const pinRankMap = $derived(colorByKey ? makeRankedHueMap(sites, colorByKey) : null);
 	function pinColorForValue(v: unknown): string | undefined {
 		if (v == null || v === '') return undefined;
 		const s = String(v);
-		let h = 0;
-		for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-		const hue = Math.abs(h) % 360;
-		return `hsl(${hue}, 65%, 55%)`;
+		const hue = pinRankMap?.get(s) ?? hashHue(s);
+		return hueToMapPin(hue);
 	}
 
 	/** Friendly label for the color-by column so the tooltip reads

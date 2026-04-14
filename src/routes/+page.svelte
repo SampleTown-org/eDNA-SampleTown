@@ -95,7 +95,7 @@
 	};
 
 	// Sort control — supports sorting by any column
-	let sortKey = $state<'date' | 'type' | 'name' | 'detail' | 'updated_at'>('date');
+	let sortKey = $state<'date' | 'type' | 'name' | 'detail' | 'updated_at'>('updated_at');
 	let sortDir = $state<'asc' | 'desc'>('desc');
 
 	function toggleSort(key: typeof sortKey) {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { makeRankedHueMap, hueToTableFill, hashHue } from '$lib/color-rank';
 
 	interface Column {
 		key: string;
@@ -82,18 +83,11 @@
 		colorByKey = colorByKey === key ? '' : key;
 	}
 
-	/** Deterministic hash → HSL hue. Same input value → same color across renders. */
-	function hashHue(s: string): number {
-		let h = 0;
-		for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-		return Math.abs(h) % 360;
-	}
-
 	function colorForValue(v: unknown): string {
 		if (v == null || v === '') return '';
-		const hue = hashHue(String(v));
-		// Low-saturation, low-lightness tint that plays well with the dark theme.
-		return `background-color: hsl(${hue}, 30%, 22%);`;
+		const s = String(v);
+		const hue = colorRankMap?.get(s) ?? hashHue(s);
+		return hueToTableFill(hue);
 	}
 
 	let filteredRows = $derived.by(() => {
@@ -116,6 +110,13 @@
 		if (typeof v === 'string' && v.trim() === '') return true;
 		return false;
 	}
+	/** Rank-based hue map for the active color-by column. Values are ranked
+	 *  over the currently visible rows, so filtering recomputes the gradient
+	 *  and sorting by the same column produces an ordered color ramp. */
+	let colorRankMap = $derived(
+		colorByKey ? makeRankedHueMap(filteredRows, colorByKey) : null
+	);
+
 	let sortedRows = $derived.by(() => {
 		if (!sortKey) return filteredRows;
 		return [...filteredRows].sort((a, b) => {
