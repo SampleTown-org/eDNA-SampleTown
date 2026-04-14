@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -221,9 +222,7 @@
 			</div>
 
 			<div>
-				<label for="nucl_acid_amp" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary#nucl_acid_amp" target="_blank" class="hover:text-ocean-400">Amplification Protocol (MIxS)</a>
-				</label>
+				<FieldLabel slot="nucl_acid_amp" for="nucl_acid_amp" label="Amplification Protocol (MIxS)" />
 				<input id="nucl_acid_amp" type="text" bind:value={plateForm.nucl_acid_amp} class={inputCls}
 					placeholder="DOI or protocol URL" />
 			</div>

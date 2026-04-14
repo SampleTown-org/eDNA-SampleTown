@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import PlateView from '$lib/components/PlateView.svelte';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
 	import { nameFromTemplate } from '$lib/naming';
 	import type { PageData } from './$types';
@@ -265,11 +266,11 @@
 				{/if}
 			</div>
 
-			<div><label class="block text-xs font-medium text-slate-400 mb-1">
-					<a href="/glossary#nucl_acid_amp" target="_blank" class="hover:text-ocean-400">Amplification Protocol (MIxS)</a>
-				</label>
+			<div>
+				<FieldLabel slot="nucl_acid_amp" label="Amplification Protocol (MIxS)" />
 				<input type="text" bind:value={plate.nucl_acid_amp} class={inputCls}
-					placeholder="DOI or protocol URL" /></div>
+					placeholder="DOI or protocol URL" />
+			</div>
 
 			<div><label class="block text-xs font-medium text-slate-400 mb-1">Notes</label>
 				<input type="text" bind:value={plate.notes} class={inputCls} /></div>

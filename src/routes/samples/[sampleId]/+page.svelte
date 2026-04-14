@@ -211,7 +211,8 @@
 				{#each customTags as e}
 					<div class={fieldRowCls}>
 						<dt class={labelCls}>
-							<a href="/glossary#misc_param" target="_blank" rel="noopener" class="hover:text-ocean-400 font-mono text-xs">misc_param:</a><span class="font-mono text-xs text-slate-200">{e.title}</span>
+							<span class="font-mono text-xs text-slate-500">misc_param:</span><span class="font-mono text-xs text-slate-200">{e.title}</span>
+							<GlossaryDoc slot="misc_param" iconOnly class="ml-1" />
 						</dt>
 						<dd class={valueCls}>{e.value}</dd>
 					</div>

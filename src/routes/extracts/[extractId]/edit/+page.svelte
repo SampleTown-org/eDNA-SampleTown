@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
+	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -97,18 +98,14 @@
 
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			<div>
-				<label for="extraction_method" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/settings?tab=extraction_method" target="_blank" class="hover:text-ocean-400">Method</a>
-				</label>
+				<FieldLabel slot="extraction_method" for="extraction_method" label="Method" picklistCategory="extraction_method" description="Kit or protocol used to extract nucleic acids." />
 				<select id="extraction_method" bind:value={form.extraction_method} class={selectCls}>
 					<option value="">Select...</option>
 					{#each data.picklists.extraction_method as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
 			<div>
-				<label for="nucl_acid_ext" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary#nucl_acid_ext" target="_blank" class="hover:text-ocean-400">Nucleic Acid Extraction Protocol</a>
-				</label>
+				<FieldLabel slot="nucl_acid_ext" for="nucl_acid_ext" />
 				<input id="nucl_acid_ext" type="text" bind:value={form.nucl_acid_ext} class={inputCls}
 					placeholder="DOI or protocol URL (MIxS nucl_acid_ext)" />
 			</div>
@@ -116,23 +113,17 @@
 
 		<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
 			<div>
-				<label for="samp_taxon_id" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary#samp_taxon_id" target="_blank" class="hover:text-ocean-400">Taxonomy ID of DNA sample</a>
-				</label>
+				<FieldLabel slot="samp_taxon_id" for="samp_taxon_id" picklistCategory="samp_taxon_id" />
 				<input id="samp_taxon_id" type="text" bind:value={form.samp_taxon_id} class={inputCls}
 					placeholder="NCBI taxid" />
 			</div>
 			<div>
-				<label for="samp_vol_we_dna_ext" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary#samp_vol_we_dna_ext" target="_blank" class="hover:text-ocean-400">Sample volume/weight for extraction</a>
-				</label>
+				<FieldLabel slot="samp_vol_we_dna_ext" for="samp_vol_we_dna_ext" />
 				<input id="samp_vol_we_dna_ext" type="text" bind:value={form.samp_vol_we_dna_ext} class={inputCls}
 					placeholder="e.g. 1500 ml" />
 			</div>
 			<div>
-				<label for="pool_dna_extracts" class="block text-sm font-medium text-slate-300 mb-1">
-					<a href="/glossary#pool_dna_extracts" target="_blank" class="hover:text-ocean-400">Pool of DNA extracts</a>
-				</label>
+				<FieldLabel slot="pool_dna_extracts" for="pool_dna_extracts" />
 				<input id="pool_dna_extracts" type="text" bind:value={form.pool_dna_extracts} class={inputCls}
 					placeholder="extract IDs if pooled" />
 			</div>

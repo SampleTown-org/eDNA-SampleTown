@@ -4,6 +4,7 @@
 	import { organizeForm, orderedOptionalBuckets, sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import SlotInput from '$lib/components/SlotInput.svelte';
 	import type { PageData } from './$types';
 
@@ -280,8 +281,9 @@
 
 					{#each miscParamKeys as key (key)}
 						<div>
-							<label for={key} class="block text-sm font-medium text-slate-300 mb-1">
-								<a href="/glossary#misc_param" target="_blank" class="text-amber-300 hover:text-amber-200 font-mono text-xs">misc_param:</a><span class="font-mono text-xs text-slate-200">{key.slice(MISC_PARAM_PREFIX.length)}</span>
+							<label for={key} class="flex items-center gap-1 text-sm font-medium text-slate-300 mb-1">
+								<span class="font-mono text-xs text-slate-500">misc_param:</span><span class="font-mono text-xs text-slate-200">{key.slice(MISC_PARAM_PREFIX.length)}</span>
+								<GlossaryDoc slot="misc_param" iconOnly />
 							</label>
 							<input id={key} type="text" bind:value={form[key]}
 								class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500" />
