@@ -410,6 +410,9 @@
 		saving = true;
 		const errors: string[] = [];
 		let imported = 0;
+		/** Track which row indices in `rows` succeeded so a partial-submit
+		 *  can leave only the failing ones behind for the user to fix. */
+		const successIdx = new Set<number>();
 
 		for (const row of nonEmptyRows) {
 			const body: Record<string, unknown> = {
@@ -433,6 +436,8 @@
 			});
 			if (res.ok) {
 				imported++;
+				const idx = rows.indexOf(row);
+				if (idx >= 0) successIdx.add(idx);
 			} else {
 				const err = await res.json().catch(() => ({}));
 				errors.push(`${row.samp_name}: ${err.error ?? `HTTP ${res.status}`}`);
@@ -441,9 +446,11 @@
 
 		saving = false;
 		result = { imported, failed: errors.length, errors };
-		if (errors.length === 0) {
-			rows = [emptyRow()];
-		}
+		// Drop only the rows that POSTed successfully; rows that failed stay
+		// on deck so users can correct the offending cells and retry without
+		// re-entering the ones that passed. Empty rows are always kept.
+		const remaining = rows.filter((_, i) => !successIdx.has(i));
+		rows = remaining.length > 0 ? remaining : [emptyRow()];
 	}
 
 	const inputCls =

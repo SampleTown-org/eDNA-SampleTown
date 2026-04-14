@@ -111,9 +111,15 @@
 		if (selectedDates.size > 0) {
 			result = result.filter((a) => selectedDates.has(a.date));
 		}
+		// Nulls / empty-string cells always go to the end regardless of direction.
 		const sorted = [...result].sort((a, b) => {
-			const av = (a as any)[sortKey] ?? '';
-			const bv = (b as any)[sortKey] ?? '';
+			const av = (a as any)[sortKey];
+			const bv = (b as any)[sortKey];
+			const aMissing = av == null || av === '';
+			const bMissing = bv == null || bv === '';
+			if (aMissing && bMissing) return 0;
+			if (aMissing) return 1;
+			if (bMissing) return -1;
 			if (av < bv) return sortDir === 'asc' ? -1 : 1;
 			if (av > bv) return sortDir === 'asc' ? 1 : -1;
 			return 0;

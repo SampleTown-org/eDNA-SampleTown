@@ -398,8 +398,27 @@ export function parseMixsTsv(
 
 		for (const { index, field } of colMap) {
 			let val: unknown = values[index]?.trim() ?? null;
-			if (val === '' || val === 'not collected' || val === 'not applicable' || val === 'missing') {
-				val = null;
+			// Null sentinels we recognize on import: blank cells, the MIxS
+			// placeholder phrases, R's "NA" and variants, pandas' "N/A", the
+			// INSDC lone period, and a handful of common synonyms. Matches
+			// case-insensitively so "na" / "Na" / "NULL" all map to null.
+			if (typeof val === 'string') {
+				const lower = val.toLowerCase();
+				if (
+					val === '' ||
+					val === '.' ||
+					lower === 'na' ||
+					lower === 'n/a' ||
+					lower === 'null' ||
+					lower === 'none' ||
+					lower === 'nan' ||
+					lower === 'not collected' ||
+					lower === 'not applicable' ||
+					lower === 'missing' ||
+					lower === 'not provided'
+				) {
+					val = null;
+				}
 			}
 			if (val == null) continue;
 			// `misc_param:<key>` — truly off-schema tag from the column mapper

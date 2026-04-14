@@ -100,14 +100,25 @@
 		);
 	});
 
+	/** Rows where the sorted column has "no value" always sort to the end,
+	 *  regardless of asc/desc direction. Treats null / undefined / empty
+	 *  string / whitespace-only as missing so imported blanks behave like
+	 *  null even when they're stored as empty strings. */
+	function isMissing(v: unknown): boolean {
+		if (v == null) return true;
+		if (typeof v === 'string' && v.trim() === '') return true;
+		return false;
+	}
 	let sortedRows = $derived.by(() => {
 		if (!sortKey) return filteredRows;
 		return [...filteredRows].sort((a, b) => {
 			const av = a[sortKey];
 			const bv = b[sortKey];
-			if (av == null && bv == null) return 0;
-			if (av == null) return 1;
-			if (bv == null) return -1;
+			const aMissing = isMissing(av);
+			const bMissing = isMissing(bv);
+			if (aMissing && bMissing) return 0;
+			if (aMissing) return 1;
+			if (bMissing) return -1;
 			const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
 			return sortDir === 'asc' ? cmp : -cmp;
 		});
