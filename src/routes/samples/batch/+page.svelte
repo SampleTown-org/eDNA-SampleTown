@@ -67,6 +67,19 @@
 		organizeForm(batchChecklist, batchExtension, data.picklists as Picklists)
 	);
 
+	/** slot → SlotConfig (type, options, placeholder) so table cells can
+	 *  render the right widget — a <select> when organizeForm auto-bound a
+	 *  picklist (env_medium, geo_loc_name, etc.), a numeric input when the
+	 *  MIxS range is numeric, etc. */
+	let slotConfigs = $derived.by(() => {
+		const map = new Map<string, import('$lib/mixs/sample-form').SlotConfig>();
+		for (const c of organized.required) map.set(c.slot, c);
+		for (const list of Object.values(organized.optional)) {
+			for (const c of list) map.set(c.slot, c);
+		}
+		return map;
+	});
+
 	/** Route a MIxS slot into one of the three Section buckets, mirroring the
 	 *  single-sample organizeForm() grouping. Required slots go first;
 	 *  everything else picks its bucket (Sampling & Storage / Other) from
@@ -102,14 +115,46 @@
 	}
 
 	let extraColumnKeys = $state<string[]>([]);
+	/** Slots the user explicitly removed — auto-seed skips these so the ✕
+	 *  button actually sticks instead of having the seed re-add the row.
+	 *  Reset when the checklist/extension combo changes (the new combination
+	 *  is a fresh slate). */
+	let suppressedKeys = $state<Set<string>>(new Set());
 
-	/** Auto-seed the parameter list whenever (checklist, extension) changes.
-	 *  Mirrors the single-sample form's visible slots: every MIxS-required
-	 *  slot that lives on samples + every slot in the Sampling & Storage
-	 *  bucket + the recommended slots from Other. Non-recommended Other slots
-	 *  stay behind the +Add parameter picker so the default view isn't
-	 *  overwhelmed. User-removed keys are re-added on a combination change,
-	 *  which is acceptable — the combination class is the source of truth. */
+	/** Detect combination changes so we can (a) drop slots no longer valid
+	 *  for the new (checklist, extension) from the table, and (b) clear the
+	 *  user-suppression set so the new combination's required/S&S seed
+	 *  populates. Ordering matters — this effect runs before the auto-seed
+	 *  below because of declaration order. */
+	let prevCombo = $state<string>(`${batchChecklist}|${batchExtension}`);
+	$effect(() => {
+		const combo = `${batchChecklist}|${batchExtension}`;
+		if (combo === prevCombo) return;
+		prevCombo = combo;
+		const validSlots = new Set(allSlotsFor(batchChecklist, batchExtension));
+		// Keep misc_param:* (they're off-schema and not tied to a combo) and
+		// any slot still valid in the new combination; drop the rest.
+		const kept = extraColumnKeys.filter(
+			(k) => k.startsWith(MISC_PARAM_PREFIX) || validSlots.has(k)
+		);
+		const dropped = new Set(extraColumnKeys.filter((k) => !kept.includes(k)));
+		if (dropped.size > 0) {
+			extraColumnKeys = kept;
+			rows = rows.map((r) => {
+				const next = { ...r };
+				for (const k of dropped) delete next[k];
+				return next;
+			});
+		}
+		suppressedKeys = new Set();
+	});
+
+	/** Auto-seed the parameter list with what a single-sample form would show
+	 *  by default: every MIxS-required slot (samples-owned) + every slot in
+	 *  the Sampling & Storage bucket + every recommended slot in Other.
+	 *  Non-recommended Other slots stay behind the +Add parameter picker so
+	 *  the default view isn't overwhelmed. Respects suppressedKeys so ✕
+	 *  removal isn't undone. */
 	$effect(() => {
 		const req = requiredSlotsFor(batchChecklist, batchExtension)
 			.filter((s) => !CORE_KEYS.has(s) && slotTable(s) === 'samples');
@@ -117,7 +162,7 @@
 		const otherRec = (organized.optional.Other ?? [])
 			.filter((f) => f.recommended)
 			.map((f) => f.slot);
-		const desired = [...req, ...storage, ...otherRec];
+		const desired = [...req, ...storage, ...otherRec].filter((s) => !suppressedKeys.has(s));
 		const toAdd = desired.filter((s) => !extraColumnKeys.includes(s));
 		if (toAdd.length > 0) {
 			extraColumnKeys = [...extraColumnKeys, ...toAdd];
@@ -227,11 +272,21 @@
 		}
 		if (extraColumnKeys.includes(key)) { extraToAdd = ''; return; }
 		extraColumnKeys = [...extraColumnKeys, key];
+		// Un-suppress if the user had previously removed it: explicit re-add beats
+		// the earlier ✕ click.
+		if (suppressedKeys.has(key)) {
+			const next = new Set(suppressedKeys);
+			next.delete(key);
+			suppressedKeys = next;
+		}
 		rows = rows.map((r) => ({ ...r, [key]: '' }));
 		extraToAdd = '';
 	}
 	function removeColumn(key: string) {
 		extraColumnKeys = extraColumnKeys.filter((k) => k !== key);
+		// Remember the removal so the auto-seed effect doesn't immediately
+		// re-add a required / S&S / recommended slot back to the bottom.
+		suppressedKeys = new Set([...suppressedKeys, key]);
 		rows = rows.map((r) => {
 			const next = { ...r };
 			delete next[key];
@@ -239,14 +294,17 @@
 		});
 	}
 
-	/** Fill rows[0][field] across every other row (overwrites). Used by the
-	 *  per-parameter "fill →" button so users can broadcast one value across
-	 *  every sample without the (now-dropped) template-row concept. */
+	/** Copy sample #1's value for a parameter to every subsequent sample whose
+	 *  cell is empty. Non-destructive — existing values aren't touched, so
+	 *  users can tweak individual samples after a fill without losing work. */
 	function fillRight(field: string) {
 		if (rows.length <= 1) return;
 		const value = rows[0][field];
+		if (!value || !value.toString().trim()) return;
 		rows = rows.map((row, i) => {
 			if (i === 0) return row;
+			const current = row[field];
+			if (current && current.toString().trim()) return row;
 			const next = { ...row, [field]: value };
 			if (field === 'project_id' && next.site_id) {
 				const ok = (data.sites as any[]).some(
@@ -431,30 +489,6 @@
 			Cancel
 		</a>
 
-		<div class="ml-auto flex items-center gap-2">
-			{#if availableExtraSlots.length > 0 || extraToAdd.startsWith(MISC_PARAM_PREFIX)}
-				<input
-					type="text"
-					list="batch-add-column-slots"
-					bind:value={extraToAdd}
-					placeholder="+ Add parameter (or misc_param:…) — search {availableExtraSlots.length} options…"
-					class="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500 min-w-80"
-					onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addColumn(); } }}
-				/>
-				<datalist id="batch-add-column-slots">
-					{#each availableExtraSlots as slot}
-						{@const title = getSlot(slot)?.title}
-						<option value={slot} label={title ? `${slot} — ${title}` : slot}></option>
-					{/each}
-				</datalist>
-				<button
-					type="button"
-					onclick={addColumn}
-					disabled={!extraToAdd || (!availableExtraSlots.includes(extraToAdd) && !extraToAdd.startsWith(MISC_PARAM_PREFIX))}
-					class="px-2 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 disabled:opacity-40 transition-colors text-sm"
-				>Add</button>
-			{/if}
-		</div>
 	</div>
 
 	<div class="flex items-center gap-4 flex-wrap">
@@ -486,7 +520,7 @@
 	     MIxS-recommended. Leftmost column hosts the per-row ✕ remove button
 	     so users can scan removable rows at a glance. -->
 	<div class="overflow-x-auto rounded-lg border border-slate-800">
-		<table class="text-sm border-collapse">
+		<table class="w-full min-w-max text-sm border-collapse">
 			<thead>
 				<tr class="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
 					<th class="w-8 sticky left-0 bg-slate-900 z-20"></th>
@@ -533,18 +567,18 @@
 							</td>
 							<!-- Parameter label cell (sticky for horizontal scrolling). -->
 							<th class="px-2 py-1 text-left font-medium sticky left-8 bg-slate-950 z-10 align-top">
-								<div class="flex items-start gap-1">
+								<div class="flex items-center gap-1 flex-wrap">
 									<span class="text-slate-200 leading-tight">{col.label}</span>
 									{#if col.required}<span class="text-rose-400" title="Required by MIxS" aria-label="required">*</span>{:else if col.recommended}<span class="text-amber-400" title="Recommended by MIxS" aria-label="recommended">*</span>{/if}
 									{#if getSlot(col.key)}
-										<GlossaryDoc slot={col.key} iconOnly class="ml-0.5" />
+										<GlossaryDoc slot={col.key} iconOnly />
 									{/if}
 									{#if rows.length > 1}
 										<button
 											type="button"
 											onclick={() => fillRight(col.key)}
-											class="ml-auto text-[11px] text-slate-500 hover:text-ocean-400"
-											title="Fill this parameter across every sample"
+											class="text-[11px] text-slate-500 hover:text-ocean-400"
+											title="Fill sample #1 across empty cells of this parameter"
 										>fill&nbsp;→</button>
 									{/if}
 								</div>
@@ -588,12 +622,40 @@
 											onpaste={(e) => handlePaste(e, i, col.key)}
 											class="{inputCls} {col.required && !rows[i][col.key] ? 'border-red-800' : ''}"
 										/>
+									{:else if slotConfigs.get(col.key)?.type === 'select'}
+										{@const cfg = slotConfigs.get(col.key)}
+										<select
+											bind:value={rows[i][col.key]}
+											class="{inputCls} {col.required && !rows[i][col.key] ? 'border-red-800' : ''}"
+										>
+											<option value="">Select…</option>
+											{#each cfg?.options ?? [] as opt}
+												<option value={opt.value}>{opt.label}</option>
+											{/each}
+										</select>
+									{:else if slotConfigs.get(col.key)?.type === 'number'}
+										<input
+											type="number"
+											step="any"
+											bind:value={rows[i][col.key]}
+											onpaste={(e) => handlePaste(e, i, col.key)}
+											placeholder={col.placeholder ?? slotConfigs.get(col.key)?.placeholder}
+											class="{inputCls} {col.required && !rows[i][col.key] ? 'border-red-800' : ''}"
+										/>
+									{:else if slotConfigs.get(col.key)?.type === 'textarea'}
+										<textarea
+											bind:value={rows[i][col.key]}
+											onpaste={(e) => handlePaste(e, i, col.key)}
+											placeholder={col.placeholder ?? slotConfigs.get(col.key)?.placeholder}
+											rows="1"
+											class="{inputCls} {col.required && !rows[i][col.key] ? 'border-red-800' : ''}"
+										></textarea>
 									{:else}
 										<input
 											type="text"
 											bind:value={rows[i][col.key]}
 											onpaste={(e) => handlePaste(e, i, col.key)}
-											placeholder={col.placeholder}
+											placeholder={col.placeholder ?? slotConfigs.get(col.key)?.placeholder}
 											class="{inputCls} {col.required && !rows[i][col.key] ? 'border-red-800' : ''}"
 										/>
 									{/if}
@@ -602,6 +664,37 @@
 						</tr>
 					{/each}
 				{/each}
+
+				<!-- +Add parameter: last row. Input lives in the parameter-label
+				     column so it reads as the bottom of the list rather than a
+				     header-bar control. -->
+				<tr>
+					<td class="w-8 px-1 sticky left-0 bg-slate-950 z-10"></td>
+					<td class="px-2 py-2 sticky left-8 bg-slate-950 z-10" colspan={rows.length + 1}>
+						<div class="flex items-center gap-2">
+							<input
+								type="text"
+								list="batch-add-column-slots"
+								bind:value={extraToAdd}
+								placeholder="+ Add parameter (or misc_param:…) — search {availableExtraSlots.length} options…"
+								class="flex-1 min-w-60 max-w-xl px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-sm focus:outline-none focus:border-ocean-500"
+								onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addColumn(); } }}
+							/>
+							<datalist id="batch-add-column-slots">
+								{#each availableExtraSlots as slot}
+									{@const title = getSlot(slot)?.title}
+									<option value={slot} label={title ? `${slot} — ${title}` : slot}></option>
+								{/each}
+							</datalist>
+							<button
+								type="button"
+								onclick={addColumn}
+								disabled={!extraToAdd || (!availableExtraSlots.includes(extraToAdd) && !extraToAdd.startsWith(MISC_PARAM_PREFIX))}
+								class="px-2 py-1.5 border border-slate-700 text-slate-300 rounded hover:bg-slate-800 disabled:opacity-40 transition-colors text-sm"
+							>Add</button>
+						</div>
+					</td>
+				</tr>
 			</tbody>
 		</table>
 	</div>
