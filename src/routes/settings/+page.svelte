@@ -569,7 +569,27 @@
 
 	{#if tabType === 'naming'}
 	<div class="space-y-4">
-		<p class="text-sm text-slate-400">Set the default placeholder template for each name field. Use <code class="text-ocean-400">{'{'}Field{'}'}</code> tokens as reminders of the naming convention.</p>
+		<p class="text-sm text-slate-400">Set the default name template for each entity. Tokens in <code class="text-ocean-400">{'{'}Braces{'}'}</code> auto-fill from the surrounding context when known; unknown tokens stay literal so you can spot what to fill in.</p>
+		<div class="text-xs text-slate-500 p-3 rounded-lg border border-slate-800 bg-slate-900/40">
+			<span class="text-slate-400">Available tokens —</span>
+			<span class="text-slate-500">Auto from clock:</span>
+			<code class="text-ocean-400">{'{'}Date{'}'}</code>
+			<code class="text-ocean-400">{'{'}Year{'}'}</code>
+			<code class="text-ocean-400">{'{'}Month{'}'}</code>
+			<code class="text-ocean-400">{'{'}Day{'}'}</code>
+			·
+			<span class="text-slate-500">From context (where applicable):</span>
+			<code class="text-ocean-400">{'{'}Project{'}'}</code>
+			<code class="text-ocean-400">{'{'}Site{'}'}</code>
+			<code class="text-ocean-400">{'{'}Sample{'}'}</code>
+			<code class="text-ocean-400">{'{'}Extract{'}'}</code>
+			<code class="text-ocean-400">{'{'}Source{'}'}</code>
+			<code class="text-ocean-400">{'{'}Gene{'}'}</code>
+			<code class="text-ocean-400">{'{'}Number{'}'}</code>
+			<code class="text-ocean-400">{'{'}Instrument{'}'}</code>
+			<code class="text-ocean-400">{'{'}PI{'}'}</code>
+			<code class="text-ocean-400">{'{'}Location{'}'}</code>
+		</div>
 		<div class="space-y-3">
 			{#each NAMING_FIELDS as field}
 			<div class="flex items-center gap-4">
