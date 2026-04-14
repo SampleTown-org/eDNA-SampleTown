@@ -19,7 +19,9 @@
 		viewer: 'Viewer (read-only)'
 	};
 
-	const navLinks = [
+	/** `desktopOnly` links are hidden on <sm screens — reserved for flows that
+	 *  don't make sense on mobile (bulk import/export, etc.). */
+	const navLinks: { href: string; label: string; desktopOnly?: boolean }[] = [
 		{ href: '/', label: 'Dashboard' },
 		{ href: '/projects', label: 'Projects' },
 		{ href: '/sites', label: 'Sites' },
@@ -29,7 +31,7 @@
 		{ href: '/libraries', label: 'Libraries' },
 		{ href: '/runs', label: 'Runs' },
 		{ href: '/analysis', label: 'Analysis' },
-		{ href: '/export', label: 'Import/Export' },
+		{ href: '/export', label: 'Import/Export', desktopOnly: true },
 		{ href: '/glossary', label: 'Glossary' },
 		{ href: '/settings', label: 'Settings' }
 	];
@@ -113,7 +115,7 @@
 		<!-- Mobile nav -->
 		{#if mobileOpen}
 			<div class="md:hidden pb-3 border-t border-slate-800 mt-1 pt-2">
-				{#each navLinks as link}
+				{#each navLinks.filter((l) => !l.desktopOnly) as link}
 					<a
 						href={link.href}
 						class="block px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded"
