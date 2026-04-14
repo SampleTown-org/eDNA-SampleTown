@@ -3,7 +3,7 @@
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { allSlotsFor, getSlot } from '$lib/mixs/schema-index';
+	import { allSlotsFor, getSlot, requiredSlotsFor } from '$lib/mixs/schema-index';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
@@ -57,16 +57,32 @@
 	 *  friendly labels and slotLabel() as fallback. */
 	function columnDefForSlot(key: string): ColumnDef {
 		const hint = COLUMN_HINTS[key] ?? {};
+		const required =
+			hint.required ??
+			requiredSlotsFor(batchChecklist, batchExtension).includes(key);
 		return {
 			key,
 			label: hint.label ?? slotLabel(key, key),
 			width: hint.width,
 			placeholder: hint.placeholder,
-			required: hint.required
+			required
 		};
 	}
 
 	let extraColumnKeys = $state<string[]>([]);
+
+	/** Auto-add every MIxS-required slot for the active (checklist, extension)
+	 *  that isn't already a core column or user-added extra. User-chosen
+	 *  extras stay put when the combination changes; this only grows the list. */
+	const coreKeys = new Set(CORE_COLUMNS.map((c) => c.key));
+	$effect(() => {
+		const required = requiredSlotsFor(batchChecklist, batchExtension);
+		const toAdd = required.filter((slot) => !coreKeys.has(slot) && !extraColumnKeys.includes(slot));
+		if (toAdd.length > 0) {
+			extraColumnKeys = [...extraColumnKeys, ...toAdd];
+			rows = rows.map((r) => ({ ...r, ...Object.fromEntries(toAdd.map((k) => [k, r[k] ?? ''])) }));
+		}
+	});
 	let columns = $derived<ColumnDef[]>([
 		...CORE_COLUMNS,
 		...extraColumnKeys.map(columnDefForSlot)
@@ -95,6 +111,33 @@
 	function sitesForProject(projectId: string): any[] {
 		if (!projectId) return data.sites as any[];
 		return (data.sites as any[]).filter((s: any) => s.project_id === projectId);
+	}
+
+	/** Name-for-id helpers so the per-row input can round-trip between the
+	 *  human-readable project/site names shown in the datalist and the IDs
+	 *  stored on each row (used by the submit loop). */
+	const projectsById = $derived(
+		new Map((data.projects as any[]).map((p: any) => [p.id, p]))
+	);
+	const sitesById = $derived(
+		new Map((data.sites as any[]).map((s: any) => [s.id, s]))
+	);
+	function projectNameFromId(id: string): string {
+		return (projectsById.get(id) as any)?.project_name ?? '';
+	}
+	function siteNameFromId(id: string): string {
+		return (sitesById.get(id) as any)?.site_name ?? '';
+	}
+	function projectIdFromName(name: string): string {
+		const p = (data.projects as any[]).find((x: any) => x.project_name === name);
+		return (p as any)?.id ?? '';
+	}
+	function siteIdFromName(name: string, projectId: string): string {
+		const pool = projectId
+			? (data.sites as any[]).filter((s: any) => s.project_id === projectId)
+			: (data.sites as any[]);
+		const s = pool.find((x: any) => x.site_name === name);
+		return (s as any)?.id ?? '';
 	}
 
 	function addRow() { rows = [...rows, emptyRow()]; }
@@ -368,6 +411,12 @@
 		</p>
 	</div>
 
+	<!-- Shared across rows — per-row site datalist is inline because it filters
+	     by the row's current project. -->
+	<datalist id="batch-projects">
+		{#each data.projects as p}<option value={p.project_name}></option>{/each}
+	</datalist>
+
 	<div class="overflow-x-auto rounded-lg border border-slate-800">
 		<table class="w-full text-sm">
 			<thead>
@@ -425,23 +474,38 @@
 						{#each columns as col}
 							<td class="px-2 py-1">
 								{#if col.widget === 'select-project'}
-									<select
-										bind:value={rows[i][col.key]}
-										onchange={isTpl ? () => fillColumnFromTemplate(col.key) : undefined}
-										class="{selectCls} {!isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
-									>
-										<option value="">Select...</option>
-										{#each data.projects as p}<option value={p.id}>{p.project_name}</option>{/each}
-									</select>
+									<input
+										type="text"
+										list="batch-projects"
+										value={projectNameFromId(rows[i][col.key])}
+										onchange={(e) => {
+											const name = e.currentTarget.value;
+											rows[i][col.key] = name ? projectIdFromName(name) : '';
+											// When the row's project changes, clear a site that doesn't belong to it.
+											if (rows[i].site_id && !sitesForProject(rows[i][col.key]).some((s: any) => s.id === rows[i].site_id)) {
+												rows[i].site_id = '';
+											}
+											if (isTpl) fillColumnFromTemplate(col.key);
+										}}
+										placeholder="Project…"
+										class="{inputCls} {!isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
+									/>
 								{:else if col.widget === 'select-site'}
-									<select
-										bind:value={rows[i][col.key]}
-										onchange={isTpl ? () => fillColumnFromTemplate(col.key) : undefined}
-										class={selectCls}
-									>
-										<option value="">Select...</option>
-										{#each sitesForProject(rows[i].project_id) as s}<option value={s.id}>{s.site_name}</option>{/each}
-									</select>
+									<input
+										type="text"
+										list="batch-sites-{i}"
+										value={siteNameFromId(rows[i][col.key])}
+										onchange={(e) => {
+											const name = e.currentTarget.value;
+											rows[i][col.key] = name ? siteIdFromName(name, rows[i].project_id) : '';
+											if (isTpl) fillColumnFromTemplate(col.key);
+										}}
+										placeholder={rows[i].project_id ? 'Site…' : 'Pick project first'}
+										class="{inputCls} {!isTpl && !rows[i][col.key] ? 'border-red-800' : ''}"
+									/>
+									<datalist id="batch-sites-{i}">
+										{#each sitesForProject(rows[i].project_id) as s}<option value={s.site_name}></option>{/each}
+									</datalist>
 								{:else if col.key === 'collection_date'}
 									<input
 										type="date"

@@ -57,6 +57,33 @@ function runMigrations(db: Database.Database) {
 		'Field Tech', 'Lab Tech', 'Bioinformatician',
 		'Collaborator', 'Other'
 	]);
+
+	// Add the per-reaction / per-library naming-template defaults for installs
+	// that seeded before these entries existed. Only inserts if the exact
+	// (category, value) pair is missing — never overwrites operator edits.
+	mergeNamingTemplates(db, [
+		{ value: 'pcr_name', label: '{Extract}_{Gene}' },
+		{ value: 'library_name', label: '{Source}_LIB' }
+	]);
+}
+
+function mergeNamingTemplates(db: Database.Database, entries: { value: string; label: string }[]) {
+	const exists = db.prepare(
+		"SELECT 1 FROM constrained_values WHERE category = 'naming_template' AND value = ?"
+	);
+	const insert = db.prepare(
+		`INSERT INTO constrained_values (category, value, label, sort_order, is_active)
+		 VALUES ('naming_template', ?, ?, ?, 1)`
+	);
+	const maxSort = db.prepare(
+		"SELECT COALESCE(MAX(sort_order), 0) AS m FROM constrained_values WHERE category = 'naming_template'"
+	);
+	let sort = (maxSort.get() as { m: number }).m;
+	for (const e of entries) {
+		if (exists.get(e.value)) continue;
+		sort += 10;
+		insert.run(e.value, e.label, sort);
+	}
 }
 
 function mergeIntoPicklist(db: Database.Database, category: string, values: string[]) {

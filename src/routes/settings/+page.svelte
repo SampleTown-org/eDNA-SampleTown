@@ -940,39 +940,40 @@
 						</div>
 					</div>
 					<div class="flex gap-2 shrink-0">
-						<button onclick={() => startEditPerson(person)} class="text-xs text-slate-500 hover:text-ocean-400">Edit</button>
+						<button onclick={() => startEditPerson(person)} class="text-xs text-slate-500 hover:text-ocean-400">{editingPersonId === person.id ? 'Close' : 'Edit'}</button>
 						<button onclick={() => removePerson(person.id)} class="text-xs text-slate-600 hover:text-red-400">Del</button>
 					</div>
 				</div>
 			</div>
+			{#if editingPersonId === person.id}
+			<form onsubmit={(e) => { e.preventDefault(); saveEditPerson(); }} class="space-y-3 p-4 bg-slate-800/30 rounded-lg border border-ocean-700 -mt-1">
+				<p class="text-sm font-medium text-ocean-400">Editing {person.full_name}</p>
+				<div class="grid grid-cols-2 gap-3">
+					<div><label class="block text-xs text-slate-400 mb-1">Full Name</label><input type="text" bind:value={editPerson.full_name} class="w-full {inputCls} text-sm" /></div>
+					<div><label class="block text-xs text-slate-400 mb-1">Role</label>
+						<select bind:value={editPerson.role} class="w-full {selectCls} text-sm">
+							<option value="">Select...</option>
+							{#each personRoleOptions as r}<option>{r}</option>{/each}
+						</select></div>
+					<div><label class="block text-xs text-slate-400 mb-1">Email</label><input type="email" bind:value={editPerson.email} class="w-full {inputCls} text-sm" /></div>
+					<div><label class="block text-xs text-slate-400 mb-1">Institution</label><input type="text" bind:value={editPerson.institution} class="w-full {inputCls} text-sm" /></div>
+					<div><label class="block text-xs text-slate-400 mb-1">ORCID</label><input type="text" bind:value={editPerson.orcid} class="w-full {inputCls} text-sm" placeholder="0000-0000-0000-0000" /></div>
+					<div><label class="block text-xs text-slate-400 mb-1">GitHub Account</label>
+						<select bind:value={editPerson.user_id} class="w-full {selectCls} text-sm">
+							<option value="">Not linked</option>
+							{#each data.users as u}<option value={u.id}>@{u.username} ({u.display_name || u.email || ''})</option>{/each}
+						</select></div>
+				</div>
+				<div class="flex gap-2">
+					<button type="submit" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">Save</button>
+					<button type="button" onclick={() => { editingPersonId = ''; }} class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 text-sm font-medium">Cancel</button>
+				</div>
+			</form>
+			{/if}
 			{/each}
 		</div>
 
-		{#if editingPersonId}
-		<form onsubmit={(e) => { e.preventDefault(); saveEditPerson(); }} class="space-y-3 p-4 bg-slate-800/30 rounded-lg border border-ocean-700">
-			<p class="text-sm font-medium text-ocean-400">Editing person</p>
-			<div class="grid grid-cols-2 gap-3">
-				<div><label class="block text-xs text-slate-400 mb-1">Full Name</label><input type="text" bind:value={editPerson.full_name} class="w-full {inputCls} text-sm" /></div>
-				<div><label class="block text-xs text-slate-400 mb-1">Role</label>
-					<select bind:value={editPerson.role} class="w-full {selectCls} text-sm">
-						<option value="">Select...</option>
-						{#each personRoleOptions as r}<option>{r}</option>{/each}
-					</select></div>
-				<div><label class="block text-xs text-slate-400 mb-1">Email</label><input type="email" bind:value={editPerson.email} class="w-full {inputCls} text-sm" /></div>
-				<div><label class="block text-xs text-slate-400 mb-1">Institution</label><input type="text" bind:value={editPerson.institution} class="w-full {inputCls} text-sm" /></div>
-				<div><label class="block text-xs text-slate-400 mb-1">ORCID</label><input type="text" bind:value={editPerson.orcid} class="w-full {inputCls} text-sm" placeholder="0000-0000-0000-0000" /></div>
-				<div><label class="block text-xs text-slate-400 mb-1">GitHub Account</label>
-					<select bind:value={editPerson.user_id} class="w-full {selectCls} text-sm">
-						<option value="">Not linked</option>
-						{#each data.users as u}<option value={u.id}>@{u.username} ({u.display_name || u.email || ''})</option>{/each}
-					</select></div>
-			</div>
-			<div class="flex gap-2">
-				<button type="submit" class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">Save</button>
-				<button type="button" onclick={() => { editingPersonId = ''; }} class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 text-sm font-medium">Cancel</button>
-			</div>
-		</form>
-		{:else}
+
 		<details class="group">
 			<summary class="text-sm font-medium text-ocean-400 cursor-pointer hover:text-ocean-300">Add person</summary>
 			<form onsubmit={(e) => { e.preventDefault(); addPerson(); }} class="space-y-3 mt-3 p-4 bg-slate-800/30 rounded-lg">
@@ -995,7 +996,6 @@
 				<button type="submit" disabled={!newPerson.full_name.trim()} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 text-sm font-medium">Add Person</button>
 			</form>
 		</details>
-		{/if}
 		</div> <!-- /Personnel directory -->
 	</div>
 

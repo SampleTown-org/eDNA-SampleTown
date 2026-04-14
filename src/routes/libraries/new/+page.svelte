@@ -3,6 +3,7 @@
 	import PlateView from '$lib/components/PlateView.svelte';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
+	import { nameFromTemplate } from '$lib/naming';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -72,7 +73,7 @@
 			source_type: 'pcr' as const,
 			source_name: r.pcr_name,
 			parent_name: r.extract_name || '',
-			library_name: `${r.pcr_name}_LIB`,
+			library_name: nameFromTemplate(data.namingTemplates, 'library_name', { Source: r.pcr_name, PCR: r.pcr_name, Extract: r.extract_name || '' }, `${r.pcr_name}_LIB`),
 			index_sequence_i7: '', index_sequence_i5: '', barcode: '', final_concentration_ng_ul: ''
 		}));
 		selectedIds = new Set(reactions.map((r: any) => r.id));
@@ -112,7 +113,7 @@
 				source_id: id,
 				source_type: sourceType === 'pcr' ? 'pcr' : 'extract',
 				source_name, parent_name,
-				library_name: `${source_name}_LIB`,
+				library_name: nameFromTemplate(data.namingTemplates, 'library_name', { Source: source_name, Parent: parent_name }, `${source_name}_LIB`),
 				index_sequence_i7: '', index_sequence_i5: '', barcode: '', final_concentration_ng_ul: ''
 			}];
 		}
@@ -147,7 +148,7 @@
 				rows.push({
 					source_id: p.id, source_type: 'pcr', source_name: p.pcr_name,
 					parent_name: p.extract_name || '',
-					library_name: `${p.pcr_name}_LIB`,
+					library_name: nameFromTemplate(data.namingTemplates, 'library_name', { Source: p.pcr_name, PCR: p.pcr_name, Extract: p.extract_name || '' }, `${p.pcr_name}_LIB`),
 					index_sequence_i7: '', index_sequence_i5: '', barcode: '', final_concentration_ng_ul: ''
 				});
 			}
@@ -161,7 +162,7 @@
 				rows.push({
 					source_id: e.id, source_type: 'extract', source_name: e.extract_name,
 					parent_name: e.samp_name || '',
-					library_name: `${e.extract_name}_LIB`,
+					library_name: nameFromTemplate(data.namingTemplates, 'library_name', { Source: e.extract_name, Extract: e.extract_name, Sample: e.samp_name || '' }, `${e.extract_name}_LIB`),
 					index_sequence_i7: '', index_sequence_i5: '', barcode: '', final_concentration_ng_ul: ''
 				});
 			}

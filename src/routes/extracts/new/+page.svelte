@@ -3,6 +3,7 @@
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
+	import { nameFromTemplate } from '$lib/naming';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -46,7 +47,7 @@
 			selectedSampleIds.add(s.id);
 			rows.push({
 				sample_id: s.id, samp_name: s.samp_name, project_name: s.project_name,
-				extract_name: `${s.samp_name}_EXT`,
+				extract_name: nameFromTemplate(data.namingTemplates, 'extract_name', { Sample: s.samp_name }, `${s.samp_name}_EXT`),
 				concentration_ng_ul: '', total_volume_ul: '', a260_280: '', a260_230: ''
 			});
 		}
@@ -63,7 +64,7 @@
 			const idx = existing.length + 1;
 			rows = [...existing, {
 				sample_id: id, samp_name, project_name,
-				extract_name: `${samp_name}_EXT`,
+				extract_name: nameFromTemplate(data.namingTemplates, 'extract_name', { Sample: samp_name }, `${samp_name}_EXT`),
 				concentration_ng_ul: '', total_volume_ul: '', a260_280: '', a260_230: ''
 			}];
 		}

@@ -3,6 +3,7 @@
 	import PlateView from '$lib/components/PlateView.svelte';
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
+	import { nameFromTemplate } from '$lib/naming';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -92,7 +93,7 @@
 			selectedExtractIds.add(id);
 			rows = [...rows, {
 				extract_id: id, extract_name, samp_name,
-				pcr_name: `${extract_name}_${currentGene || 'PCR'}`,
+				pcr_name: nameFromTemplate(data.namingTemplates, 'pcr_name', { Extract: extract_name, Gene: currentGene }, `${extract_name}_${currentGene || 'PCR'}`),
 				concentration_ng_ul: ''
 			}];
 		}
@@ -121,7 +122,7 @@
 			selectedExtractIds.add(e.id);
 			rows.push({
 				extract_id: e.id, extract_name: e.extract_name, samp_name: e.samp_name,
-				pcr_name: `${e.extract_name}_${currentGene || 'PCR'}`,
+				pcr_name: nameFromTemplate(data.namingTemplates, 'pcr_name', { Extract: e.extract_name, Gene: currentGene }, `${e.extract_name}_${currentGene || 'PCR'}`),
 				concentration_ng_ul: ''
 			});
 		}

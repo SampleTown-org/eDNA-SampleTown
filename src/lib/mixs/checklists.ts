@@ -23,8 +23,23 @@ export interface ChecklistInfo {
 	description: string;
 }
 
+/**
+ * LinkML `title:` overrides for a couple of checklists whose upstream titles
+ * are the fully-spelled-out standard names ("Minimum Information About a
+ * Single Amplified Genome") where every other checklist in the picker uses
+ * the canonical acronym ("MIGS bacteria", "MIMARKS survey"). Keep the
+ * dropdown internally consistent.
+ */
+const CHECKLIST_LABEL_OVERRIDES: Record<string, string> = {
+	Misag: 'MISAG',
+	Miuvig: 'MIUVIG'
+};
+
 /** Dropdown options for the top-level checklist picker. */
-export const CHECKLIST_OPTIONS = checklistOptions();
+export const CHECKLIST_OPTIONS = checklistOptions().map((opt) => ({
+	...opt,
+	label: CHECKLIST_LABEL_OVERRIDES[opt.value] ?? opt.label
+}));
 
 /** Dropdown options for the extension (formerly env_package) picker. */
 export const EXTENSION_OPTIONS = extensionOptions();

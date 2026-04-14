@@ -248,7 +248,13 @@ const NAMING_TEMPLATES = [
 	{ value: 'site_name', label: '{Location}_{Habitat}_{Number}' },
 	{ value: 'sample_name', label: '{Site}_{Date}_{Number}' },
 	{ value: 'extract_name', label: '{Sample}_EXT{Number}' },
+	// Per-reaction PCR name. `{Extract}` is the parent DNA extract name;
+	// `{Gene}` is the target gene from the chosen primer set.
+	{ value: 'pcr_name', label: '{Extract}_{Gene}' },
 	{ value: 'pcr_plate_name', label: '{Gene}_{Date}_{PlateNumber}' },
+	// Per-library prep name. `{Source}` is the PCR reaction name or (for
+	// shotgun libraries) the extract name.
+	{ value: 'library_name', label: '{Source}_LIB' },
 	{ value: 'library_plate_name', label: '{Type}_{Date}_{PlateNumber}' },
 	{ value: 'run_name', label: 'RUN_{Date}_{Instrument}' },
 ];
