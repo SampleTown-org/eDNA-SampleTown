@@ -17,6 +17,7 @@
 
 	// --- Event calendar ---------------------------------------------------
 	const EVENT_COLORS: Record<string, { dot: string; label: string }> = {
+		site:          { dot: 'bg-sky-400',     label: 'Site' },
 		sample:        { dot: 'bg-ocean-400',   label: 'Sample collection' },
 		extract:       { dot: 'bg-emerald-400', label: 'Extraction' },
 		pcr_plate:     { dot: 'bg-amber-400',   label: 'PCR plate' },
@@ -81,6 +82,7 @@
 
 	// --- Activity list ---
 	const TYPE_HREF: Record<string, (id: string) => string> = {
+		site: (id) => `/sites/${id}`,
 		sample: (id) => `/samples/${id}`,
 		extract: (id) => `/extracts/${id}`,
 		pcr_plate: (id) => `/pcr/${id}`,
@@ -88,7 +90,7 @@
 		run: (id) => `/runs/${id}`
 	};
 	const TYPE_LABEL: Record<string, string> = {
-		sample: 'Sample', extract: 'Extract', pcr_plate: 'PCR Plate',
+		site: 'Site', sample: 'Sample', extract: 'Extract', pcr_plate: 'PCR Plate',
 		library_plate: 'Library Plate', run: 'Run'
 	};
 

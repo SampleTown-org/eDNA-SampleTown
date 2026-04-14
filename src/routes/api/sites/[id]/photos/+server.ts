@@ -70,6 +70,9 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 		).run(photoId, params.id, filename, file.name || null, file.type, file.size, caption, user.id);
 
+		// Touch the site so the dashboard "Modified" column reflects this change.
+		db.prepare("UPDATE sites SET updated_at = datetime('now') WHERE id = ?").run(params.id);
+
 		const row = db.prepare('SELECT * FROM site_photos WHERE id = ?').get(photoId);
 		return json(row, { status: 201 });
 	} catch (err) {

@@ -125,6 +125,17 @@ export const load: PageServerLoad = async () => {
 		LEFT JOIN users u ON u.id = r.created_by
 		WHERE r.is_deleted = 0 AND date(r.run_date) IS NOT NULL
 
+		UNION ALL
+
+		SELECT date(st.created_at) AS date, 'site' AS type, st.id, st.site_name AS name,
+			pr.project_name AS detail,
+			u.username AS created_by_username, u.avatar_emoji AS created_by_avatar,
+			st.updated_at AS updated_at
+		FROM sites st
+		JOIN projects pr ON pr.id = st.project_id
+		LEFT JOIN users u ON u.id = st.created_by
+		WHERE st.is_deleted = 0
+
 		ORDER BY date DESC
 	`;
 	const activities = db.prepare(activitySql).all() as {

@@ -46,6 +46,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		const photo = loadPhoto(params.id, params.photoId);
 		const db = getDb();
 		db.prepare('UPDATE site_photos SET is_deleted = 1 WHERE id = ?').run(photo.id);
+		db.prepare("UPDATE sites SET updated_at = datetime('now') WHERE id = ?").run(params.id);
 		const path = photoFilePath(photo.filename);
 		if (existsSync(path)) {
 			try { unlinkSync(path); } catch { /* best-effort */ }

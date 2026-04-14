@@ -30,6 +30,21 @@
 	let saving = $state(false);
 	let errorMsg = $state('');
 
+	// Photos are staged client-side and uploaded after the site is created.
+	let stagedPhotos = $state<File[]>([]);
+	let photoInput: HTMLInputElement | undefined;
+
+	function addPhotos(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const files = Array.from(input.files ?? []);
+		stagedPhotos = [...stagedPhotos, ...files];
+		if (photoInput) photoInput.value = '';
+	}
+
+	function removeStaged(i: number) {
+		stagedPhotos = stagedPhotos.filter((_, idx) => idx !== i);
+	}
+
 	async function submit() {
 		if (!form.project_id) { errorMsg = 'Please select a project'; return; }
 		if (!(form.site_name as string).trim()) { errorMsg = 'Site name is required'; return; }
@@ -50,8 +65,33 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(body)
 		});
-		if (res.ok) { const site = await res.json(); goto(`/sites/${site.id}`); }
-		else { errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to create site'; saving = false; }
+		if (!res.ok) {
+			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed to create site';
+			saving = false;
+			return;
+		}
+		const site = await res.json();
+		// Best-effort photo upload; failures are reported but don't undo the
+		// site creation — user can retry from the detail page.
+		const failed: string[] = [];
+		for (const file of stagedPhotos) {
+			const fd = new FormData();
+			fd.append('file', file);
+			const up = await fetch(`/api/sites/${site.id}/photos`, { method: 'POST', body: fd });
+			if (!up.ok) failed.push(file.name);
+		}
+		if (failed.length > 0) {
+			errorMsg = `Site saved, but these photos failed: ${failed.join(', ')}`;
+			saving = false;
+			return;
+		}
+		goto(`/sites/${site.id}`);
+	}
+
+	function formatBytes(n: number): string {
+		if (n < 1024) return `${n} B`;
+		if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+		return `${(n / 1024 / 1024).toFixed(1)} MB`;
 	}
 
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
@@ -149,6 +189,35 @@
 			<FieldLabel slot="notes" label="Notes" description="Free-form notes about this site." />
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>
 		</div>
+
+		<fieldset class="space-y-3">
+			<legend class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Photos</legend>
+			<p class="text-xs text-slate-500">Optional. Photos upload after the site is saved. JPEG, PNG, WebP, or GIF up to 15 MB each.</p>
+			<label class="inline-block px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm cursor-pointer">
+				Add Photos
+				<input
+					bind:this={photoInput}
+					type="file"
+					accept="image/jpeg,image/png,image/webp,image/gif"
+					multiple
+					onchange={addPhotos}
+					class="hidden"
+				/>
+			</label>
+			{#if stagedPhotos.length > 0}
+				<ul class="space-y-1 text-sm">
+					{#each stagedPhotos as file, i}
+						<li class="flex items-center justify-between px-3 py-1.5 rounded bg-slate-900/50 border border-slate-800">
+							<span class="text-slate-300 truncate">{file.name}</span>
+							<span class="flex items-center gap-3 text-xs text-slate-500">
+								<span>{formatBytes(file.size)}</span>
+								<button type="button" onclick={() => removeStaged(i)} class="text-slate-500 hover:text-red-400" title="Remove">✕</button>
+							</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</fieldset>
 
 		<div class="flex gap-3 pt-2">
 			<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
