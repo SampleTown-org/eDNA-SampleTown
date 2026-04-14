@@ -117,6 +117,23 @@ CREATE TABLE IF NOT EXISTS site_photos (
 
 CREATE INDEX IF NOT EXISTS idx_site_photos_site ON site_photos(site_id) WHERE is_deleted = 0;
 
+-- Sample photo gallery. Same shape as site_photos; binaries live under
+-- data/sample_photos/<id>.<ext>.
+CREATE TABLE IF NOT EXISTS sample_photos (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    sample_id TEXT NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    original_filename TEXT,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    caption TEXT,
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sample_photos_sample ON sample_photos(sample_id) WHERE is_deleted = 0;
+
 -- ============================================================
 -- PHYSICAL SAMPLES (MIxS 6.3-aligned)
 --

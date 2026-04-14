@@ -70,7 +70,8 @@
 		{ key: 'env_local_scale', label: 'Feature', sortable: true },
 		{ key: 'env_medium', label: 'Medium', sortable: true },
 		{ key: 'collection_date', label: 'Collected', sortable: true },
-		{ key: 'people_summary', label: 'People', sortable: true }
+		{ key: 'people_summary', label: 'People', sortable: true },
+		{ key: 'photo_count', label: 'Photos', sortable: true }
 	];
 
 	// User-added optional columns, persisted across reloads.

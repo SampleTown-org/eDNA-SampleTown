@@ -11,15 +11,15 @@ import {
 	photoFilePath
 } from '$lib/server/entity-photos';
 
-/** List (non-deleted) photos for a site. */
+/** List (non-deleted) photos for a sample. */
 export const GET: RequestHandler = async ({ params }) => {
 	const db = getDb();
-	const site = db.prepare('SELECT id FROM sites WHERE id = ? AND is_deleted = 0').get(params.id);
-	if (!site) throw error(404, 'Site not found');
+	const sample = db.prepare('SELECT id FROM samples WHERE id = ? AND is_deleted = 0').get(params.id);
+	if (!sample) throw error(404, 'Sample not found');
 	const rows = db.prepare(
-		`SELECT id, site_id, filename, original_filename, mime_type, size_bytes, caption, created_at, created_by
-		 FROM site_photos
-		 WHERE site_id = ? AND is_deleted = 0
+		`SELECT id, sample_id, filename, original_filename, mime_type, size_bytes, caption, created_at, created_by
+		 FROM sample_photos
+		 WHERE sample_id = ? AND is_deleted = 0
 		 ORDER BY created_at DESC`
 	).all(params.id);
 	return json(rows);
@@ -30,8 +30,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const user = requireUser(locals);
 	try {
 		const db = getDb();
-		const site = db.prepare('SELECT id FROM sites WHERE id = ? AND is_deleted = 0').get(params.id);
-		if (!site) throw error(404, 'Site not found');
+		const sample = db.prepare('SELECT id FROM samples WHERE id = ? AND is_deleted = 0').get(params.id);
+		if (!sample) throw error(404, 'Sample not found');
 
 		const formData = await request.formData();
 		const file = formData.get('file');
@@ -63,17 +63,17 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		const ext = MIME_TO_EXT[file.type] ?? 'bin';
 		const filename = `${photoId}.${ext}`;
 		const buffer = Buffer.from(await file.arrayBuffer());
-		writeFileSync(photoFilePath('site', filename), buffer);
+		writeFileSync(photoFilePath('sample', filename), buffer);
 
 		db.prepare(
-			`INSERT INTO site_photos (id, site_id, filename, original_filename, mime_type, size_bytes, caption, created_by)
+			`INSERT INTO sample_photos (id, sample_id, filename, original_filename, mime_type, size_bytes, caption, created_by)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 		).run(photoId, params.id, filename, file.name || null, file.type, file.size, caption, user.id);
 
-		// Touch the site so the dashboard "Modified" column reflects this change.
-		db.prepare("UPDATE sites SET updated_at = datetime('now') WHERE id = ?").run(params.id);
+		// Touch the sample so the dashboard "Modified" column reflects this change.
+		db.prepare("UPDATE samples SET updated_at = datetime('now') WHERE id = ?").run(params.id);
 
-		const row = db.prepare('SELECT * FROM site_photos WHERE id = ?').get(photoId);
+		const row = db.prepare('SELECT * FROM sample_photos WHERE id = ?').get(photoId);
 		return json(row, { status: 201 });
 	} catch (err) {
 		return apiError(err);

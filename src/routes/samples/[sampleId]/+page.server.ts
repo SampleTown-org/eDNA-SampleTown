@@ -30,5 +30,12 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	const people = getEntityPersonnel('sample', params.sampleId);
 
-	return { sample, extracts, people };
+	const photos = db.prepare(`
+		SELECT id, filename, original_filename, mime_type, size_bytes, caption, created_at
+		FROM sample_photos
+		WHERE sample_id = ? AND is_deleted = 0
+		ORDER BY created_at DESC
+	`).all(params.sampleId);
+
+	return { sample, extracts, people, photos };
 };
