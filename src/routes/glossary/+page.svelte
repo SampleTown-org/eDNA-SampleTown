@@ -78,9 +78,9 @@
 	<div>
 		<h1 class="text-2xl font-bold text-white">MIxS Glossary</h1>
 		<p class="text-sm text-slate-400">
-			Reference for MIxS v{data.version} slots, checklists, and extensions.
+			Reference for MIxS v{data.version} parameters, checklists, and extensions.
 			Sourced from the GSC LinkML schema at build time.
-			{data.slots.length} slots · {data.checklists.length} checklists · {data.extensions.length} extensions.
+			{data.slots.length} parameters · {data.checklists.length} checklists · {data.extensions.length} extensions.
 		</p>
 	</div>
 
@@ -207,7 +207,7 @@
 			</div>
 		{/each}
 		{#if filtered.length === 0}
-			<p class="text-sm text-slate-500 italic">No slots match the current filter.</p>
+			<p class="text-sm text-slate-500 italic">No parameters match the current filter.</p>
 		{/if}
 	</div>
 </div>

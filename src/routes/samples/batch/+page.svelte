@@ -4,6 +4,7 @@
 	import FieldLabel from '$lib/components/FieldLabel.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
 	import { allSlotsFor, getSlot, requiredSlotsFor } from '$lib/mixs/schema-index';
+	import { slotTable } from '$lib/mixs/slot-ownership';
 	import { cart } from '$lib/stores/cart.svelte';
 	import type { PageData } from './$types';
 
@@ -72,12 +73,20 @@
 	let extraColumnKeys = $state<string[]>([]);
 
 	/** Auto-add every MIxS-required slot for the active (checklist, extension)
-	 *  that isn't already a core column or user-added extra. User-chosen
-	 *  extras stay put when the combination changes; this only grows the list. */
+	 *  that (a) isn't already a core column, (b) isn't already a user-added
+	 *  extra, and (c) actually lives on the samples table. Required slots
+	 *  that belong on extracts / pcr_plates / library_preps / runs get
+	 *  surfaced on those entities' own forms instead of being entered
+	 *  per-row here. User-chosen extras stay put; this only grows the list. */
 	const coreKeys = new Set(CORE_COLUMNS.map((c) => c.key));
 	$effect(() => {
 		const required = requiredSlotsFor(batchChecklist, batchExtension);
-		const toAdd = required.filter((slot) => !coreKeys.has(slot) && !extraColumnKeys.includes(slot));
+		const toAdd = required.filter(
+			(slot) =>
+				!coreKeys.has(slot) &&
+				!extraColumnKeys.includes(slot) &&
+				slotTable(slot) === 'samples'
+		);
 		if (toAdd.length > 0) {
 			extraColumnKeys = [...extraColumnKeys, ...toAdd];
 			rows = rows.map((r) => ({ ...r, ...Object.fromEntries(toAdd.map((k) => [k, r[k] ?? ''])) }));
@@ -351,7 +360,7 @@
 			onclick={addRow}
 			class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm"
 		>
-			+ Row
+			+ Sample
 		</button>
 		<button
 			type="button"
@@ -374,7 +383,7 @@
 					type="text"
 					list="batch-add-column-slots"
 					bind:value={extraToAdd}
-					placeholder="+ Add column — search {availableExtraSlots.length} slots…"
+					placeholder="+ Add parameter — search {availableExtraSlots.length} options…"
 					class="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500 min-w-60"
 					onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addColumn(); } }}
 				/>
@@ -402,8 +411,8 @@
 			label="People (applied to all rows)"
 		/>
 		<p class="text-xs text-slate-500 flex-1 min-w-48">
-			Row <span class="text-ocean-400">⭐</span> is a template —
-			<kbd class="text-ocean-400">Enter</kbd> fills column down, or
+			Column <span class="text-ocean-400">⭐</span> is a template —
+			<kbd class="text-ocean-400">Enter</kbd> fills the parameter across every sample, or
 			<button type="button" onclick={applyTemplate} class="text-ocean-400 hover:text-ocean-300 underline">
 				apply all to empty cells
 			</button>.
@@ -417,16 +426,41 @@
 		{#each data.projects as p}<option value={p.project_name}></option>{/each}
 	</datalist>
 
+	<!-- Transposed layout: each tbody row is one parameter, each sample is a
+	     column. Column ⭐ is the template — Enter on any cell fills that
+	     parameter across every sample to the right. -->
 	<div class="overflow-x-auto rounded-lg border border-slate-800">
-		<table class="w-full text-sm">
+		<table class="text-sm border-collapse">
 			<thead>
 				<tr class="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
-					<th class="w-8 px-1"></th>
-					<th class="px-2 py-2 text-left font-medium w-10">#</th>
-					{#each columns as col}
-						<th class="px-2 py-2 text-left font-medium {col.width ?? ''}">
+					<th class="px-2 py-2 text-left font-medium w-48 sticky left-0 bg-slate-900 z-10">Parameter</th>
+					{#each rows as _row, i}
+						{@const isTpl = i === 0}
+						<th class="px-2 py-2 text-left font-medium min-w-40 {isTpl ? 'bg-ocean-900/20' : ''}">
 							<div class="flex items-center gap-1">
-								<span class={col.required ? 'text-red-400' : ''}>{col.label}</span>
+								{#if isTpl}
+									<span class="text-ocean-400" title="Template — Enter fills this parameter across every sample">⭐ template</span>
+								{:else}
+									<span class="font-mono text-slate-500">#{i}</span>
+									<button
+										type="button"
+										onclick={() => removeRow(i)}
+										class="text-slate-700 hover:text-red-400 text-xs ml-auto"
+										title="Remove sample"
+									>✕</button>
+								{/if}
+							</div>
+						</th>
+					{/each}
+				</tr>
+			</thead>
+			<tbody>
+				{#each columns as col}
+					<tr class="border-b border-slate-800/50">
+						<!-- Parameter label (leftmost column, sticky so it stays visible when scrolling right) -->
+						<th class="px-2 py-1 text-left font-medium sticky left-0 bg-slate-950 z-10">
+							<div class="flex items-center gap-1">
+								<span class={col.required ? 'text-red-400' : 'text-slate-200'}>{col.label}</span>
 								{#if getSlot(col.key)}
 									<a
 										href="/glossary#{col.key}"
@@ -442,37 +476,14 @@
 										type="button"
 										onclick={() => removeColumn(col.key)}
 										class="text-slate-600 hover:text-red-400 text-xs ml-auto"
-										title="Remove column"
+										title="Remove parameter"
 									>×</button>
 								{/if}
 							</div>
 						</th>
-					{/each}
-				</tr>
-			</thead>
-			<tbody>
-				{#each rows as row, i}
-					{@const isTpl = i === 0}
-					<tr class="border-b border-slate-800/50 {isTpl ? 'bg-ocean-900/20' : ''}">
-						<td class="px-1 py-1">
-							{#if !isTpl}
-								<button
-									type="button"
-									onclick={() => removeRow(i)}
-									class="text-slate-700 hover:text-red-400 text-xs"
-									title="Remove row"
-								>✕</button>
-							{/if}
-						</td>
-						<td class="px-2 py-1 text-slate-500 text-xs font-mono">
-							{#if isTpl}
-								<span class="text-ocean-400" title="Template — Enter in any cell fills the column">⭐</span>
-							{:else}
-								{i}
-							{/if}
-						</td>
-						{#each columns as col}
-							<td class="px-2 py-1">
+						{#each rows as _row, i}
+							{@const isTpl = i === 0}
+							<td class="px-2 py-1 {isTpl ? 'bg-ocean-900/20' : ''}">
 								{#if col.widget === 'select-project'}
 									<input
 										type="text"
@@ -481,7 +492,6 @@
 										onchange={(e) => {
 											const name = e.currentTarget.value;
 											rows[i][col.key] = name ? projectIdFromName(name) : '';
-											// When the row's project changes, clear a site that doesn't belong to it.
 											if (rows[i].site_id && !sitesForProject(rows[i][col.key]).some((s: any) => s.id === rows[i].site_id)) {
 												rows[i].site_id = '';
 											}

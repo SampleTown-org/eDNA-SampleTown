@@ -102,7 +102,7 @@
 	// environmental context (lat_lon, geo_loc_name, env_broad_scale,
 	// env_local_scale). For Project we just use the MIxS project_name slot
 	// directly (MIXS:0000092), so no local description override is needed.
-	const SITE_DESCRIPTION = 'SampleTown site where this sample was collected. Sites own the MIxS location slots (lat_lon, geo_loc_name, env_broad_scale, env_local_scale) and pass them through to the sample on export.';
+	const SITE_DESCRIPTION = 'SampleTown site where this sample was collected. Sites own the MIxS location parameters (lat_lon, geo_loc_name, env_broad_scale, env_local_scale) and pass them through to the sample on export.';
 </script>
 
 <div class="max-w-3xl space-y-6">
@@ -302,7 +302,7 @@
 					>
 						<option value="">+ Add parameter...</option>
 						{#if otherRestHidden.length > 0}
-							<optgroup label="MIxS optional slots">
+							<optgroup label="MIxS optional parameters">
 								{#each otherRestHidden as f (f.slot)}
 									<option value={f.slot}>{f.slot}</option>
 								{/each}

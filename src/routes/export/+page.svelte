@@ -330,7 +330,7 @@
 		</div>
 		<p class="text-xs text-slate-500">
 			Rows without <code>mixs_checklist</code> / <code>extension</code> columns default to
-			<code class="text-ocean-400">{importChecklist}{importExtension ? ' + ' + importExtension : ''}</code> for required-slot validation.
+			<code class="text-ocean-400">{importChecklist}{importExtension ? ' + ' + importExtension : ''}</code> for required-parameter validation.
 		</p>
 
 		{#if importFileName}
@@ -410,7 +410,7 @@
 					{#if showMapper}
 						<div class="p-4 pt-0 space-y-2">
 							<p class="text-xs text-slate-500">
-								Override SampleTown's auto-detection. Type to search — matches against every MIxS slot
+								Override SampleTown's auto-detection. Type to search — matches against every MIxS parameter
 								(~786) plus SampleTown-local fields. Leave blank to skip. Type <code class="text-amber-400">misc_param:&lt;name&gt;</code>
 								to add a truly custom tag. The <em>goes to</em> column shows which SampleTown tab the value lands on.
 							</p>
@@ -612,7 +612,7 @@
 			<h3 class="text-sm font-medium text-slate-300">MIxS v{MIXS_ACTIVE_VERSION} templates</h3>
 			<p class="text-xs text-slate-500">
 				Pick a checklist and extension to download an empty TSV with the exact columns that combination requires and recommends.
-				Required slots are prefixed with <code class="text-rose-400">*</code>. Fill in the file, save as TSV, and import above.
+				Required parameters are prefixed with <code class="text-rose-400">*</code>. Fill in the file, save as TSV, and import above.
 			</p>
 			<div class="flex flex-wrap gap-2 items-end">
 				<div>
