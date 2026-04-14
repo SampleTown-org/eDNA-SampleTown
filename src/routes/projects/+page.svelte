@@ -57,6 +57,28 @@
 		const created = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 		if (created.ok) { const p = await created.json(); goto(`/projects/${p.id}`); }
 	}
+
+	async function bulkDeleteProjects(rs: Record<string, unknown>[]) {
+		if (!confirm(`Delete ${rs.length} projects? This will delete all associated data.`)) return;
+		const ids = rs.map((r) => r.id as string);
+		await Promise.all(ids.map((id) => fetch(`/api/projects/${id}`, { method: 'DELETE' })));
+		const removed = new Set(ids);
+		allProjects = allProjects.filter((p) => !removed.has(p.id));
+		selectedIds = new Set([...selectedIds].filter((id) => !removed.has(id)));
+	}
+	async function bulkDuplicateProjects(rs: Record<string, unknown>[]) {
+		if (!confirm(`Duplicate ${rs.length} projects?`)) return;
+		const created: any[] = [];
+		for (const r of rs) {
+			const res = await fetch(`/api/projects/${r.id}`);
+			if (!res.ok) continue;
+			const orig = await res.json();
+			const body = { ...orig, project_name: `${orig.project_name} (copy)`, id: undefined, created_at: undefined, updated_at: undefined };
+			const dup = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+			if (dup.ok) created.push(await dup.json());
+		}
+		if (created.length > 0) allProjects = [...created, ...allProjects];
+	}
 </script>
 
 <div class="space-y-4">
@@ -84,5 +106,7 @@
 		editHref={(row) => `/projects/${row.id}/edit`}
 		ondelete={deleteProject}
 		onduplicate={duplicateProject}
+		onbulkdelete={bulkDeleteProjects}
+		onbulkduplicate={bulkDuplicateProjects}
 	/>
 </div>

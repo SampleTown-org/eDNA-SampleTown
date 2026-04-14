@@ -97,6 +97,15 @@
 		const created = await fetch('/api/library-plates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 		if (created.ok) { const p = await created.json(); goto(`/libraries/${p.id}`); }
 	}
+
+	async function bulkDeletePlates(rs: Record<string, unknown>[]) {
+		if (!confirm(`Delete ${rs.length} library plates?`)) return;
+		const ids = rs.map((r) => r.id as string);
+		await Promise.all(ids.map((id) => fetch(`/api/library-plates/${id}`, { method: 'DELETE' })));
+		const removed = new Set(ids);
+		allPlates = allPlates.filter((p) => !removed.has(p.id));
+		selectedIds = new Set([...selectedIds].filter((id) => !removed.has(id)));
+	}
 </script>
 
 <div class="space-y-6">
@@ -126,6 +135,7 @@
 		editHref={(row) => `/libraries/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}
+		onbulkdelete={bulkDeletePlates}
 	/>
 
 	{#if orphanLibraries.length > 0}

@@ -18,6 +18,11 @@
 		editHref?: (row: Record<string, unknown>) => string;
 		ondelete?: (row: Record<string, unknown>) => void;
 		onduplicate?: (row: Record<string, unknown>) => void;
+		/** Bulk-action handlers — fired once with every currently-selected row.
+		 *  When provided + ≥2 rows are selected, DataTable shows Delete/Dup
+		 *  buttons in the filter bar. Parents supply a single confirm + loop. */
+		onbulkdelete?: (rows: Record<string, unknown>[]) => void | Promise<void>;
+		onbulkduplicate?: (rows: Record<string, unknown>[]) => void | Promise<void>;
 		/** Show the filter input above the table and narrow rows to matching cells. */
 		filterable?: boolean;
 		/**
@@ -50,6 +55,8 @@
 		editHref,
 		ondelete,
 		onduplicate,
+		onbulkdelete,
+		onbulkduplicate,
 		filterable = false,
 		colorByKey = $bindable(''),
 		selectable = false,
@@ -211,6 +218,29 @@
 		{#if selectable}
 			<span class="text-[10px] text-slate-600 hidden sm:inline">
 				Shift+↑↓ navigate · Space select · Shift+click header to color
+			</span>
+		{/if}
+		<!-- Bulk actions: only appear with ≥2 selected rows + parent-supplied
+		     handlers. Inline so they sit next to the filter + cart chip rather
+		     than reshuffling the table header. -->
+		{#if selectable && selectedIds.size >= 2 && (onbulkduplicate || onbulkdelete)}
+			{@const selectedRows = sortedRows.filter((r) => selectedIds.has(r.id as string))}
+			<span class="ml-auto flex items-center gap-2">
+				<span class="text-xs text-slate-500">{selectedIds.size} selected</span>
+				{#if onbulkduplicate}
+					<button
+						type="button"
+						onclick={() => onbulkduplicate!(selectedRows)}
+						class="text-xs px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-ocean-400"
+					>Dup all</button>
+				{/if}
+				{#if onbulkdelete}
+					<button
+						type="button"
+						onclick={() => onbulkdelete!(selectedRows)}
+						class="text-xs px-2 py-1 rounded border border-slate-700 text-slate-500 hover:bg-slate-800 hover:text-red-400 hover:border-red-900"
+					>Del all</button>
+				{/if}
 			</span>
 		{/if}
 	</div>

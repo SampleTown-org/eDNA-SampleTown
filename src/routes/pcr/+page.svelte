@@ -71,6 +71,14 @@
 		await fetch(`/api/pcr-plates/${row.id}`, { method: 'DELETE' });
 		allPlates = allPlates.filter(p => p.id !== row.id);
 	}
+	async function bulkDeletePlates(rs: Record<string, unknown>[]) {
+		if (!confirm(`Delete ${rs.length} PCR plates?`)) return;
+		const ids = rs.map((r) => r.id as string);
+		await Promise.all(ids.map((id) => fetch(`/api/pcr-plates/${id}`, { method: 'DELETE' })));
+		const removed = new Set(ids);
+		allPlates = allPlates.filter((p) => !removed.has(p.id));
+		selectedIds = new Set([...selectedIds].filter((id) => !removed.has(id)));
+	}
 
 	async function duplicatePlate(row: Record<string, unknown>) {
 		const res = await fetch(`/api/pcr-plates/${row.id}`);
@@ -116,6 +124,7 @@
 		editHref={(row) => `/pcr/${row.id}/edit`}
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}
+		onbulkdelete={bulkDeletePlates}
 	/>
 
 	{#if orphanReactions.length > 0}

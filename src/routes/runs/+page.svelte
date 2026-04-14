@@ -68,6 +68,14 @@
 		await fetch(`/api/runs/${row.id}`, { method: 'DELETE' });
 		allRuns = allRuns.filter(r => r.id !== row.id);
 	}
+	async function bulkDeleteRuns(rs: Record<string, unknown>[]) {
+		if (!confirm(`Delete ${rs.length} runs?`)) return;
+		const ids = rs.map((r) => r.id as string);
+		await Promise.all(ids.map((id) => fetch(`/api/runs/${id}`, { method: 'DELETE' })));
+		const removed = new Set(ids);
+		allRuns = allRuns.filter((r) => !removed.has(r.id));
+		selectedIds = new Set([...selectedIds].filter((id) => !removed.has(id)));
+	}
 </script>
 
 <div class="space-y-4">
@@ -95,5 +103,6 @@
 		cartFilterLabel={hasParentFilter ? `showing ${runs.length}/${allRuns.length} runs` : ''}
 		editHref={(row) => `/runs/${row.id}/edit`}
 		ondelete={deleteRun}
+		onbulkdelete={bulkDeleteRuns}
 	/>
 </div>

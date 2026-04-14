@@ -151,12 +151,10 @@
 			})
 	);
 
-	/** Shift-drag a rectangle on the map to batch-add every contained pin to
-	 *  the selection. Additive — existing selection is preserved. */
-	function addFromBox(ids: string[]) {
-		const next = new Set(selectedIds);
-		for (const id of ids) next.add(id);
-		selectedIds = next;
+	/** Shift-drag a rectangle on the map replaces the existing selection with
+	 *  the contained pins — each drag is "select this area", not accumulate. */
+	function replaceFromBox(ids: string[]) {
+		selectedIds = new Set(ids);
 	}
 
 	async function deleteSample(row: Record<string, unknown>) {
@@ -172,6 +170,29 @@
 		const body = { ...orig, samp_name: `${orig.samp_name}_copy`, id: undefined, created_at: undefined, updated_at: undefined };
 		const created = await fetch('/api/samples', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 		if (created.ok) { const s = await created.json(); goto(`/samples/${s.id}`); }
+	}
+
+	async function bulkDeleteSamples(rs: Record<string, unknown>[]) {
+		if (!confirm(`Delete ${rs.length} samples? This can't be undone.`)) return;
+		const ids = rs.map((r) => r.id as string);
+		await Promise.all(ids.map((id) => fetch(`/api/samples/${id}`, { method: 'DELETE' })));
+		const removed = new Set(ids);
+		allSamples = allSamples.filter((s) => !removed.has(s.id));
+		selectedIds = new Set([...selectedIds].filter((id) => !removed.has(id)));
+	}
+
+	async function bulkDuplicateSamples(rs: Record<string, unknown>[]) {
+		if (!confirm(`Duplicate ${rs.length} samples?`)) return;
+		const created: any[] = [];
+		for (const r of rs) {
+			const res = await fetch(`/api/samples/${r.id}`);
+			if (!res.ok) continue;
+			const orig = await res.json();
+			const body = { ...orig, samp_name: `${orig.samp_name}_copy`, id: undefined, created_at: undefined, updated_at: undefined };
+			const dup = await fetch('/api/samples', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+			if (dup.ok) created.push(await dup.json());
+		}
+		if (created.length > 0) allSamples = [...created, ...allSamples];
 	}
 </script>
 
@@ -189,7 +210,7 @@
 	</div>
 
 	{#if markers.length > 0}
-		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={addFromBox} />
+		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={replaceFromBox} />
 	{/if}
 
 	<!-- Optional columns: drawn from MIxS parameters that have data on ≥1 sample -->
@@ -240,6 +261,8 @@
 		editHref={(row) => `/samples/${row.id}/edit`}
 		ondelete={deleteSample}
 		onduplicate={duplicateSample}
+		onbulkdelete={bulkDeleteSamples}
+		onbulkduplicate={bulkDuplicateSamples}
 		bind:colorByKey
 	/>
 </div>

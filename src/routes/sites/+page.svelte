@@ -107,13 +107,11 @@
 			})
 	);
 
-	/** Shift-drag a rectangle on the map to batch-add every contained pin to
-	 *  the selection. Additive — existing selection is preserved so users
-	 *  can build up a selection with multiple drags. */
-	function addFromBox(ids: string[]) {
-		const next = new Set(selectedIds);
-		for (const id of ids) next.add(id);
-		selectedIds = next;
+	/** Shift-drag a rectangle on the map to batch-select every contained pin.
+	 *  Each drag replaces the existing selection — drawing a new area is
+	 *  "selecting that area", not accumulating across drags. */
+	function replaceFromBox(ids: string[]) {
+		selectedIds = new Set(ids);
 	}
 
 	async function deleteSite(row: Record<string, unknown>) {
@@ -129,6 +127,29 @@
 		const body = { ...original, site_name: `${original.site_name} (copy)`, id: undefined, created_at: undefined, updated_at: undefined };
 		const created = await fetch('/api/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 		if (created.ok) { const newSite = await created.json(); goto(`/sites/${newSite.id}`); }
+	}
+
+	async function bulkDeleteSites(rs: Record<string, unknown>[]) {
+		if (!confirm(`Delete ${rs.length} sites? This can't be undone.`)) return;
+		const ids = rs.map((r) => r.id as string);
+		await Promise.all(ids.map((id) => fetch(`/api/sites/${id}`, { method: 'DELETE' })));
+		const removed = new Set(ids);
+		allSites = allSites.filter((s) => !removed.has(s.id));
+		selectedIds = new Set([...selectedIds].filter((id) => !removed.has(id)));
+	}
+
+	async function bulkDuplicateSites(rs: Record<string, unknown>[]) {
+		if (!confirm(`Duplicate ${rs.length} sites?`)) return;
+		const created: any[] = [];
+		for (const r of rs) {
+			const res = await fetch(`/api/sites/${r.id}`);
+			if (!res.ok) continue;
+			const orig = await res.json();
+			const body = { ...orig, site_name: `${orig.site_name} (copy)`, id: undefined, created_at: undefined, updated_at: undefined };
+			const dup = await fetch('/api/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+			if (dup.ok) created.push(await dup.json());
+		}
+		if (created.length > 0) allSites = [...created, ...allSites];
 	}
 </script>
 
@@ -146,7 +167,7 @@
 	</div>
 
 	{#if markers.length > 0}
-		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={addFromBox} />
+		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={replaceFromBox} />
 	{/if}
 
 	<DataTable
@@ -164,5 +185,7 @@
 		editHref={(row) => `/sites/${row.id}/edit`}
 		ondelete={deleteSite}
 		onduplicate={duplicateSite}
+		onbulkdelete={bulkDeleteSites}
+		onbulkduplicate={bulkDuplicateSites}
 	/>
 </div>

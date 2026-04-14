@@ -65,6 +65,28 @@
 		const created = await fetch('/api/extracts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 		if (created.ok) { const e = await created.json(); goto(`/extracts/${e.id}`); }
 	}
+
+	async function bulkDeleteExtracts(rs: Record<string, unknown>[]) {
+		if (!confirm(`Delete ${rs.length} extracts?`)) return;
+		const ids = rs.map((r) => r.id as string);
+		await Promise.all(ids.map((id) => fetch(`/api/extracts/${id}`, { method: 'DELETE' })));
+		const removed = new Set(ids);
+		allExtracts = allExtracts.filter((e) => !removed.has(e.id));
+		selectedIds = new Set([...selectedIds].filter((id) => !removed.has(id)));
+	}
+	async function bulkDuplicateExtracts(rs: Record<string, unknown>[]) {
+		if (!confirm(`Duplicate ${rs.length} extracts?`)) return;
+		const created: any[] = [];
+		for (const r of rs) {
+			const res = await fetch(`/api/extracts/${r.id}`);
+			if (!res.ok) continue;
+			const orig = await res.json();
+			const body = { ...orig, extract_name: `${orig.extract_name}_copy`, id: undefined, created_at: undefined, updated_at: undefined };
+			const dup = await fetch('/api/extracts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+			if (dup.ok) created.push(await dup.json());
+		}
+		if (created.length > 0) allExtracts = [...created, ...allExtracts];
+	}
 </script>
 
 <div class="space-y-4">
@@ -94,5 +116,7 @@
 		editHref={(row) => `/extracts/${row.id}/edit`}
 		ondelete={deleteExtract}
 		onduplicate={duplicateExtract}
+		onbulkdelete={bulkDeleteExtracts}
+		onbulkduplicate={bulkDuplicateExtracts}
 	/>
 </div>
