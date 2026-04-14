@@ -548,7 +548,8 @@
 			<thead>
 				<tr class="bg-slate-900 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800">
 					<th class="w-8 sticky left-0 bg-slate-900 z-20"></th>
-					<th class="px-2 py-2 text-left font-medium w-80 sticky left-8 bg-slate-900 z-10">Parameter</th>
+					<th class="px-2 py-2 text-left font-medium w-72 sticky left-8 bg-slate-900 z-10">Parameter</th>
+					<th class="w-14 bg-slate-900"></th>
 					{#each rows as _row, i}
 						<th class="px-2 py-2 text-left font-medium min-w-48">
 							<div class="flex items-center gap-1">
@@ -570,7 +571,7 @@
 				{#each sections as sec}
 					<tr class="bg-slate-900/60">
 						<th
-							colspan={rows.length + 2}
+							colspan={rows.length + 3}
 							class="sticky left-0 px-3 py-1.5 text-left text-[11px] uppercase tracking-wider font-semibold text-slate-300 border-y border-slate-800"
 						>
 							{sec.title}
@@ -597,16 +598,20 @@
 									{#if getSlot(col.key)}
 										<GlossaryDoc slot={col.key} iconOnly />
 									{/if}
-									{#if rows.length > 1}
-										<button
-											type="button"
-											onclick={() => fillRight(col.key)}
-											class="text-[11px] text-slate-500 hover:text-ocean-400"
-											title="Fill sample #1 across empty cells of this parameter"
-										>fill&nbsp;→</button>
-									{/if}
 								</div>
 							</th>
+							<!-- fill → lives in its own narrow column so it's right-aligned
+							     to the sample inputs and never wraps onto a second line. -->
+							<td class="px-1 py-1 text-right align-top">
+								{#if rows.length > 1}
+									<button
+										type="button"
+										onclick={() => fillRight(col.key)}
+										class="text-[11px] text-slate-500 hover:text-ocean-400 whitespace-nowrap"
+										title="Fill sample #1 across empty cells of this parameter"
+									>fill&nbsp;→</button>
+								{/if}
+							</td>
 							{#each rows as _row, i}
 								<td class="px-2 py-1 align-top">
 									{#if col.widget === 'select-project'}
@@ -694,7 +699,7 @@
 				     header-bar control. -->
 				<tr>
 					<td class="w-8 px-1 sticky left-0 bg-slate-950 z-10"></td>
-					<td class="px-2 py-2 sticky left-8 bg-slate-950 z-10" colspan={rows.length + 1}>
+					<td class="px-2 py-2 sticky left-8 bg-slate-950 z-10" colspan={rows.length + 2}>
 						<div class="flex items-center gap-2">
 							<input
 								type="text"
