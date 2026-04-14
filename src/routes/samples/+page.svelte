@@ -124,17 +124,35 @@
 		return `hsl(${hue}, 65%, 55%)`;
 	}
 
+	/** Friendly column label for the color-by tooltip line. Columns are the
+	 *  default DataTable columns plus any user-added extra parameter. */
+	const colorByLabel = $derived.by(() => {
+		if (!colorByKey) return '';
+		const def = columns.find((c: any) => c.key === colorByKey);
+		return def?.label ?? colorByKey;
+	});
 	let markers = $derived(
 		displaySamples
 			.filter((s: any) => s.latitude != null && s.longitude != null)
 			.map((s: any) => ({
+				id: s.id,
 				lat: s.latitude,
 				lng: s.longitude,
 				label: `${s.samp_name} (${s.site_name})`,
 				href: `/samples/${s.id}`,
-				color: colorByKey ? pinColorForValue(s[colorByKey]) : undefined
+				color: colorByKey ? pinColorForValue(s[colorByKey]) : undefined,
+				colorLabel: colorByKey ? colorByLabel : undefined,
+				colorValue: colorByKey ? (s[colorByKey] != null ? String(s[colorByKey]) : '—') : undefined
 			}))
 	);
+
+	/** Toggle selection when a map pin is clicked — keeps the cart in sync
+	 *  with whatever the user points at on the map. */
+	function toggleFromMap(id: string) {
+		const next = new Set(selectedIds);
+		if (next.has(id)) next.delete(id); else next.add(id);
+		selectedIds = next;
+	}
 
 	async function deleteSample(row: Record<string, unknown>) {
 		if (!confirm(`Delete sample "${row.samp_name}"?`)) return;
@@ -166,7 +184,7 @@
 	</div>
 
 	{#if markers.length > 0}
-		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" />
+		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onmarkerclick={toggleFromMap} />
 	{/if}
 
 	<!-- Optional columns: drawn from MIxS parameters that have data on ≥1 sample -->

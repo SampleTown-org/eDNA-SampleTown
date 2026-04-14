@@ -11,18 +11,45 @@
 		 * Multi-marker mode. Each marker can optionally specify a `color` (any
 		 * CSS color string, typically `hsl(...)`) — when set, the marker is
 		 * rendered as a colored circle instead of the default Leaflet pin.
-		 * Used by /sites to mirror the DataTable's color-by tint.
+		 * `id` + `colorLabel` / `colorValue` are used by /sites + /samples to
+		 * surface the colored-by column in the tooltip and let the parent
+		 * sync selection state when a pin is clicked.
 		 */
-		markers?: Array<{ lat: number; lng: number; label: string; href?: string; color?: string }>;
+		markers?: Array<{
+			id?: string;
+			lat: number;
+			lng: number;
+			label: string;
+			href?: string;
+			color?: string;
+			colorLabel?: string;
+			colorValue?: string;
+		}>;
+		/** Fired when a marker is clicked. Used by the sites + samples lists to
+		 *  toggle the row's selection (which feeds the cart) via the same path
+		 *  as clicking the checkbox in the DataTable. */
+		onmarkerclick?: (id: string) => void;
 	}
 
-	let { latitude = $bindable(), longitude = $bindable(), onchange, height = '300px', readonly = false, markers = [] }: Props = $props();
+	let { latitude = $bindable(), longitude = $bindable(), onchange, height = '300px', readonly = false, markers = [], onmarkerclick }: Props = $props();
 
 	let mapEl: HTMLDivElement;
 	let map: any;
 	let marker: any;
 	let markerLayer: any;
 	let L: any;
+
+	/** Escape operator-entered strings before injecting into popup HTML — site
+	 *  names, column values, etc. Defense-in-depth: keeps any stray angle
+	 *  brackets or quotes from re-entering the DOM as live markup. */
+	function escapeHtml(s: string): string {
+		return String(s)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+	}
 
 	onMount(async () => {
 		L = await import('leaflet');
@@ -103,10 +130,25 @@
 			} else {
 				mk = L.marker([m.lat, m.lng]);
 			}
-			if (m.href) {
-				mk.bindPopup(`<a href="${m.href}" style="font-weight:600">${m.label}</a>`);
-			} else {
-				mk.bindPopup(m.label);
+			// Popup shows the entity label (linked to its detail page if href is
+			// provided) plus the colored-by column value when the operator has
+			// a color-by active on the sister DataTable — so hovering a pin
+			// reveals *why* it's that colour.
+			const head = m.href
+				? `<a href="${escapeHtml(m.href)}" style="font-weight:600">${escapeHtml(m.label)}</a>`
+				: escapeHtml(m.label);
+			const colorLine =
+				m.colorLabel && m.colorValue
+					? `<div style="margin-top:4px;font-size:11px;color:#94a3b8"><span style="color:#64748b">${escapeHtml(m.colorLabel)}:</span> ${escapeHtml(m.colorValue)}</div>`
+					: '';
+			mk.bindPopup(`${head}${colorLine}`);
+			// Clicking a pin: tell the parent so it can toggle the row's
+			// selection and keep the cart in sync with whatever the user is
+			// clicking on the map. We use `click` — the default popup-open is
+			// preserved by Leaflet; the selection side-effect happens alongside.
+			if (onmarkerclick && m.id) {
+				const id = m.id;
+				mk.on('click', () => onmarkerclick!(id));
 			}
 			layer.addLayer(mk);
 		}

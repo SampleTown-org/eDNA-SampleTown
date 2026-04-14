@@ -82,17 +82,34 @@
 		return `hsl(${hue}, 65%, 55%)`;
 	}
 
+	/** Friendly label for the color-by column so the tooltip reads
+	 *  "Biome: marine biome [ENVO:...]" instead of "env_broad_scale: …". */
+	const colorByLabel = $derived(
+		colorByKey ? (columns.find((c) => c.key === colorByKey)?.label ?? colorByKey) : ''
+	);
 	let markers = $derived(
 		sites
 			.filter((s: any) => s.latitude != null && s.longitude != null)
 			.map((s: any) => ({
+				id: s.id,
 				lat: s.latitude,
 				lng: s.longitude,
 				label: `${s.site_name} (${s.sample_count} samples)`,
 				href: `/sites/${s.id}`,
-				color: colorByKey ? pinColorForValue(s[colorByKey]) : undefined
+				color: colorByKey ? pinColorForValue(s[colorByKey]) : undefined,
+				colorLabel: colorByKey ? colorByLabel : undefined,
+				colorValue: colorByKey ? (s[colorByKey] != null ? String(s[colorByKey]) : '—') : undefined
 			}))
 	);
+
+	/** Clicking a pin toggles the row's selection (same affordance as the
+	 *  checkbox in the DataTable below). Selection syncs to the cart via the
+	 *  existing "Update Cart" button. */
+	function toggleFromMap(id: string) {
+		const next = new Set(selectedIds);
+		if (next.has(id)) next.delete(id); else next.add(id);
+		selectedIds = next;
+	}
 
 	async function deleteSite(row: Record<string, unknown>) {
 		if (!confirm(`Delete site "${row.site_name}"?`)) return;
@@ -124,7 +141,7 @@
 	</div>
 
 	{#if markers.length > 0}
-		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" />
+		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onmarkerclick={toggleFromMap} />
 	{/if}
 
 	<DataTable
