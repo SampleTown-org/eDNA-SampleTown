@@ -507,22 +507,20 @@
 		>
 			+ Sample
 		</button>
-		{#if nonEmptyRows.length > 0}
-			<button
-				type="button"
-				onclick={submit}
-				disabled={saving}
-				class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium"
-			>
-				{saving ? 'Creating...' : `Create ${nonEmptyRows.length} sample${nonEmptyRows.length === 1 ? '' : 's'}`}
-			</button>
-		{:else if result && result.failed === 0}
-			<div class="px-4 py-2 rounded-lg bg-green-900/30 border border-green-800 text-green-300 text-sm font-medium">
-				✓ {result.imported} sample{result.imported === 1 ? '' : 's'} created
-			</div>
-		{:else}
-			<span class="px-4 py-2 text-sm text-slate-500 italic">Fill in at least one sample name to create</span>
-		{/if}
+		<span
+			class="px-2 py-1 rounded bg-slate-800/60 border border-slate-800 text-xs text-slate-400 font-mono"
+			title="Sample columns currently on deck (+Sample adds one)"
+		>
+			{rows.length} on deck
+		</span>
+		<button
+			type="button"
+			onclick={submit}
+			disabled={saving || nonEmptyRows.length === 0}
+			class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium"
+		>
+			{saving ? 'Creating...' : `Create ${nonEmptyRows.length} sample${nonEmptyRows.length === 1 ? '' : 's'}`}
+		</button>
 		<a
 			href="/samples"
 			class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium"
