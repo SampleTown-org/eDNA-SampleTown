@@ -21,5 +21,12 @@ export const load: PageServerLoad = async ({ params }) => {
 		ORDER BY s.collection_date DESC
 	`).all(params.siteId);
 
-	return { site, samples };
+	const photos = db.prepare(`
+		SELECT id, filename, original_filename, mime_type, size_bytes, caption, created_at
+		FROM site_photos
+		WHERE site_id = ? AND is_deleted = 0
+		ORDER BY created_at DESC
+	`).all(params.siteId);
+
+	return { site, samples, photos };
 };

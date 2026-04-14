@@ -100,6 +100,23 @@ CREATE TABLE IF NOT EXISTS sites (
 CREATE INDEX IF NOT EXISTS idx_sites_project ON sites(project_id);
 CREATE INDEX IF NOT EXISTS idx_sites_coords ON sites(latitude, longitude);
 
+-- Site photo gallery. Binaries live under data/site_photos/<id>.<ext>;
+-- this table stores the metadata and owns the lifecycle (soft delete).
+CREATE TABLE IF NOT EXISTS site_photos (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,                -- on-disk filename (id.ext)
+    original_filename TEXT,                -- uploader's original name
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    caption TEXT,
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_photos_site ON site_photos(site_id) WHERE is_deleted = 0;
+
 -- ============================================================
 -- PHYSICAL SAMPLES (MIxS 6.3-aligned)
 --
