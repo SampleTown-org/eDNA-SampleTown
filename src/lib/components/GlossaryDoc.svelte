@@ -6,11 +6,21 @@
 	 * full glossary entry.
 	 *
 	 * The popover uses `position: fixed` (anchored to the ⓘ button's
-	 * bounding rect captured at open time) so it escapes `overflow-auto`
-	 * ancestors like the batch table's scroll container. Closes on outside
-	 * click, Escape, window resize, or any ancestor scroll.
+	 * bounding rect captured at open time) AND is portalled to
+	 * document.body so it escapes any sticky/z-indexed ancestor stacking
+	 * context (the batch table's sticky parameter-label column, in
+	 * particular, which otherwise paints over the popover). Closes on
+	 * outside click, Escape, window resize, or any ancestor scroll.
 	 */
 	import { getSlot } from '$lib/mixs/schema-index';
+
+	/** Svelte action: relocate the node to document.body for the lifetime
+	 *  of the component. Restores nothing — destroy removes the node, which
+	 *  is the only user of it. */
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return { destroy() { node.remove(); } };
+	}
 
 	interface Props {
 		slot: string;
@@ -93,7 +103,8 @@
 
 {#if open && anchor && hasDoc}
 	<div
-		class="glossary-doc-popover fixed z-[60] w-80 p-3 rounded-lg border border-slate-700 bg-slate-900 shadow-xl text-xs text-slate-300 font-normal"
+		use:portal
+		class="glossary-doc-popover fixed z-[9999] w-80 p-3 rounded-lg border border-slate-700 bg-slate-900 shadow-xl text-xs text-slate-300 font-normal"
 		style="top: {anchor.top}px; left: {anchor.left}px;"
 		role="dialog"
 	>
