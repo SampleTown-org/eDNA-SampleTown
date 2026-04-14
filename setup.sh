@@ -28,11 +28,13 @@ echo "    port:    $PORT"
 echo "    repo:    $REPO_URL ($BRANCH)"
 echo
 
-# Node.js via NodeSource
+# Node.js via NodeSource. Also installs a C toolchain + python3 so that
+# native modules (better-sqlite3) can compile if npm doesn't find a
+# prebuilt binary for the host's Node/arch combination.
 if ! command -v node &>/dev/null; then
-    echo ">> Installing Node.js ${NODE_VERSION}..."
+    echo ">> Installing Node.js ${NODE_VERSION} + build tools..."
     curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | sudo -E bash -
-    sudo apt-get install -y nodejs
+    sudo apt-get install -y nodejs build-essential python3
 fi
 echo "Node: $(node --version)"
 
