@@ -50,17 +50,19 @@
 				SampleTown
 			</a>
 
-			<!-- Desktop nav -->
-			<div class="hidden md:flex items-center gap-1">
-				{#each navLinks.filter((l) => !l.writerOnly || user?.role !== 'viewer') as link}
-					<a
-						href={link.href}
-						class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
-					>
-						{link.label}
-					</a>
-				{/each}
-			</div>
+			<!-- Desktop nav (only for signed-in users) -->
+			{#if user}
+				<div class="hidden md:flex items-center gap-1">
+					{#each navLinks.filter((l) => !l.writerOnly || user?.role !== 'viewer') as link}
+						<a
+							href={link.href}
+							class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+						>
+							{link.label}
+						</a>
+					{/each}
+				</div>
+			{/if}
 
 			<div class="flex items-center gap-3">
 				{#if user}
@@ -89,42 +91,42 @@
 						class="text-sm text-slate-400 hover:text-white hidden sm:inline"
 						title="Manage account"
 					>{user.username}</a>
+					<!-- Cart toggle + mobile hamburger live inside the signed-in
+					     branch — logged-out visitors see neither. -->
+					<button
+						onclick={() => { cart.toggleSidebar(); if (cart.count === 0 && !cart.sidebarOpen) cart.openSidebar(); }}
+						class="relative px-2 py-1 text-sm transition-colors {cart.sidebarOpen ? 'text-ocean-400' : 'text-slate-400 hover:text-white'}"
+						title="{cart.sidebarOpen ? 'Close' : 'Open'} cart"
+					>
+						Cart
+						{#if cart.count > 0}
+							<span class="absolute -top-1 -right-1 w-4 h-4 bg-ocean-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+								{cart.count}
+							</span>
+						{/if}
+					</button>
+
+					<button
+						class="md:hidden p-1.5 text-slate-400 hover:text-white"
+						onclick={() => (mobileOpen = !mobileOpen)}
+						aria-label="Toggle menu"
+					>
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+							{#if mobileOpen}
+								<path d="M6 18L18 6M6 6l12 12" />
+							{:else}
+								<path d="M4 6h16M4 12h16M4 18h16" />
+							{/if}
+						</svg>
+					</button>
 				{:else}
 					<a href="/auth/login" class="text-sm text-ocean-400 hover:text-ocean-300">Sign in</a>
 				{/if}
-
-				<!-- Cart toggle (always visible, far right) -->
-				<button
-					onclick={() => { cart.toggleSidebar(); if (cart.count === 0 && !cart.sidebarOpen) cart.openSidebar(); }}
-					class="relative px-2 py-1 text-sm transition-colors {cart.sidebarOpen ? 'text-ocean-400' : 'text-slate-400 hover:text-white'}"
-					title="{cart.sidebarOpen ? 'Close' : 'Open'} cart"
-				>
-					Cart
-					{#if cart.count > 0}
-						<span class="absolute -top-1 -right-1 w-4 h-4 bg-ocean-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-							{cart.count}
-						</span>
-					{/if}
-				</button>
-
-				<!-- Mobile menu button -->
-				<button
-					class="md:hidden p-1.5 text-slate-400 hover:text-white"
-					onclick={() => (mobileOpen = !mobileOpen)}
-				>
-					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-						{#if mobileOpen}
-							<path d="M6 18L18 6M6 6l12 12" />
-						{:else}
-							<path d="M4 6h16M4 12h16M4 18h16" />
-						{/if}
-					</svg>
-				</button>
 			</div>
 		</div>
 
-		<!-- Mobile nav -->
-		{#if mobileOpen}
+		<!-- Mobile nav (only when signed in; the toggle is also hidden otherwise) -->
+		{#if mobileOpen && user}
 			<div class="md:hidden pb-3 border-t border-slate-800 mt-1 pt-2">
 				{#each navLinks.filter((l) => !l.desktopOnly && (!l.writerOnly || user?.role !== 'viewer')) as link}
 					<a

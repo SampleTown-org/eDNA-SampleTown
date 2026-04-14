@@ -13,6 +13,16 @@
 	}
 
 	let { data, children }: Props = $props();
+
+	/** On logout (or any visit where there's no authenticated user) wipe
+	 *  the client-side cart. The cart lives in localStorage, which would
+	 *  otherwise bleed a signed-out browser's previously-selected items
+	 *  into whoever signs in next on the same machine. */
+	$effect(() => {
+		if (!data.user && cart.count > 0) {
+			cart.clearAll();
+		}
+	});
 </script>
 
 <div class="min-h-screen flex flex-col" class:role-viewer={data.user?.role === 'viewer'}>
@@ -21,7 +31,7 @@
 		<main class="flex-1 min-w-0 max-w-7xl mx-auto w-full px-4 py-6">
 			{@render children()}
 		</main>
-		{#if cart.sidebarOpen}
+		{#if cart.sidebarOpen && data.user}
 			<CartSidebar />
 		{/if}
 	</div>
