@@ -111,6 +111,14 @@ export const cart = {
 		persist(items);
 	},
 
+	/** Replace every item in the cart with the given list. Used by the
+	 *  saved-carts feature when loading a cart: preserves the saved order
+	 *  and the saved labels rather than merging into the current set. */
+	replaceAll(newItems: CartItem[]) {
+		items = [...newItems];
+		persist(items);
+	},
+
 	get sidebarOpen() {
 		return _sidebarOpen;
 	},

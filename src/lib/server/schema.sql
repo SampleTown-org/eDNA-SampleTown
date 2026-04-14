@@ -135,6 +135,39 @@ CREATE TABLE IF NOT EXISTS sample_photos (
 CREATE INDEX IF NOT EXISTS idx_sample_photos_sample ON sample_photos(sample_id) WHERE is_deleted = 0;
 
 -- ============================================================
+-- SAVED CARTS — named bundles of entity references a user assembled
+-- on the cart sidebar. Public carts are visible to everyone;
+-- private carts are only visible to the owner.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS saved_carts (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    is_public INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_carts_user ON saved_carts(user_id);
+CREATE INDEX IF NOT EXISTS idx_saved_carts_public ON saved_carts(is_public) WHERE is_public = 1;
+
+-- Individual cart items. Entity metadata (label, sublabel) is denormalized
+-- at save time so a saved cart still reads correctly if the underlying
+-- entity gets renamed or soft-deleted later. position preserves the
+-- order the user built the cart in.
+CREATE TABLE IF NOT EXISTS saved_cart_items (
+    cart_id TEXT NOT NULL REFERENCES saved_carts(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    label TEXT,
+    sublabel TEXT,
+    PRIMARY KEY (cart_id, position)
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_cart_items_cart ON saved_cart_items(cart_id);
+
+-- ============================================================
 -- PHYSICAL SAMPLES (MIxS 6.3-aligned)
 --
 -- Column names here mirror MIxS LinkML slot names 1:1 so import/export is a
