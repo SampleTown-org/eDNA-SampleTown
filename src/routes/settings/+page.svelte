@@ -83,7 +83,7 @@
 		return 'MIxS';
 	}
 
-	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback' | 'labels' | 'backup';
+	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback' | 'labels' | 'backup' | 'danger';
 
 	// --- Search filter (shared across the list-based tabs, reset on tab switch) ---
 	let searchQuery = $state('');
@@ -224,6 +224,28 @@
 			backupMsg = 'Saved.';
 		}
 		backupBusy = false;
+	}
+
+	// --- Danger zone: delete the entire lab ---
+	let deleteLabConfirm = $state('');
+	let deleteLabBusy = $state(false);
+	let deleteLabError = $state('');
+
+	async function deleteLab() {
+		deleteLabBusy = true; deleteLabError = '';
+		const res = await fetch('/api/lab', {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ confirm: deleteLabConfirm })
+		});
+		if (res.ok) {
+			// All lab data wiped, caller's lab_id is now NULL → next request
+			// gets bounced to /auth/setup-lab. Send them there directly.
+			window.location.href = '/auth/setup-lab';
+			return;
+		}
+		deleteLabError = (await res.json().catch(() => ({}))).error || 'Delete failed';
+		deleteLabBusy = false;
 	}
 
 	async function runBackupNow() {
@@ -443,7 +465,7 @@
 
 	// Support ?tab= URL parameter to deep-link to a category
 	const urlTab = $page.url.searchParams.get('tab');
-	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : urlTab === 'backup' ? 'backup' : 'category';
+	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : urlTab === 'backup' ? 'backup' : urlTab === 'danger' ? 'danger' : 'category';
 	const initialCategory = (urlTab && urlTab in CATEGORY_LABELS) ? urlTab : 'geo_loc_name';
 
 	let tabType = $state<TabType>(initialTab);
@@ -725,6 +747,7 @@
 		<button onclick={() => { tabType = 'labels'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'labels' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Labels</button>
 		{#if data.isAdmin}
 			<button onclick={() => { tabType = 'backup'; resetSearch(); loadBackupData(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'backup' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Backup</button>
+			<button onclick={() => { tabType = 'danger'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'danger' ? 'bg-red-700 text-white' : 'text-red-400 hover:text-red-300'}">Danger</button>
 		{/if}
 		{#if data.isAdmin}
 			<button onclick={() => { tabType = 'feedback'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'feedback' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">
@@ -1472,5 +1495,43 @@
 			{/if}
 		</div>
 	</div>
+
+	{:else if tabType === 'danger'}
+	<div class="space-y-6 max-w-2xl">
+		<div>
+			<h2 class="text-base font-semibold text-red-300">Delete this lab</h2>
+			<p class="text-sm text-slate-400 mt-1">
+				Permanently removes <strong class="text-white">{data.lab?.name ?? 'this lab'}</strong> and
+				<strong class="text-red-300">every project, site, sample, extract, PCR plate, library
+				plate, sequencing run, analysis, personnel record, picklist, primer set, PCR protocol,
+				saved cart, invite, snapshot history record, and feedback row</strong> in it.
+				Members keep their accounts but lose access to this lab — they can start a new lab
+				or accept an invite to another one.
+			</p>
+			<p class="text-xs text-slate-500 mt-2">
+				If you have configured GitHub backups, the JSON snapshot in your backup repo is
+				NOT deleted — that's your safety net. Pull a fresh snapshot first if you want a
+				point-in-time export before the delete.
+			</p>
+		</div>
+
+		<form onsubmit={(e) => { e.preventDefault(); deleteLab(); }}
+			class="p-4 rounded-lg border border-red-900/60 bg-red-950/20 space-y-3">
+			<label for="del-lab" class="block text-xs text-slate-300">
+				Type the lab name <code class="text-red-300">{data.lab?.name ?? ''}</code> exactly to confirm:
+			</label>
+			<input id="del-lab" type="text" bind:value={deleteLabConfirm}
+				autocomplete="off"
+				class="{inputCls} border-red-900 focus:border-red-500" />
+			{#if deleteLabError}
+				<div class="text-xs text-red-400">{deleteLabError}</div>
+			{/if}
+			<button type="submit" disabled={deleteLabBusy || deleteLabConfirm !== (data.lab?.name ?? '__no__')}
+				class="px-3 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 text-sm font-medium">
+				{deleteLabBusy ? 'Deleting…' : 'Permanently delete this lab'}
+			</button>
+		</form>
+	</div>
+
 	{/if}
 </div>

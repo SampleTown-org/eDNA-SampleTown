@@ -95,6 +95,30 @@
 
 	const inputCls =
 		'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
+
+	// --- Danger zone: self-delete account ---
+	let deleteOpen = $state(false);
+	let deleteConfirm = $state('');
+	let deleteBusy = $state(false);
+	let deleteError = $state('');
+
+	async function deleteAccount() {
+		deleteBusy = true; deleteError = '';
+		const res = await fetch('/api/account', {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ confirm: deleteConfirm })
+		});
+		if (res.ok) {
+			// Server already wiped the session cookie; navigate to login so
+			// the user sees they're signed out (don't try to fetch again,
+			// any further request would 401).
+			window.location.href = '/auth/login';
+			return;
+		}
+		deleteError = (await res.json().catch(() => ({}))).error || 'Delete failed';
+		deleteBusy = false;
+	}
 </script>
 
 <div class="max-w-xl space-y-8">
@@ -254,6 +278,46 @@
 				There's nothing to change here — manage your GitHub credentials at
 				<a href="https://github.com/settings/security" target="_blank" class="text-ocean-400 hover:text-ocean-300">github.com/settings/security</a>.
 			</p>
+		{/if}
+	</div>
+
+	<!-- Danger zone -->
+	<div class="p-4 rounded-lg border border-red-900/60 bg-red-950/20 space-y-3">
+		<div>
+			<h2 class="text-sm font-semibold text-red-300 uppercase tracking-wider">Danger zone</h2>
+			<p class="text-xs text-slate-400 mt-1">
+				Deleting your account signs you out and revokes access. Your past contributions
+				(samples / extracts / notes you created) stay attributed to your username so the
+				lab's audit trail isn't broken — but you can no longer sign in.
+			</p>
+		</div>
+		{#if !deleteOpen}
+			<button type="button" onclick={() => { deleteOpen = true; deleteError = ''; deleteConfirm = ''; }}
+				class="px-3 py-1.5 border border-red-800 text-red-300 rounded-lg hover:bg-red-900/30 text-sm font-medium">
+				Delete my account
+			</button>
+		{:else}
+			<form onsubmit={(e) => { e.preventDefault(); deleteAccount(); }} class="space-y-2">
+				<label for="del-confirm" class="block text-xs text-slate-300">
+					Type <code class="text-red-300">{data.user?.username}</code> to confirm:
+				</label>
+				<input id="del-confirm" type="text" bind:value={deleteConfirm}
+					autocomplete="off"
+					class="{inputCls} border-red-900 focus:border-red-500" />
+				{#if deleteError}
+					<div class="text-xs text-red-400">{deleteError}</div>
+				{/if}
+				<div class="flex gap-2">
+					<button type="submit" disabled={deleteBusy || deleteConfirm !== data.user?.username}
+						class="px-3 py-1.5 bg-red-700 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 text-sm font-medium">
+						{deleteBusy ? 'Deleting…' : 'Permanently delete'}
+					</button>
+					<button type="button" onclick={() => { deleteOpen = false; }}
+						class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 text-sm font-medium">
+						Cancel
+					</button>
+				</div>
+			</form>
 		{/if}
 	</div>
 </div>

@@ -63,7 +63,7 @@ const ADMIN_WRITE_PREFIXES = [
 	'/api/db/',
 	'/api/feedback/', // covers /api/feedback/[id] PUT/DELETE
 	'/api/invites',   // covers /api/invites and /api/invites/[token]
-	'/api/lab/'       // covers /api/lab/settings (lab-level config edits)
+	'/api/lab'        // covers /api/lab (DELETE the lab) + /api/lab/settings + /api/lab/settings/test
 ];
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
