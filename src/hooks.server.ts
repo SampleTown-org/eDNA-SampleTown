@@ -141,12 +141,18 @@ function blockedByPasswordChange(pathname: string, user: { must_change_password:
  * Routes a logged-in user with lab_id=NULL is allowed to reach. Everything
  * else gets bounced to /auth/setup-lab until they either create their own
  * lab or accept an invite. Mirrors the must_change_password gate above.
+ *
+ * /account and /api/account/* are explicitly allowed: account management
+ * (avatar, password, self-delete) doesn't touch lab data, and a user
+ * mid-onboarding shouldn't be locked out of deleting their own account
+ * if they change their mind.
  */
 const LAB_SETUP_ALLOWLIST = new Set([
 	'/auth/setup-lab',
 	'/auth/logout',
 	'/api/auth/setup-lab',
-	'/api/auth/join'
+	'/api/auth/join',
+	'/account'
 ]);
 
 function blockedByMissingLab(pathname: string, user: { lab_id: string | null } | null): boolean {
@@ -154,6 +160,9 @@ function blockedByMissingLab(pathname: string, user: { lab_id: string | null } |
 	if (LAB_SETUP_ALLOWLIST.has(pathname)) return false;
 	// Allow the join-via-token routes (path is /auth/join/<token>).
 	if (pathname.startsWith('/auth/join/')) return false;
+	// Allow self-account API endpoints (avatar, password, self-delete) so
+	// a lab-less user can still manage / delete their own account.
+	if (pathname === '/api/account' || pathname.startsWith('/api/account/')) return false;
 	if (pathname.startsWith('/_app/') || pathname === '/favicon.ico') return false;
 	return true;
 }
