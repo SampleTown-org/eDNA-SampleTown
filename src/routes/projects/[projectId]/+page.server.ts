@@ -145,5 +145,5 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		}))
 		.sort((a, b) => b.total - a.total || a.full_name.localeCompare(b.full_name));
 
-	return { project, samples, roster };
+	return { project, sites, samples, roster };
 };

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { page } from '$app/state';
 	import { makeRankedHueMap, hashHue } from '$lib/color-rank';
 
 	interface Column {
@@ -109,15 +110,22 @@
 		return bg ?? 'rgb(2, 6, 23)'; // slate-950
 	}
 
+	// Viewer role hides every `.write-only` cell via global CSS, but those
+	// cells' pixel widths still need to be excluded from the sticky-left
+	// offsets — otherwise the first data column sticks at left=224px while
+	// nothing renders at x=0..224, leaving a gap between the pinned column
+	// and the rest of the row.
+	const isViewer = $derived(page.data.user?.role === 'viewer');
+
 	/** Left-offset (px) for each sticky column. Only the columns that actually
 	 *  render are allocated an offset, so tables that don't use selection or
 	 *  actions still line up correctly. */
 	const stickyOffsets = $derived.by(() => {
 		let x = 0;
 		const o = { checkbox: 0, actions: 0, id: 0, firstCol: 0 };
-		if (selectable) { o.checkbox = x; x += 32; }
-		if (hasActions) { o.actions = x; x += 112; }
-		if (showId) { o.id = x; x += 80; }
+		if (selectable && !isViewer) { o.checkbox = x; x += 32; }
+		if (hasActions && !isViewer) { o.actions = x; x += 112; }
+		if (showId && !isViewer) { o.id = x; x += 80; }
 		o.firstCol = x;
 		return o;
 	});

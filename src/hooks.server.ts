@@ -183,6 +183,7 @@ const PUBLIC_PAGE_PREFIXES = [
 function isPublicPage(pathname: string): boolean {
 	if (pathname.startsWith('/_app/')) return true;
 	if (pathname === '/favicon.ico' || pathname === '/favicon.png') return true;
+	if (pathname === '/privacy') return true;
 	return PUBLIC_PAGE_PREFIXES.some((p) => pathname.startsWith(p));
 }
 

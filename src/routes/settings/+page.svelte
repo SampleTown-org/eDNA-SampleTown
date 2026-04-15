@@ -1209,79 +1209,6 @@
 		</div>
 		{/if}
 
-		<!-- ============ Lab invites (admin only) ============ -->
-		{#if data.isAdmin}
-		<div class="space-y-3">
-			<div>
-				<h2 class="text-base font-semibold text-white">Lab Invites</h2>
-				<p class="text-sm text-slate-400 mt-0.5">
-					Generate a single-use invite link for a teammate. They sign in
-					with GitHub at the link and land directly in this lab with the
-					role you pick.
-				</p>
-			</div>
-
-			<form onsubmit={(e) => { e.preventDefault(); createInvite(); }}
-				class="flex flex-wrap gap-2 items-end p-3 bg-slate-800/30 rounded-lg">
-				<div>
-					<label for="inv-role" class="block text-xs text-slate-400 mb-1">Role</label>
-					<select id="inv-role" bind:value={newInvite.role} class="{selectCls} text-sm">
-						<option value="user">user</option>
-						<option value="viewer">viewer</option>
-						<option value="admin">admin</option>
-					</select>
-				</div>
-				<div class="flex-1 min-w-[200px]">
-					<label for="inv-email" class="block text-xs text-slate-400 mb-1">Email hint <span class="text-slate-600">(optional)</span></label>
-					<input id="inv-email" type="text" bind:value={newInvite.email_hint}
-						class="w-full {inputCls} text-sm" placeholder="who's this for? shown on the join page" />
-				</div>
-				<div>
-					<label for="inv-ttl" class="block text-xs text-slate-400 mb-1">Expires in (days)</label>
-					<input id="inv-ttl" type="number" min="1" max="90" bind:value={newInvite.ttl_days} class="w-24 {inputCls} text-sm" />
-				</div>
-				<button type="submit" class="px-3 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">Create invite</button>
-			</form>
-
-			{#if inviteList.length === 0}
-				<p class="text-sm text-slate-500 italic">No invites yet. Create one above to onboard a teammate.</p>
-			{:else}
-				<div class="space-y-2">
-					{#each inviteList as inv (inv.token)}
-						{@const s = inviteStatus(inv)}
-						<div class="p-3 rounded-lg bg-slate-800/50 border border-slate-800">
-							<div class="flex items-start justify-between gap-3">
-								<div class="flex-1 min-w-0">
-									<div class="flex items-center gap-2 flex-wrap">
-										<span class="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">{inv.role}</span>
-										<span class="text-xs {s.cls}">{s.label}</span>
-										{#if inv.email_hint}<span class="text-xs text-slate-400">{inv.email_hint}</span>{/if}
-									</div>
-									<div class="flex gap-3 text-xs text-slate-500 mt-1 flex-wrap">
-										{#if inv.created_by_username}<span>by @{inv.created_by_username}</span>{/if}
-										<span>created {new Date(inv.created_at).toLocaleDateString()}</span>
-										<span>expires {new Date(inv.expires_at).toLocaleDateString()}</span>
-										<span class="font-mono truncate">{inv.token.slice(0, 12)}…</span>
-									</div>
-								</div>
-								<div class="flex items-center gap-2 shrink-0">
-									{#if !inv.used_at}
-										<button type="button" onclick={() => copyInvite(inv.token)}
-											class="text-xs text-ocean-400 hover:text-ocean-300">
-											{inviteCopiedToken === inv.token ? 'Copied!' : 'Copy link'}
-										</button>
-										<button type="button" onclick={() => revokeInvite(inv.token)}
-											class="text-xs text-slate-600 hover:text-red-400">Revoke</button>
-									{/if}
-								</div>
-							</div>
-						</div>
-					{/each}
-				</div>
-			{/if}
-		</div>
-		{/if}
-
 		<!-- ============ Personnel directory ============ -->
 		<div class="space-y-3">
 			<div>
@@ -1373,6 +1300,79 @@
 			</form>
 		</details>
 		</div> <!-- /Personnel directory -->
+
+		<!-- ============ Lab invites (admin only) ============ -->
+		{#if data.isAdmin}
+		<div class="space-y-3">
+			<div>
+				<h2 class="text-base font-semibold text-white">Lab Invites</h2>
+				<p class="text-sm text-slate-400 mt-0.5">
+					Generate a single-use invite link for a teammate. They sign in
+					with GitHub at the link and land directly in this lab with the
+					role you pick.
+				</p>
+			</div>
+
+			<form onsubmit={(e) => { e.preventDefault(); createInvite(); }}
+				class="flex flex-wrap gap-2 items-end p-3 bg-slate-800/30 rounded-lg">
+				<div>
+					<label for="inv-role" class="block text-xs text-slate-400 mb-1">Role</label>
+					<select id="inv-role" bind:value={newInvite.role} class="{selectCls} text-sm">
+						<option value="user">user</option>
+						<option value="viewer">viewer</option>
+						<option value="admin">admin</option>
+					</select>
+				</div>
+				<div class="flex-1 min-w-[200px]">
+					<label for="inv-email" class="block text-xs text-slate-400 mb-1">Email hint <span class="text-slate-600">(optional)</span></label>
+					<input id="inv-email" type="text" bind:value={newInvite.email_hint}
+						class="w-full {inputCls} text-sm" placeholder="who's this for? shown on the join page" />
+				</div>
+				<div>
+					<label for="inv-ttl" class="block text-xs text-slate-400 mb-1">Expires in (days)</label>
+					<input id="inv-ttl" type="number" min="1" max="90" bind:value={newInvite.ttl_days} class="w-24 {inputCls} text-sm" />
+				</div>
+				<button type="submit" class="px-3 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">Create invite</button>
+			</form>
+
+			{#if inviteList.length === 0}
+				<p class="text-sm text-slate-500 italic">No invites yet. Create one above to onboard a teammate.</p>
+			{:else}
+				<div class="space-y-2">
+					{#each inviteList as inv (inv.token)}
+						{@const s = inviteStatus(inv)}
+						<div class="p-3 rounded-lg bg-slate-800/50 border border-slate-800">
+							<div class="flex items-start justify-between gap-3">
+								<div class="flex-1 min-w-0">
+									<div class="flex items-center gap-2 flex-wrap">
+										<span class="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">{inv.role}</span>
+										<span class="text-xs {s.cls}">{s.label}</span>
+										{#if inv.email_hint}<span class="text-xs text-slate-400">{inv.email_hint}</span>{/if}
+									</div>
+									<div class="flex gap-3 text-xs text-slate-500 mt-1 flex-wrap">
+										{#if inv.created_by_username}<span>by @{inv.created_by_username}</span>{/if}
+										<span>created {new Date(inv.created_at).toLocaleDateString()}</span>
+										<span>expires {new Date(inv.expires_at).toLocaleDateString()}</span>
+										<span class="font-mono truncate">{inv.token.slice(0, 12)}…</span>
+									</div>
+								</div>
+								<div class="flex items-center gap-2 shrink-0">
+									{#if !inv.used_at}
+										<button type="button" onclick={() => copyInvite(inv.token)}
+											class="text-xs text-ocean-400 hover:text-ocean-300">
+											{inviteCopiedToken === inv.token ? 'Copied!' : 'Copy link'}
+										</button>
+										<button type="button" onclick={() => revokeInvite(inv.token)}
+											class="text-xs text-slate-600 hover:text-red-400">Revoke</button>
+									{/if}
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+		{/if}
 	</div>
 
 	{:else if tabType === 'feedback'}
