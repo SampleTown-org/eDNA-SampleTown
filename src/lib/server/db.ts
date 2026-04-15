@@ -127,25 +127,46 @@ function preSchemaMigrations(db: Database.Database) {
  */
 function seedDefaultLab(db: Database.Database) {
 	const existing = db.prepare('SELECT COUNT(*) AS c FROM labs').get() as { c: number };
-	if (existing.c > 0) return;
 
-	const name = process.env.DEFAULT_LAB_NAME || 'Cryomics Lab';
-	const slug = name
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '') || 'default';
-	const id = generateId();
-	db.prepare('INSERT INTO labs (id, name, slug) VALUES (?, ?, ?)').run(id, name, slug);
-	console.log(`[seed] Created default lab "${name}" (${slug})`);
+	let defaultLabId: string;
+	if (existing.c === 0) {
+		const name = process.env.DEFAULT_LAB_NAME || 'Cryomics Lab';
+		const slug = name
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-|-$/g, '') || 'default';
+		defaultLabId = generateId();
+		db.prepare('INSERT INTO labs (id, name, slug) VALUES (?, ?, ?)').run(defaultLabId, name, slug);
+		console.log(`[seed] Created default lab "${name}" (${slug})`);
+	} else {
+		defaultLabId = (db
+			.prepare('SELECT id FROM labs ORDER BY created_at ASC LIMIT 1')
+			.get() as { id: string }).id;
+	}
 
-	// Backfill post-migration users + feedback to the default lab. Sessions
-	// were already cleared in preSchemaMigrations so affected users will
-	// log in fresh with the new lab_id in locals.user.
+	// Reconciliation + first-run backfill. Runs every startup (cheap with
+	// indexed FK lookups) so a mid-migration labs rebuild can't leave users
+	// or feedback pointing at a dead lab_id. Three cases handled:
+	//
+	//   NULL lab_id         → backfill to default lab (post-initial-migration)
+	//   non-existent lab_id → reconcile to default lab (stale reference
+	//                         from a botched earlier migration — hit once
+	//                         on the 2026-04-14 prod deploy)
+	//   valid lab_id        → untouched
 	try {
-		db.prepare('UPDATE users SET lab_id = ? WHERE lab_id IS NULL').run(id);
-		db.prepare('UPDATE feedback SET lab_id = ? WHERE lab_id IS NULL').run(id);
+		const uReconcile = db.prepare(
+			'UPDATE users SET lab_id = ? WHERE lab_id IS NOT NULL AND lab_id NOT IN (SELECT id FROM labs)'
+		).run(defaultLabId);
+		const fReconcile = db.prepare(
+			'UPDATE feedback SET lab_id = ? WHERE lab_id IS NOT NULL AND lab_id NOT IN (SELECT id FROM labs)'
+		).run(defaultLabId);
+		if (uReconcile.changes > 0) console.warn(`[seed] Reconciled ${uReconcile.changes} users with stale lab_id → default lab`);
+		if (fReconcile.changes > 0) console.warn(`[seed] Reconciled ${fReconcile.changes} feedback rows with stale lab_id → default lab`);
+
+		db.prepare('UPDATE users SET lab_id = ? WHERE lab_id IS NULL').run(defaultLabId);
+		db.prepare('UPDATE feedback SET lab_id = ? WHERE lab_id IS NULL').run(defaultLabId);
 	} catch {
-		/* columns may not exist yet on very-first-run; addColumn below handles it */
+		/* columns may not exist yet on very-first-run; addColumnIfMissing handles it */
 	}
 }
 
