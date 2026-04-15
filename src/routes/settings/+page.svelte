@@ -121,7 +121,20 @@
 			return;
 		}
 		const created = await res.json();
-		inviteList = [{ ...created, created_by_username: data.users.find((u: any) => u.id)?.username ?? '', used_at: null, used_by_username: null }, ...inviteList];
+		// Optimistic row: stamp created_at locally (the API only returns
+		// token/role/email_hint/expires_at) and use the current user as
+		// the creator. Was pulling data.users[0]'s username, which on a
+		// multi-lab admin's view could be a totally different user.
+		inviteList = [
+			{
+				...created,
+				created_at: new Date().toISOString(),
+				created_by_username: data.user?.username ?? '',
+				used_at: null,
+				used_by_username: null
+			},
+			...inviteList
+		];
 		newInvite = { role: 'user', email_hint: '', ttl_days: 14 };
 		// Auto-copy fresh token's URL so the admin can paste-and-send right away.
 		try {
