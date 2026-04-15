@@ -255,7 +255,11 @@
 			{/if}
 		{/each}
 
-		{#if pickableParameters.length === 0 && extraColumnSlots.length === 0}
+		{#if pickableParameters.length === 0 && extraColumnSlots.length === 0 && allSamples.length > 0}
+			<!-- Only show the "no extras" hint when there ARE samples but
+			     none of them have populated any spill / misc_param slots.
+			     A brand-new lab with zero samples gets a cleaner empty
+			     state from the table below instead. -->
 			<span class="text-slate-600 italic">No extra parameters have data on any sample yet.</span>
 		{/if}
 	</div>

@@ -212,8 +212,13 @@
 
 <div class="space-y-8">
 	<div>
-		<h1 class="text-3xl font-bold text-white tracking-tight">SampleTown</h1>
-		<p class="text-slate-400 mt-1">eDNA sample tracking &middot; MIxS-compliant</p>
+		<h1 class="text-3xl font-bold text-white tracking-tight">
+			{data.lab?.name ?? 'SampleTown'}
+		</h1>
+		<p class="text-slate-400 mt-1 text-sm">
+			eDNA sample tracking &middot; MIxS-compliant
+			{#if data.lab}<span class="text-slate-600"> &middot; lab/{data.lab.slug}</span>{/if}
+		</p>
 	</div>
 
 	<div class="grid grid-cols-4 sm:grid-cols-8 gap-2">
