@@ -11,7 +11,7 @@
 #   APP_DIR       install path                      (default: /opt/sampletown)
 #   PORT          port pm2 will bind                (default: 3000)
 #   NODE_VERSION  major Node version to install     (default: 20)
-#   REPO_URL      git repo to clone                 (default: https://github.com/rec3141/SampleTown.git)
+#   REPO_URL      git repo to clone                 (default: https://github.com/sampletown-org/edna-sampletown.git)
 #   BRANCH        branch to check out               (default: main)
 
 set -euo pipefail
@@ -19,7 +19,7 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/sampletown}"
 PORT="${PORT:-3000}"
 NODE_VERSION="${NODE_VERSION:-20}"
-REPO_URL="${REPO_URL:-https://github.com/rec3141/SampleTown.git}"
+REPO_URL="${REPO_URL:-https://github.com/sampletown-org/edna-sampletown.git}"
 BRANCH="${BRANCH:-main}"
 
 echo "=== SampleTown Setup ==="

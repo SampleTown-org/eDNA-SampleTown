@@ -46,8 +46,8 @@ Tracks the full chain: **Project → Site → Sample → Extract → PCR → Lib
 ## Quick start
 
 ```bash
-git clone https://github.com/rec3141/SampleTown.git
-cd SampleTown
+git clone https://github.com/sampletown-org/edna-sampletown.git
+cd edna-sampletown
 npm install
 cp .env.example .env          # edit AUTH_MODE, ORIGIN, secrets as needed
 npm run dev                   # http://localhost:5173

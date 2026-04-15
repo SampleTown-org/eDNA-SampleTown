@@ -206,7 +206,7 @@ export function getDefaultLabId(db: Database.Database): string {
  *
  * Rule: columns added here must also be added to schema.sql so fresh installs
  * get the column from the CREATE TABLE. Never drop, rename, or change types;
- * the prod DB at sampletown.reric.org has live beta-tester data.
+ * the prod DB at edna.sampletown.org has live beta-tester data.
  */
 function runMigrations(db: Database.Database) {
 	const addColumn = (table: string, def: string) => {
