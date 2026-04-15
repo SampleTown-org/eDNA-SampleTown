@@ -75,6 +75,24 @@
 
 			<div class="flex items-center gap-3">
 				{#if user}
+					<!-- Cart sits between the main nav and the right-side icon
+					     cluster (search/qr/username/emoji/sign out) per beta
+					     feedback — it's a workflow tool, closer in role to the
+					     nav than to the account utilities. -->
+					<button
+						onclick={() => { cart.toggleSidebar(); if (cart.count === 0 && !cart.sidebarOpen) cart.openSidebar(); }}
+						class="relative px-2 py-1 text-sm transition-colors {cart.sidebarOpen ? 'text-ocean-400' : 'text-slate-400 hover:text-white'}"
+						title="{cart.sidebarOpen ? 'Close' : 'Open'} cart"
+					>
+						Cart
+						{#if cart.count > 0}
+							<span class="absolute -top-1 -right-1 w-4 h-4 bg-ocean-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+								{cart.count}
+							</span>
+						{/if}
+					</button>
+
+					<!-- Right-side cluster, ordered: search → qr → username → emoji → sign out -->
 					<a
 						href="/#dashboard-search"
 						class="text-slate-400 hover:text-white"
@@ -98,34 +116,19 @@
 							<path d="M7 8h3v3H7zM14 8h3v3h-3zM7 13h3v3H7zM14 13h3v3h-3z"/>
 						</svg>
 					</button>
-					<!-- Order: sign out, emoji, user, cart -->
-					<form method="POST" action="/auth/logout" class="inline">
-						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
-					</form>
-					<a
-						href="/account"
-						class="text-base hover:opacity-80 transition-opacity"
-						title="{ROLE_LABEL[user.role] ?? user.role} — manage account"
-					>{user.avatar_emoji ?? ROLE_ICON[user.role] ?? '👤'}</a>
 					<a
 						href="/account"
 						class="text-sm text-slate-400 hover:text-white hidden sm:inline"
 						title="Manage account"
 					>{user.username}</a>
-					<!-- Cart toggle + mobile hamburger live inside the signed-in
-					     branch — logged-out visitors see neither. -->
-					<button
-						onclick={() => { cart.toggleSidebar(); if (cart.count === 0 && !cart.sidebarOpen) cart.openSidebar(); }}
-						class="relative px-2 py-1 text-sm transition-colors {cart.sidebarOpen ? 'text-ocean-400' : 'text-slate-400 hover:text-white'}"
-						title="{cart.sidebarOpen ? 'Close' : 'Open'} cart"
-					>
-						Cart
-						{#if cart.count > 0}
-							<span class="absolute -top-1 -right-1 w-4 h-4 bg-ocean-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-								{cart.count}
-							</span>
-						{/if}
-					</button>
+					<a
+						href="/account"
+						class="text-base hover:opacity-80 transition-opacity"
+						title="{ROLE_LABEL[user.role] ?? user.role} — manage account"
+					>{user.avatar_emoji ?? ROLE_ICON[user.role] ?? '👤'}</a>
+					<form method="POST" action="/auth/logout" class="inline">
+						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
+					</form>
 
 					<button
 						class="md:hidden p-1.5 text-slate-400 hover:text-white"

@@ -17,7 +17,11 @@
 
 	// --- Event calendar ---------------------------------------------------
 	const EVENT_COLORS: Record<string, { dot: string; label: string }> = {
-		site:          { dot: 'bg-sky-400',     label: 'Site' },
+		// Sites used to be sky-400 — too close to ocean-400 for sample
+		// collection, the two dots were indistinguishable on the calendar.
+		// Fuchsia is far enough from every other event color that even the
+		// 1×1 dots in the calendar grid read clearly.
+		site:          { dot: 'bg-fuchsia-400', label: 'Site' },
 		sample:        { dot: 'bg-ocean-400',   label: 'Sample collection' },
 		extract:       { dot: 'bg-emerald-400', label: 'Extraction' },
 		pcr_plate:     { dot: 'bg-amber-400',   label: 'PCR plate' },
