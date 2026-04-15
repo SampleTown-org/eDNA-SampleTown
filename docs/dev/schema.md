@@ -1,8 +1,14 @@
 # Database schema
 
-The full DDL lives in [`src/lib/server/schema.sql`](../src/lib/server/schema.sql) and is applied automatically by `getDb()` in `src/lib/server/db.ts` on first connection. SQLite, WAL mode, foreign keys on. Picklist data is seeded by `src/lib/server/seed-constrained-values.ts`.
+The full DDL lives at `src/lib/server/schema.sql` and is applied automatically by `getDb()` in `src/lib/server/db.ts` on first connection. SQLite, WAL mode, foreign keys on. Picklist data is seeded per-lab by `src/lib/server/seed-constrained-values.ts`.
 
-`schema.sql` is the single source of truth — `runMigrations()` is a no-op. For breaking schema changes (column rename, drop, type change) we wipe and re-initialize the DB rather than carrying a migration runner. Backups are snapshotted before any destructive operation.
+`schema.sql` is the single source of truth — there's **no migration layer**. For schema changes (column add/rename/drop, type change) we wipe and re-initialize the DB rather than carrying a runner. Take a [GitHub backup](backup.md) before destructive operations.
+
+## Multi-tenancy
+
+Every top-level entity carries a `lab_id TEXT REFERENCES labs(id) ON DELETE CASCADE`. The `labs` table is the tenancy boundary; cross-lab access is enforced at the API layer (returns 404, never 403, to avoid existence-leaks). See [Multi-lab tenancy](multi-lab.md) for the full story.
+
+`users.lab_id` and `feedback.lab_id` are nullable (pending GitHub OAuth signups have no lab yet; anonymous feedback has no lab). Everything else is `NOT NULL` per schema.
 
 ## Hierarchy
 

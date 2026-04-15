@@ -795,6 +795,19 @@
 			</svg>
 			MIxS Glossary
 		</a>
+		<a
+			href="https://sampletown-org.github.io/eDNA-SampleTown/"
+			target="_blank"
+			rel="noopener noreferrer"
+			class="px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-sm text-slate-200 transition-colors flex items-center gap-2"
+		>
+			<svg class="w-4 h-4 text-ocean-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+				<circle cx="12" cy="12" r="10" />
+				<path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+				<line x1="12" y1="17" x2="12.01" y2="17" />
+			</svg>
+			Help &amp; Docs
+		</a>
 	</div>
 
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}

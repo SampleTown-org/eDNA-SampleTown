@@ -1,0 +1,34 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+      - 'CHANGELOG.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          key: mkdocs-material-${{ hashFiles('.github/workflows/docs.yml') }}
+          path: ~/.cache/pip
+      - run: pip install mkdocs-material pymdown-extensions
+      - name: Sync CHANGELOG into docs/
+        run: cp CHANGELOG.md docs/changelog.md
+      - run: mkdocs gh-deploy --force --clean

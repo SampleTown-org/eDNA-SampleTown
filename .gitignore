@@ -9,3 +9,5 @@ data/*.db-wal
 data/*.db-shm
 .DS_Store
 CLAUDE.local.md
+site
+docs/changelog.md
