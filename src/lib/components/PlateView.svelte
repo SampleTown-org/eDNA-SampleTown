@@ -138,6 +138,25 @@
 		wellAssignments = {};
 	}
 
+	/** Switch plate format and unassign any wells that fall outside the new
+	 *  grid (e.g. shrinking 384 → 96 leaves rows I-P + cols 13-24 in limbo).
+	 *  Pruned items reappear in the unassigned sidebar so the operator can
+	 *  re-place them. */
+	function setFormat(f: 8 | 96 | 384) {
+		format = f;
+		const lay = LAYOUTS[f];
+		const validRows = ROW_LETTERS.slice(0, lay.rows);
+		const next: Record<string, string> = {};
+		for (const [well, id] of Object.entries(wellAssignments)) {
+			const row = well[0];
+			const col = parseInt(well.slice(1), 10);
+			if (validRows.includes(row) && col >= 1 && col <= lay.cols) {
+				next[well] = id;
+			}
+		}
+		wellAssignments = next;
+	}
+
 	// Cell size shrinks for 384-well; also used for font sizing.
 	const cellClass = $derived(
 		format === 8
@@ -156,7 +175,7 @@
 				{#each [8, 96, 384] as f}
 					<button
 						type="button"
-						onclick={() => (format = f as 8 | 96 | 384)}
+						onclick={() => setFormat(f as 8 | 96 | 384)}
 						class="px-2 py-0.5 rounded text-xs {format === f
 							? 'bg-ocean-600 text-white'
 							: 'text-slate-400 hover:text-white'}"

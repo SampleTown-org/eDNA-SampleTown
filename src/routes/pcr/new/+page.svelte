@@ -294,33 +294,6 @@
 		</div>
 	</div>
 
-	<!-- Per-reaction table -->
-	{#if rows.length > 0}
-	<div class="overflow-x-auto">
-		<p class="text-sm font-semibold text-slate-300 mb-2">Reactions ({rows.length})</p>
-		<table class="w-full text-sm">
-			<thead>
-				<tr class="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
-					<th class="text-left pb-2 pr-3 font-medium">Extract</th>
-					<th class="text-left pb-2 pr-3 font-medium min-w-36">Reaction Name</th>
-					<th class="text-left pb-2 pr-3 font-medium w-28">Conc. ng/µL</th>
-					<th class="pb-2 w-8"></th>
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-slate-800">
-				{#each rows as row, i}
-				<tr>
-					<td class="py-2 pr-3"><div class="text-white">{row.extract_name}</div><div class="text-xs text-slate-500">{row.samp_name}</div></td>
-					<td class="py-2 pr-3"><input type="text" bind:value={rows[i].pcr_name} class={cellInput} /></td>
-					<td class="py-2 pr-3"><input type="number" step="any" bind:value={rows[i].concentration_ng_ul} class={cellInput} placeholder="--" /></td>
-					<td class="py-2"><button onclick={() => toggleExtract(row.extract_id, row.extract_name, row.samp_name)} class="text-slate-600 hover:text-red-400 transition-colors">✕</button></td>
-				</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-	{/if}
-
 	<!-- Plate layout (collapsible, expanded by default). Sits immediately
 	     above the Create button so operators can verify well placement
 	     right before submitting. -->
@@ -361,8 +334,52 @@
 
 	<div class="flex gap-3 pt-2">
 		<button onclick={submit} disabled={saving || rows.length === 0 || rows.length > plateFormat || unassignedRows.length > 0} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
-			{saving ? 'Creating...' : `Create Plate (${rows.length} reaction${rows.length !== 1 ? 's' : ''})`}
+			{saving ? 'Creating...' : `Create Plate and ${rows.length} Reaction${rows.length !== 1 ? 's' : ''}`}
 		</button>
 		<a href="/pcr" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Cancel</a>
 	</div>
+
+	<!-- Reactions to be created — at the bottom of the page so the plate
+	     layout (the operator's primary verification surface) sits closer
+	     to the Create button. Per-row inputs let the operator name each
+	     reaction and record its post-cleanup concentration before
+	     submitting. -->
+	{#if rows.length > 0}
+	<div class="overflow-x-auto pt-4">
+		<p class="text-sm font-semibold text-slate-300 mb-2">Reactions to be Created ({rows.length})</p>
+		<table class="w-full text-sm">
+			<thead>
+				<tr class="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
+					<th class="text-left pb-2 pr-3 font-medium">Extract</th>
+					<th class="text-left pb-2 pr-3 font-medium min-w-36">Reaction Name</th>
+					<th class="text-left pb-2 pr-3 font-medium w-28">Conc. ng/µL</th>
+					<th class="pb-2 w-8"></th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-800">
+				{#each rows as row, i}
+				<tr>
+					<td class="py-2 pr-3"><div class="text-white">{row.extract_name}</div><div class="text-xs text-slate-500">{row.samp_name}</div></td>
+					<td class="py-2 pr-3"><input type="text" bind:value={rows[i].pcr_name} class={cellInput} /></td>
+					<td class="py-2 pr-3"><input
+						id="conc-{i}"
+						type="number"
+						step="any"
+						bind:value={rows[i].concentration_ng_ul}
+						class={cellInput}
+						placeholder="--"
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								(document.getElementById(`conc-${i + 1}`) as HTMLInputElement | null)?.focus();
+							}
+						}}
+					/></td>
+					<td class="py-2"><button onclick={() => toggleExtract(row.extract_id, row.extract_name, row.samp_name)} class="text-slate-600 hover:text-red-400 transition-colors">✕</button></td>
+				</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
+	{/if}
 </div>
