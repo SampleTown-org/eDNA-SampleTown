@@ -38,6 +38,8 @@ export interface Project {
 	description: string | null;
 	pi_name: string | null;
 	institution: string | null;
+	contact_email: string | null;
+	funding_sources: string | null;
 	github_repo: string | null;
 	created_by: string | null;
 	created_at: string;

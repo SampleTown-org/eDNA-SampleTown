@@ -19,9 +19,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const id = resolveId(data?.id);
 
 	db.prepare(`
-		INSERT INTO projects (id, lab_id, project_name, description, pi_name, institution, github_repo, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`).run(id, labId, data.project_name, data.description, data.pi_name, data.institution, data.github_repo, user.id);
+		INSERT INTO projects (id, lab_id, project_name, description, pi_name, institution, contact_email, funding_sources, github_repo, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`).run(
+		id,
+		labId,
+		data.project_name,
+		data.description,
+		data.pi_name,
+		data.institution,
+		data.contact_email ?? null,
+		data.funding_sources ?? null,
+		data.github_repo,
+		user.id
+	);
 
 	const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
 	return json(project, { status: 201 });

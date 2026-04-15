@@ -82,6 +82,14 @@ CREATE TABLE IF NOT EXISTS projects (
     description TEXT,
     pi_name TEXT,
     institution TEXT,
+    -- Contact email for project correspondence (grant reports, data requests).
+    -- Free-text — not validated against an email regex; some projects route
+    -- to a shared mailbox without standard format.
+    contact_email TEXT,
+    -- Funding sources — free-text multi-line. Operators paste in one or more
+    -- grant numbers / agency names per line. No structured grant table since
+    -- the format varies wildly across funders and we don't query on this.
+    funding_sources TEXT,
     github_repo TEXT,
     created_by TEXT REFERENCES users(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),

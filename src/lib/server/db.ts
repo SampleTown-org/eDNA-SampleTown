@@ -235,6 +235,9 @@ function runMigrations(db: Database.Database) {
 	// that column. See addColumnIfMissing calls above.
 	addColumn('pcr_amplifications', 'well_label TEXT');
 	addColumn('library_preps', 'well_label TEXT');
+	// Project metadata extras — added 2026-04-15 per beta feedback.
+	addColumn('projects', 'contact_email TEXT');
+	addColumn('projects', 'funding_sources TEXT');
 	addColumn('users', 'avatar_emoji TEXT');
 	addColumn('extracts', 'nucl_acid_type TEXT');
 	addColumn('pcr_amplifications', 'total_volume_ul REAL');

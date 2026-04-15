@@ -10,6 +10,8 @@
 		description: data.project.description || '',
 		pi_name: data.project.pi_name || '',
 		institution: data.project.institution || '',
+		contact_email: data.project.contact_email || '',
+		funding_sources: data.project.funding_sources || '',
 		github_repo: data.project.github_repo || ''
 	});
 
@@ -67,6 +69,16 @@
 				<FieldLabel slot="institution" for="institution" label="Institution" description="PI's affiliation (university, institute, lab)." />
 				<input id="institution" type="text" bind:value={form.institution} class={inputCls} />
 			</div>
+		</div>
+		<div>
+			<FieldLabel slot="contact_email" for="contact_email" label="Contact Email" description="Where to route questions about this project — PI's email, lab mailbox, or grant manager. Free-text, no validation." />
+			<input id="contact_email" type="email" bind:value={form.contact_email} class={inputCls}
+				placeholder="lab@example.org" />
+		</div>
+		<div>
+			<FieldLabel slot="funding_sources" for="funding_sources" label="Funding Sources" description="Grant numbers, agency names, or program identifiers — one per line is conventional but any free-text works." />
+			<textarea id="funding_sources" bind:value={form.funding_sources} rows="3" class={inputCls}
+				placeholder="e.g.&#10;NSERC RGPIN-2024-12345&#10;Genome BC SIP 2025"></textarea>
 		</div>
 		<div>
 			<FieldLabel slot="github_repo" for="github_repo" label="GitHub Repository" description="Repository where project DB snapshots are committed (e.g., org/repo-name). Optional." />

@@ -29,6 +29,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 		db.prepare(
 			`UPDATE projects SET
 				project_name = ?, description = ?, pi_name = ?, institution = ?,
+				contact_email = ?, funding_sources = ?,
 				github_repo = ?, updated_at = datetime('now')
 			 WHERE id = ?`
 		).run(
@@ -36,6 +37,8 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 			nn(data.description),
 			nn(data.pi_name),
 			nn(data.institution),
+			nn(data.contact_email),
+			nn(data.funding_sources),
 			nn(data.github_repo),
 			params.id
 		);

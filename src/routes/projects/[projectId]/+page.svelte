@@ -28,14 +28,61 @@
 		{/if}
 	</div>
 
-	<div class="flex gap-4 text-sm text-slate-400">
+	<div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
 		{#if data.project.pi_name}
 			<span>PI: <span class="text-slate-300">{data.project.pi_name}</span></span>
 		{/if}
 		{#if data.project.institution}
 			<span>Institution: <span class="text-slate-300">{data.project.institution}</span></span>
 		{/if}
+		{#if data.project.contact_email}
+			<span>Contact: <a href="mailto:{data.project.contact_email}" class="text-ocean-400 hover:text-ocean-300">{data.project.contact_email}</a></span>
+		{/if}
 	</div>
+
+	{#if data.project.funding_sources}
+		<div class="text-sm">
+			<div class="text-slate-400 mb-1">Funding</div>
+			<div class="text-slate-300 whitespace-pre-line p-3 rounded-lg border border-slate-800 bg-slate-900/40">{data.project.funding_sources}</div>
+		</div>
+	{/if}
+
+	{#if data.roster.length > 0}
+		<div>
+			<h2 class="text-lg font-semibold text-white mb-2">People ({data.roster.length})</h2>
+			<p class="text-xs text-slate-500 mb-2">
+				Everyone who has a recorded role on this project's samples, extracts, PCR plates,
+				library plates, or sequencing runs. Sorted by total contribution count.
+			</p>
+			<div class="overflow-x-auto rounded-lg border border-slate-800">
+				<table class="w-full text-sm">
+					<thead class="bg-slate-900/60 text-slate-400 text-xs uppercase tracking-wider">
+						<tr>
+							<th class="text-left px-3 py-2">Name</th>
+							<th class="text-left px-3 py-2">Title</th>
+							<th class="text-left px-3 py-2">Roles on this project</th>
+							<th class="text-right px-3 py-2">Contributions</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-800">
+						{#each data.roster as person}
+							<tr class="hover:bg-slate-900/40">
+								<td class="px-3 py-2">
+									<div class="text-slate-200">{person.full_name}</div>
+									{#if person.email}
+										<a href="mailto:{person.email}" class="text-xs text-ocean-400 hover:text-ocean-300">{person.email}</a>
+									{/if}
+								</td>
+								<td class="px-3 py-2 text-slate-300">{person.title ?? '—'}</td>
+								<td class="px-3 py-2 text-slate-400 text-xs">{person.roles}</td>
+								<td class="px-3 py-2 text-right text-slate-300">{person.total}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	{/if}
 
 	<div class="flex items-center justify-between">
 		<h2 class="text-lg font-semibold text-white">Samples ({data.samples.length})</h2>
