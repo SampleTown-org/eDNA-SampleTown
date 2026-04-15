@@ -22,6 +22,15 @@ export function getDb(): Database.Database {
 		// They run BEFORE schema.exec so the CREATE TABLE IF NOT EXISTS
 		// statements rebuild the tables with the new shape.
 		preSchemaMigrations(_db);
+		// Columns that schema.sql references in CREATE INDEX statements must
+		// already exist on surviving tables (users, feedback) before
+		// schema.exec runs — otherwise SQLite aborts the whole schema apply
+		// at the first CREATE INDEX that points at a missing column, and we
+		// end up with a partial-schema DB. This was discovered the hard way
+		// on the 2026-04-14 prod deploy. Keep column additions on long-lived
+		// tables HERE, not in runMigrations.
+		addColumnIfMissing(_db, 'users', 'lab_id TEXT REFERENCES labs(id)');
+		addColumnIfMissing(_db, 'feedback', 'lab_id TEXT REFERENCES labs(id)');
 		_db.exec(schema);
 		runMigrations(_db);
 		seedDefaultLab(_db);
@@ -140,6 +149,25 @@ function seedDefaultLab(db: Database.Database) {
 	}
 }
 
+/** Idempotent ADD COLUMN helper used by preSchemaMigrations. Unlike the
+ *  addColumn inside runMigrations (which runs AFTER schema.exec), this runs
+ *  BEFORE so schema.sql's CREATE INDEX statements can reference the new
+ *  columns on tables that already exist from an earlier install. */
+function addColumnIfMissing(db: Database.Database, table: string, def: string) {
+	// Skip silently if the target table doesn't exist yet (fresh install —
+	// schema.exec will create it with the column already in CREATE TABLE).
+	const exists = db
+		.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
+		.get(table);
+	if (!exists) return;
+	try {
+		db.exec(`ALTER TABLE ${table} ADD COLUMN ${def}`);
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (!msg.includes('duplicate column')) throw err;
+	}
+}
+
 /** Return the default lab's id — used by seeds (default admin, picklists). */
 export function getDefaultLabId(db: Database.Database): string {
 	const row = db
@@ -181,11 +209,9 @@ function runMigrations(db: Database.Database) {
 		}
 	};
 	addColumn('users', 'is_deleted INTEGER NOT NULL DEFAULT 0');
-	// Multi-lab: nullable on users so pre-approval GitHub-OAuth signups can
-	// land without a lab; nullable on feedback for anonymous / pre-migration
-	// rows. seedDefaultLab() backfills existing NULLs to the default lab.
-	addColumn('users', 'lab_id TEXT REFERENCES labs(id)');
-	addColumn('feedback', 'lab_id TEXT REFERENCES labs(id)');
+	// NB: users.lab_id and feedback.lab_id are added earlier in getDb(), BEFORE
+	// schema.exec, because schema.sql's CREATE INDEX idx_users_lab references
+	// that column. See addColumnIfMissing calls above.
 	addColumn('pcr_amplifications', 'well_label TEXT');
 	addColumn('library_preps', 'well_label TEXT');
 	addColumn('users', 'avatar_emoji TEXT');
