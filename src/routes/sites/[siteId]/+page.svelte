@@ -4,10 +4,18 @@
 	import MapPicker from '$lib/components/MapPicker.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	const site = data.site as any;
+	const crumbs = $derived([
+		{ label: data.lab?.name ?? 'Lab', href: '/' },
+		{ label: 'Projects', href: '/projects' },
+		{ label: site.project_name, href: `/projects/${site.project_id}` },
+		{ label: 'Sites', href: '/sites' },
+		{ label: site.site_name }
+	]);
 	const photos = $derived(data.photos as Array<{
 		id: string;
 		filename: string;
@@ -88,7 +96,7 @@
 
 <div class="space-y-6">
 	<div>
-		<a href="/sites" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Sites</a>
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<div class="flex items-center gap-3">
 				<h1 class="text-2xl font-bold text-white">{data.site.site_name}</h1>

@@ -20,8 +20,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const db = getDb();
 	const id = generateId();
 	try {
-		db.prepare(`INSERT INTO pcr_protocols (id, lab_id, name, polymerase, annealing_temp_c, num_cycles, pcr_cond, sort_order)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, labId, data.name, data.polymerase ?? null,
+		db.prepare(`INSERT INTO pcr_protocols (id, lab_id, name, annealing_temp_c, num_cycles, pcr_cond, sort_order)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, labId, data.name,
 			data.annealing_temp_c ?? null, data.num_cycles ?? null, data.pcr_cond ?? null, data.sort_order ?? 0);
 		return json(db.prepare('SELECT * FROM pcr_protocols WHERE id = ?').get(id), { status: 201 });
 	} catch (err) { return apiError(err); }

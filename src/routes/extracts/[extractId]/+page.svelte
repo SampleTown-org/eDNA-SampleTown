@@ -3,10 +3,22 @@
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
 	const ext = data.extract as any;
+	const crumbs = $derived([
+		{ label: data.lab?.name ?? 'Lab', href: '/' },
+		{ label: 'Projects', href: '/projects' },
+		{ label: ext.project_name, href: `/projects/${ext.project_id}` },
+		{ label: 'Sites', href: '/sites' },
+		{ label: ext.site_name, href: `/sites/${ext.site_id}` },
+		{ label: 'Samples', href: '/samples' },
+		{ label: ext.samp_name, href: `/samples/${ext.sample_id}` },
+		{ label: 'Extracts', href: '/extracts' },
+		{ label: ext.extract_name }
+	]);
 
 	const pcrColumns = [
 		{ key: 'pcr_name', label: 'PCR', sortable: true },
@@ -74,7 +86,7 @@
 
 <div class="space-y-6">
 	<div>
-		<a href="/extracts" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Extracts</a>
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<h1 class="text-2xl font-bold text-white">{ext.extract_name}</h1>
 			<div class="flex items-center gap-3 shrink-0">

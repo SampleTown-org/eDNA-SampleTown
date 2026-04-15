@@ -28,14 +28,17 @@
 	// Plate layout — assigns reactions to well positions (A1, A2, …).
 	// Optional visual aid for laying out the plate on the bench; the mapping
 	// doesn't currently persist (no well column in the schema yet).
-	let showPlateView = $state(false);
+	// Plate layout shows by default — operators almost always want to see the
+	// well grid before submitting (caught a lot of off-by-one well placements
+	// when it was hidden behind a toggle).
+	let showPlateView = $state(true);
 	let plateFormat = $state<8 | 96 | 384>(96);
 	let wellAssignments = $state<Record<string, string>>({});
 
 	let plate = $state({
 		plate_name: '', pcr_date: '', primer_set_id: '', target_subfragment: '',
 		forward_primer_name: '', forward_primer_seq: '', reverse_primer_name: '', reverse_primer_seq: '',
-		pcr_cond: '', annealing_temp_c: '', num_cycles: '', polymerase: '', nucl_acid_amp: '', notes: ''
+		pcr_cond: '', annealing_temp_c: '', num_cycles: '', nucl_acid_amp: '', notes: ''
 	});
 
 	// Primer set selector — selecting a primer set sets primer_set_id + copies
@@ -67,7 +70,6 @@
 	function onProtocolChange() {
 		const proto = (data.pcrProtocols as any[]).find((p: any) => p.id === selectedProtocolId);
 		if (proto) {
-			plate.polymerase = proto.polymerase || '';
 			plate.annealing_temp_c = proto.annealing_temp_c ?? '';
 			plate.num_cycles = proto.num_cycles ?? '';
 			plate.pcr_cond = proto.pcr_cond || '';
@@ -136,6 +138,10 @@
 	async function submit() {
 		if (!plate.plate_name.trim()) { errorMsg = 'Plate name is required'; return; }
 		if (rows.length === 0) { errorMsg = 'Select at least one extract'; return; }
+		if (rows.length > plateFormat) {
+			errorMsg = `Too many reactions (${rows.length}) for a ${plateFormat}-well plate. Switch to a larger plate format or split into multiple plates.`;
+			return;
+		}
 		saving = true; errorMsg = '';
 
 		// Invert wellAssignments (well → extract_id) so we can look up the well
@@ -248,7 +254,7 @@
 
 			<!-- Protocol selector -->
 			<div>
-				<FieldLabel slot="pcr_protocol" label="PCR Protocol" description="Named polymerase + cycling-conditions preset. Manage via Settings → PCR Protocols." />
+				<FieldLabel slot="pcr_protocol" label="PCR Protocol" description="Named cycling-conditions preset. Manage via Settings → PCR Protocols." />
 				<select bind:value={selectedProtocolId} onchange={onProtocolChange} class={selectCls}>
 					<option value="">Select protocol...</option>
 					{#each data.pcrProtocols as proto}
@@ -259,7 +265,7 @@
 					{@const proto = (data.pcrProtocols as any[]).find((p) => p.id === selectedProtocolId)}
 					{#if proto}
 					<div class="mt-2 p-2 bg-slate-800/50 rounded text-xs text-slate-400">
-						<span>{proto.polymerase} &middot; {proto.annealing_temp_c}°C &middot; {proto.num_cycles} cycles</span>
+						<span>{proto.annealing_temp_c}°C &middot; {proto.num_cycles} cycles</span>
 						{#if proto.pcr_cond}<div class="font-mono mt-1">{proto.pcr_cond}</div>{/if}
 					</div>
 					{/if}
@@ -277,20 +283,32 @@
 		</div>
 	</div>
 
-	<!-- Plate layout (collapsible) -->
+	<!-- Plate layout (collapsible, expanded by default) -->
 	{#if rows.length > 0}
-	<div class="rounded-lg border border-slate-800 bg-slate-900/30">
+	{@const overCapacity = rows.length > plateFormat}
+	<div class="rounded-lg border {overCapacity ? 'border-red-800' : 'border-slate-800'} bg-slate-900/30">
 		<button
 			type="button"
 			onclick={() => (showPlateView = !showPlateView)}
 			class="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-300 hover:text-white"
 		>
 			<span class="font-semibold">Plate layout</span>
-			<span class="text-xs text-slate-500">{showPlateView ? '▾' : '▸'}</span>
+			<span class="flex items-center gap-3">
+				<span class="text-xs {overCapacity ? 'text-red-400' : 'text-slate-500'}">
+					{rows.length}/{plateFormat} wells
+				</span>
+				<span class="text-xs text-slate-500">{showPlateView ? '▾' : '▸'}</span>
+			</span>
 		</button>
 		{#if showPlateView}
 			<div class="p-4 border-t border-slate-800">
 				<PlateView items={plateItems} bind:wellAssignments bind:format={plateFormat} />
+				{#if overCapacity}
+					<p class="mt-3 text-sm text-red-400">
+						{rows.length} reactions exceed the {plateFormat}-well capacity. Switch
+						plate format above, or remove reactions before creating.
+					</p>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -324,7 +342,7 @@
 	{/if}
 
 	<div class="flex gap-3 pt-2">
-		<button onclick={submit} disabled={saving || rows.length === 0} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
+		<button onclick={submit} disabled={saving || rows.length === 0 || rows.length > plateFormat} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 			{saving ? 'Creating...' : `Create Plate (${rows.length} reaction${rows.length !== 1 ? 's' : ''})`}
 		</button>
 		<a href="/pcr" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Cancel</a>

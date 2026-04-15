@@ -419,7 +419,6 @@ CREATE TABLE IF NOT EXISTS pcr_plates (
     pcr_cond TEXT,                        -- MIxS pcr_cond: annealing + cycling conditions
     annealing_temp_c REAL,
     num_cycles INTEGER,
-    polymerase TEXT,
     nucl_acid_amp TEXT,                   -- MIxS nucleic acid amplification protocol (URL / DOI / PID)
 
     notes TEXT,
@@ -452,7 +451,6 @@ CREATE TABLE IF NOT EXISTS pcr_amplifications (
     pcr_cond TEXT,                        -- MIxS pcr_cond: annealing + cycling conditions
     annealing_temp_c REAL,
     num_cycles INTEGER,
-    polymerase TEXT,
     pcr_date TEXT,
     band_observed INTEGER,
     concentration_ng_ul REAL,
@@ -662,12 +660,11 @@ CREATE TABLE IF NOT EXISTS primer_sets (
 
 CREATE INDEX IF NOT EXISTS idx_primer_sets_lab ON primer_sets(lab_id);
 
--- PCR protocols (linked: polymerase + cycling conditions)
+-- PCR protocols (named cycling-conditions presets)
 CREATE TABLE IF NOT EXISTS pcr_protocols (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    polymerase TEXT,
     annealing_temp_c REAL,
     num_cycles INTEGER,
     pcr_cond TEXT,                        -- MIxS pcr_cond: annealing + cycling conditions

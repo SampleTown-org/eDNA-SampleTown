@@ -1,9 +1,16 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	const crumbs = $derived([
+		{ label: data.lab?.name ?? 'Lab', href: '/' },
+		{ label: 'Projects', href: '/projects' },
+		{ label: (data.project as any).project_name }
+	]);
 
 	const siteColumns = [
 		{ key: 'site_name', label: 'Site', sortable: true },
@@ -22,7 +29,7 @@
 
 <div class="space-y-6">
 	<div>
-		<a href="/projects" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Projects</a>
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<h1 class="text-2xl font-bold text-white">{data.project.project_name}</h1>
 			<div class="flex items-center gap-3 shrink-0">

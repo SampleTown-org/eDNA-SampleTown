@@ -574,7 +574,7 @@
 			if (!searchQuery.trim()) return pcrProtocols;
 			const q = searchQuery.toLowerCase();
 			return pcrProtocols.filter(
-				(p: any) => matches(p.name, q) || matches(p.polymerase, q) || matches(p.pcr_cond, q)
+				(p: any) => matches(p.name, q) || matches(p.pcr_cond, q)
 			);
 		})()
 	);
@@ -724,7 +724,7 @@
 	}
 
 	// --- PCR Protocols CRUD ---
-	const emptyProtocol = () => ({ name: '', polymerase: '', annealing_temp_c: '' as string | number, num_cycles: '' as string | number, pcr_cond: '' });
+	const emptyProtocol = () => ({ name: '', annealing_temp_c: '' as string | number, num_cycles: '' as string | number, pcr_cond: '' });
 	let newProtocol = $state(emptyProtocol());
 	let editingProtocolId = $state('');
 	let editProtocol = $state(emptyProtocol());
@@ -739,7 +739,7 @@
 
 	function startEditProtocol(proto: any) {
 		editingProtocolId = proto.id;
-		editProtocol = { name: proto.name, polymerase: proto.polymerase || '', annealing_temp_c: proto.annealing_temp_c ?? '', num_cycles: proto.num_cycles ?? '', pcr_cond: proto.pcr_cond || '' };
+		editProtocol = { name: proto.name, annealing_temp_c: proto.annealing_temp_c ?? '', num_cycles: proto.num_cycles ?? '', pcr_cond: proto.pcr_cond || '' };
 	}
 
 	async function saveEditProtocol() {
@@ -1064,7 +1064,6 @@
 					</div>
 				</div>
 				<div class="flex gap-4 mt-1 text-xs text-slate-400">
-					{#if proto.polymerase}<span>Polymerase: <span class="text-slate-300">{proto.polymerase}</span></span>{/if}
 					{#if proto.annealing_temp_c}<span>Anneal: <span class="text-slate-300">{proto.annealing_temp_c}°C</span></span>{/if}
 					{#if proto.num_cycles}<span>Cycles: <span class="text-slate-300">{proto.num_cycles}</span></span>{/if}
 				</div>
@@ -1076,10 +1075,7 @@
 		{#if editingProtocolId}
 		<form onsubmit={(e) => { e.preventDefault(); saveEditProtocol(); }} class="space-y-3 p-4 bg-slate-800/30 rounded-lg border border-ocean-700">
 			<p class="text-sm font-medium text-ocean-400">Editing protocol</p>
-			<div class="grid grid-cols-2 gap-3">
-				<div><label class="block text-xs text-slate-400 mb-1">Name</label><input type="text" bind:value={editProtocol.name} class="w-full {inputCls} text-sm" /></div>
-				<div><label class="block text-xs text-slate-400 mb-1">Polymerase</label><input type="text" bind:value={editProtocol.polymerase} class="w-full {inputCls} text-sm" /></div>
-			</div>
+			<div><label class="block text-xs text-slate-400 mb-1">Name</label><input type="text" bind:value={editProtocol.name} class="w-full {inputCls} text-sm" /></div>
 			<div class="grid grid-cols-3 gap-3">
 				<div><label class="block text-xs text-slate-400 mb-1">Anneal °C</label><input type="number" step="any" bind:value={editProtocol.annealing_temp_c} class="w-full {inputCls} text-sm" /></div>
 				<div><label class="block text-xs text-slate-400 mb-1">Cycles</label><input type="number" bind:value={editProtocol.num_cycles} class="w-full {inputCls} text-sm" /></div>
@@ -1094,10 +1090,7 @@
 		<details class="group">
 			<summary class="text-sm font-medium text-ocean-400 cursor-pointer hover:text-ocean-300">Add protocol</summary>
 			<form onsubmit={(e) => { e.preventDefault(); addProtocol(); }} class="space-y-3 mt-3 p-4 bg-slate-800/30 rounded-lg">
-				<div class="grid grid-cols-2 gap-3">
-					<div><label class="block text-xs text-slate-400 mb-1">Name</label><input type="text" bind:value={newProtocol.name} class="w-full {inputCls} text-sm" placeholder="e.g., Standard 16S (55°C, 30 cycles)" /></div>
-					<div><label class="block text-xs text-slate-400 mb-1">Polymerase</label><input type="text" bind:value={newProtocol.polymerase} class="w-full {inputCls} text-sm" /></div>
-				</div>
+				<div><label class="block text-xs text-slate-400 mb-1">Name</label><input type="text" bind:value={newProtocol.name} class="w-full {inputCls} text-sm" placeholder="e.g., Standard 16S (55°C, 30 cycles)" /></div>
 				<div class="grid grid-cols-3 gap-3">
 					<div><label class="block text-xs text-slate-400 mb-1">Anneal °C</label><input type="number" step="any" bind:value={newProtocol.annealing_temp_c} class="w-full {inputCls} text-sm" /></div>
 					<div><label class="block text-xs text-slate-400 mb-1">Cycles</label><input type="number" bind:value={newProtocol.num_cycles} class="w-full {inputCls} text-sm" /></div>

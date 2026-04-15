@@ -2,8 +2,15 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	const crumbs = $derived([
+		{ label: data.lab?.name ?? 'Lab', href: '/' },
+		{ label: 'Sequencing Runs', href: '/runs' },
+		{ label: (data.run as any).run_name }
+	]);
 
 	const libColumns = [
 		{ key: 'library_name', label: 'Library', sortable: true },
@@ -30,7 +37,7 @@
 
 <div class="space-y-6">
 	<div>
-		<a href="/runs" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Runs</a>
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<h1 class="text-2xl font-bold text-white">{data.run.run_name}</h1>
 			<div class="flex items-center gap-3 shrink-0">

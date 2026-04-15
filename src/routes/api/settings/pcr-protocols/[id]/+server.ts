@@ -11,9 +11,9 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	const db = getDb();
 	try {
 		assertLabOwnsRow(db, 'pcr_protocols', params.id!, labId, 'PCR protocol not found');
-		db.prepare(`UPDATE pcr_protocols SET name = ?, polymerase = ?, annealing_temp_c = ?,
+		db.prepare(`UPDATE pcr_protocols SET name = ?, annealing_temp_c = ?,
 			num_cycles = ?, pcr_cond = ?, is_active = ?, sort_order = ? WHERE id = ?`).run(
-			data.name, data.polymerase ?? null, data.annealing_temp_c ?? null,
+			data.name, data.annealing_temp_c ?? null,
 			data.num_cycles ?? null, data.pcr_cond ?? null,
 			data.is_active ?? 1, data.sort_order ?? 0, params.id);
 		return json(db.prepare('SELECT * FROM pcr_protocols WHERE id = ?').get(params.id));

@@ -194,7 +194,6 @@ export interface PcrPlate {
 	pcr_cond: string | null;
 	annealing_temp_c: number | null;
 	num_cycles: number | null;
-	polymerase: string | null;
 	nucl_acid_amp: string | null;
 	notes: string | null;
 	custom_fields: string | null;
@@ -220,7 +219,6 @@ export interface PcrAmplification {
 	pcr_cond: string | null;
 	annealing_temp_c: number | null;
 	num_cycles: number | null;
-	polymerase: string | null;
 	pcr_date: string | null;
 	band_observed: number | null;
 	concentration_ng_ul: number | null;

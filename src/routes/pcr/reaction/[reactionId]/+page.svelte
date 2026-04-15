@@ -1,8 +1,28 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	const crumbs = $derived.by(() => {
+		const c: { label: string; href?: string }[] = [
+			{ label: data.lab?.name ?? 'Lab', href: '/' },
+			{ label: 'Projects', href: '/projects' },
+			{ label: (data.pcr as any).project_name, href: `/projects/${(data.pcr as any).project_id}` },
+			{ label: 'Sites', href: '/sites' },
+			{ label: (data.pcr as any).site_name, href: `/sites/${(data.pcr as any).site_id}` },
+			{ label: 'Samples', href: '/samples' },
+			{ label: (data.pcr as any).samp_name, href: `/samples/${(data.pcr as any).sample_id}` },
+			{ label: 'Extracts', href: '/extracts' },
+			{ label: (data.pcr as any).extract_name, href: `/extracts/${(data.pcr as any).extract_id}` }
+		];
+		if ((data.pcr as any).plate_id) {
+			c.push({ label: (data.pcr as any).plate_name, href: `/pcr/${(data.pcr as any).plate_id}` });
+		}
+		c.push({ label: (data.pcr as any).pcr_name });
+		return c;
+	});
 
 	const libColumns = [
 		{ key: 'library_name', label: 'Library', sortable: true },
@@ -18,7 +38,6 @@
 		['Reverse Primer', data.pcr.reverse_primer_name ? `${data.pcr.reverse_primer_name} (${data.pcr.reverse_primer_seq})` : data.pcr.reverse_primer_seq],
 		['Annealing Temp', data.pcr.annealing_temp_c != null ? `${data.pcr.annealing_temp_c}°C` : null],
 		['Cycles', data.pcr.num_cycles],
-		['Polymerase', data.pcr.polymerase],
 		['Concentration', data.pcr.concentration_ng_ul != null ? `${data.pcr.concentration_ng_ul} ng/µL` : null],
 		['Volume', data.pcr.total_volume_ul != null ? `${data.pcr.total_volume_ul} µL` : null],
 		['260/280', data.pcr.a260_280],
@@ -31,11 +50,7 @@
 
 <div class="space-y-6">
 	<div>
-		{#if data.pcr.plate_id}
-			<a href="/pcr/{data.pcr.plate_id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.pcr.plate_name}</a>
-		{:else}
-			<a href="/pcr" class="text-sm text-slate-400 hover:text-ocean-400">&larr; PCR</a>
-		{/if}
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<h1 class="text-2xl font-bold text-white">{data.pcr.pcr_name}</h1>
 			<div class="flex items-center gap-3 shrink-0">

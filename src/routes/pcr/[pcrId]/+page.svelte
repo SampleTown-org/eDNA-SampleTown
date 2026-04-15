@@ -3,8 +3,33 @@
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	// Plate has many sources; reaction has a single linear chain.
+	const crumbs = $derived.by(() => {
+		if (data.type === 'plate') {
+			return [
+				{ label: data.lab?.name ?? 'Lab', href: '/' },
+				{ label: 'PCR Plates', href: '/pcr' },
+				{ label: (data.plate as any).plate_name }
+			];
+		}
+		const r = data.pcr as any;
+		return [
+			{ label: data.lab?.name ?? 'Lab', href: '/' },
+			{ label: 'Projects', href: '/projects' },
+			{ label: r.project_name, href: `/projects/${r.project_id}` },
+			{ label: 'Sites', href: '/sites' },
+			{ label: r.site_name, href: `/sites/${r.site_id}` },
+			{ label: 'Samples', href: '/samples' },
+			{ label: r.samp_name, href: `/samples/${r.sample_id}` },
+			{ label: 'Extracts', href: '/extracts' },
+			{ label: r.extract_name, href: `/extracts/${r.extract_id}` },
+			{ label: r.pcr_name }
+		];
+	});
 
 	const reactionColumns = [
 		{ key: 'well_label', label: 'Well', sortable: true },
@@ -26,7 +51,7 @@
 	{#if data.type === 'plate'}
 	<!-- PLATE VIEW -->
 	<div>
-		<a href="/pcr" class="text-sm text-slate-400 hover:text-ocean-400">&larr; PCR Plates</a>
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<div class="flex items-center gap-3 flex-wrap">
 				<h1 class="text-2xl font-bold text-white">{data.plate.plate_name}</h1>
@@ -52,7 +77,6 @@
 				['Rev Sequence', data.plate.reverse_primer_seq, undefined],
 				['Anneal Temp', data.plate.annealing_temp_c != null ? `${data.plate.annealing_temp_c}°C` : null, undefined],
 				['Cycles', data.plate.num_cycles, undefined],
-				['Polymerase', data.plate.polymerase, undefined],
 				['Conditions', data.plate.pcr_cond, 'pcr_cond'],
 				['Amplification Protocol (MIxS)', data.plate.nucl_acid_amp, 'nucl_acid_amp']
 			] as [label, value, slot]}
@@ -100,7 +124,7 @@
 	{:else}
 	<!-- SINGLE REACTION VIEW (backward compat) -->
 	<div>
-		<a href="/pcr" class="text-sm text-slate-400 hover:text-ocean-400">&larr; PCR</a>
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<h1 class="text-2xl font-bold text-white">{data.pcr.pcr_name}</h1>
 			<div class="flex items-center gap-3 shrink-0">
@@ -108,10 +132,6 @@
 				<a href="/pcr/{data.pcr.id}/edit" class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 			</div>
 		</div>
-		<p class="text-slate-400 mt-1">
-			<a href="/samples/{data.pcr.sample_id}" class="text-ocean-400 hover:text-ocean-300">{data.pcr.samp_name}</a>
-			&rarr; <a href="/extracts/{data.pcr.extract_id}" class="text-ocean-400 hover:text-ocean-300">{data.pcr.extract_name}</a>
-		</p>
 	</div>
 
 	<div class="rounded-lg border border-slate-800 p-5">
@@ -124,7 +144,6 @@
 				['Reverse Primer', data.pcr.reverse_primer_name ? `${data.pcr.reverse_primer_name} (${data.pcr.reverse_primer_seq})` : data.pcr.reverse_primer_seq, undefined],
 				['Annealing Temp', data.pcr.annealing_temp_c != null ? `${data.pcr.annealing_temp_c}°C` : null, undefined],
 				['Cycles', data.pcr.num_cycles, undefined],
-				['Polymerase', data.pcr.polymerase, undefined],
 				['Concentration', data.pcr.concentration_ng_ul != null ? `${data.pcr.concentration_ng_ul} ng/µL` : null, undefined],
 				['Volume', data.pcr.total_volume_ul != null ? `${data.pcr.total_volume_ul} µL` : null, undefined],
 				['260/280', data.pcr.a260_280, undefined],

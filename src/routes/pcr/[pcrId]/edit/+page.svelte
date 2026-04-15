@@ -9,7 +9,7 @@
 	// Plate-edit branch state. Mirrors pcr/new: plate_name + pcr_date + notes
 	// are direct fields; primer details (forward/reverse name+seq, target_gene,
 	// target_subfragment) are sourced from a Primer Set picker; PCR conditions
-	// (polymerase, annealing temp, cycles, conditions string) come from a PCR
+	// (annealing temp, cycles, conditions string) come from a PCR
 	// Protocol picker. Both pickers start unselected and overwrite the
 	// underlying fields when chosen — the existing values are surfaced as
 	// read-only "current" lines so the operator knows what's already set.
@@ -27,7 +27,6 @@
 					pcr_cond: (data.plate as any).pcr_cond || '',
 					annealing_temp_c: (data.plate as any).annealing_temp_c ?? '',
 					num_cycles: (data.plate as any).num_cycles ?? '',
-					polymerase: (data.plate as any).polymerase || '',
 					nucl_acid_amp: (data.plate as any).nucl_acid_amp || '',
 					notes: (data.plate as any).notes || ''
 				}
@@ -60,7 +59,6 @@
 		if (data.type !== 'plate') return;
 		const proto = (data.pcrProtocols as any[] | undefined)?.find((p: any) => p.id === selectedProtocolId);
 		if (!proto) return;
-		plateForm.polymerase = proto.polymerase || '';
 		plateForm.annealing_temp_c = proto.annealing_temp_c ?? '';
 		plateForm.num_cycles = proto.num_cycles ?? '';
 		plateForm.pcr_cond = proto.pcr_cond || '';
@@ -79,7 +77,6 @@
 					reverse_primer_seq: (data.pcr as any).reverse_primer_seq || '',
 					annealing_temp_c: (data.pcr as any).annealing_temp_c ?? '',
 					num_cycles: (data.pcr as any).num_cycles ?? '',
-					polymerase: (data.pcr as any).polymerase || '',
 					pcr_date: (data.pcr as any).pcr_date || '',
 					band_observed: (data.pcr as any).band_observed || '',
 					concentration_ng_ul: (data.pcr as any).concentration_ng_ul ?? '',
@@ -211,9 +208,9 @@
 
 			<!-- PCR Protocol picker (mirrors pcr/new) -->
 			<div>
-				<FieldLabel slot="pcr_protocol" label="PCR Protocol" description="Named polymerase + cycling-conditions preset. Manage via Settings → PCR Protocols." />
+				<FieldLabel slot="pcr_protocol" label="PCR Protocol" description="Named cycling-conditions preset. Manage via Settings → PCR Protocols." />
 				<select bind:value={selectedProtocolId} onchange={onProtocolChange} class={selectCls}>
-					<option value="">Keep current ({plateForm.polymerase || '—'} · {plateForm.annealing_temp_c || '—'}°C · {plateForm.num_cycles || '—'} cycles)</option>
+					<option value="">Keep current ({plateForm.annealing_temp_c || '—'}°C · {plateForm.num_cycles || '—'} cycles)</option>
 					{#each data.pcrProtocols ?? [] as proto}
 						<option value={proto.id}>{proto.name}</option>
 					{/each}
@@ -278,7 +275,7 @@
 					<input type="text" bind:value={reactionForm.reverse_primer_seq} class="{inputCls} font-mono" />
 				</div>
 			</div>
-			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div>
 					<label class="block text-sm font-medium text-slate-300 mb-1">Annealing Temp (°C)</label>
 					<input type="number" step="any" bind:value={reactionForm.annealing_temp_c} class={inputCls} />
@@ -286,10 +283,6 @@
 				<div>
 					<label class="block text-sm font-medium text-slate-300 mb-1">Number of Cycles</label>
 					<input type="number" bind:value={reactionForm.num_cycles} class={inputCls} />
-				</div>
-				<div>
-					<label class="block text-sm font-medium text-slate-300 mb-1">Polymerase</label>
-					<input type="text" bind:value={reactionForm.polymerase} class={inputCls} />
 				</div>
 			</div>
 			<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">

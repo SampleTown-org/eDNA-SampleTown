@@ -2,8 +2,36 @@
 	import DataTable from '$lib/components/DataTable.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	const crumbs = $derived.by(() => {
+		const c: { label: string; href?: string }[] = [
+			{ label: data.lab?.name ?? 'Lab', href: '/' }
+		];
+		const s = data.source as any;
+		if (s?.project_id) {
+			c.push({ label: 'Projects', href: '/projects' });
+			c.push({ label: s.project_name, href: `/projects/${s.project_id}` });
+			c.push({ label: 'Sites', href: '/sites' });
+			c.push({ label: s.site_name, href: `/sites/${s.site_id}` });
+			c.push({ label: 'Samples', href: '/samples' });
+			c.push({ label: s.sample_name, href: `/samples/${s.sample_id}` });
+			c.push({ label: 'Extracts', href: '/extracts' });
+			if (s.extract_name) {
+				c.push({ label: s.extract_name, href: `/extracts/${s.extract_id}` });
+			}
+			if (s.type === 'PCR') c.push({ label: s.name, href: `/pcr/reaction/${s.id}` });
+		} else {
+			c.push({ label: 'Libraries', href: '/libraries' });
+		}
+		if (data.plate) {
+			c.push({ label: (data.plate as any).plate_name, href: `/libraries/${(data.plate as any).id}` });
+		}
+		c.push({ label: (data.library as any).library_name });
+		return c;
+	});
 
 	const runColumns = [
 		{ key: 'run_name', label: 'Run', sortable: true },
@@ -28,11 +56,7 @@
 
 <div class="space-y-6">
 	<div>
-		{#if data.plate}
-			<a href="/libraries/{data.plate.id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.plate.plate_name}</a>
-		{:else}
-			<a href="/libraries" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Libraries</a>
-		{/if}
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<h1 class="text-2xl font-bold text-white">{data.library.library_name}</h1>
 			<EntityQR id={data.library.id} size={96} />

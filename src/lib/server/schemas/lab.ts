@@ -189,7 +189,6 @@ const pcrPlateFields = {
 	pcr_cond: optionalLongText,
 	annealing_temp_c: optionalNumber,
 	num_cycles: optionalInt,
-	polymerase: optionalShortText,
 	nucl_acid_amp: optionalLongText,
 	notes: optionalLongText
 };

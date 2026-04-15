@@ -7,10 +7,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const { labId } = requireLab(locals);
 	const db = getDb();
 	const pcr = db.prepare(`SELECT p.*, e.extract_name, e.id as extract_id, s.samp_name, s.id as sample_id,
+		s.site_id, st.site_name, s.project_id, proj.project_name,
 		pl.plate_name, pl.id as plate_id, ps.target_gene
 		FROM pcr_amplifications p
 		JOIN extracts e ON e.id = p.extract_id
 		JOIN samples s ON s.id = e.sample_id
+		JOIN sites st ON st.id = s.site_id
+		JOIN projects proj ON proj.id = s.project_id
 		LEFT JOIN pcr_plates pl ON pl.id = p.plate_id
 		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
 		WHERE p.id = ? AND p.is_deleted = 0 AND p.lab_id = ?`).get(params.reactionId, labId);

@@ -7,7 +7,13 @@ import { getEntityPersonnel } from '$lib/server/entity-personnel';
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const { labId } = requireLab(locals);
 	const db = getDb();
-	const extract = db.prepare(`SELECT e.*, s.samp_name, s.id as sample_id FROM extracts e JOIN samples s ON s.id = e.sample_id WHERE e.id = ? AND e.is_deleted = 0 AND e.lab_id = ?`).get(params.extractId, labId);
+	const extract = db.prepare(`SELECT e.*, s.samp_name, s.id as sample_id,
+			s.site_id, st.site_name, s.project_id, p.project_name
+		FROM extracts e
+		JOIN samples s ON s.id = e.sample_id
+		JOIN sites st ON st.id = s.site_id
+		JOIN projects p ON p.id = s.project_id
+		WHERE e.id = ? AND e.is_deleted = 0 AND e.lab_id = ?`).get(params.extractId, labId);
 	if (!extract) throw error(404, 'Extract not found');
 	const pcrs = db.prepare(`
 		SELECT r.*, ps.target_gene

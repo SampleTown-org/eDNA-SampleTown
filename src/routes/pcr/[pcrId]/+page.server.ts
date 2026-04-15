@@ -38,10 +38,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	// Fall back to individual reaction
 	const pcr = db.prepare(`SELECT p.*, e.extract_name, e.id as extract_id, s.samp_name, s.id as sample_id,
+			s.site_id, st.site_name, s.project_id, proj.project_name,
 			ps.target_gene
 		FROM pcr_amplifications p
 		JOIN extracts e ON e.id = p.extract_id
 		JOIN samples s ON s.id = e.sample_id
+		JOIN sites st ON st.id = s.site_id
+		JOIN projects proj ON proj.id = s.project_id
 		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
 		WHERE p.id = ? AND p.is_deleted = 0 AND p.lab_id = ?`).get(params.pcrId, labId);
 	if (!pcr) throw error(404, 'PCR plate or reaction not found');

@@ -4,6 +4,7 @@
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import { getSlot } from '$lib/mixs/schema-index';
 	import { slotTable } from '$lib/mixs/slot-ownership';
 	import { MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
@@ -12,6 +13,15 @@
 	let { data }: { data: PageData } = $props();
 
 	const sample = data.sample as Record<string, unknown>;
+	const crumbs = $derived([
+		{ label: data.lab?.name ?? 'Lab', href: '/' },
+		{ label: 'Projects', href: '/projects' },
+		{ label: sample.project_name as string, href: `/projects/${sample.project_id}` },
+		{ label: 'Sites', href: '/sites' },
+		{ label: sample.site_name as string, href: `/sites/${sample.site_id}` },
+		{ label: 'Samples', href: '/samples' },
+		{ label: sample.samp_name as string }
+	]);
 	const photos = $derived(data.photos as Array<{
 		id: string;
 		filename: string;
@@ -167,7 +177,7 @@
 
 <div class="space-y-6">
 	<div>
-		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
+		<Breadcrumb items={crumbs} />
 		<div class="flex items-start justify-between mt-1 gap-4">
 			<div class="flex items-center gap-3 flex-wrap">
 				<h1 class="text-2xl font-bold text-white">{sample.samp_name}</h1>
