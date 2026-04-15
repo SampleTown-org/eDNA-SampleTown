@@ -4,8 +4,44 @@
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import { detectPlateFormat, downloadTSV, openPrintWindow, type PrintCell } from '$lib/plate-export';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	function exportPlateTSV() {
+		const plate = data.plate as any;
+		const reactions = (data.reactions ?? []) as any[];
+		downloadTSV(
+			`${plate.plate_name}.tsv`,
+			['Well', 'Reaction Name', 'Extract', 'Sample', 'Band', 'Conc. ng/µL', 'Notes'],
+			reactions.map((r) => [
+				r.well_label ?? '',
+				r.pcr_name ?? '',
+				r.extract_name ?? '',
+				r.samp_name ?? '',
+				r.band_observed == null ? '' : r.band_observed ? 'yes' : 'no',
+				r.concentration_ng_ul ?? '',
+				r.notes ?? ''
+			])
+		);
+	}
+
+	function printPlateLayout() {
+		const plate = data.plate as any;
+		const reactions = (data.reactions ?? []) as any[];
+		const wellMap: Record<string, PrintCell> = {};
+		for (const r of reactions) {
+			if (!r.well_label) continue;
+			wellMap[r.well_label] = { primary: r.pcr_name ?? '', secondary: r.extract_name ?? '' };
+		}
+		const format = detectPlateFormat(reactions.map((r) => r.well_label));
+		const subtitle = [
+			plate.target_gene && `${plate.target_gene}${plate.target_subfragment ? ` ${plate.target_subfragment}` : ''}`,
+			plate.pcr_date,
+			`${reactions.length} reactions`
+		].filter(Boolean).join(' · ');
+		openPrintWindow({ title: plate.plate_name, subtitle, format, wellMap });
+	}
 
 	// Plate has many sources; reaction has a single linear chain.
 	const crumbs = $derived.by(() => {
@@ -59,6 +95,8 @@
 			</div>
 			<div class="flex items-center gap-3 shrink-0">
 				<EntityQR id={data.plate.id} size={96} />
+				<button onclick={exportPlateTSV} class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium" title="Download plate layout + per-reaction details as TSV">TSV</button>
+				<button onclick={printPlateLayout} class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium" title="Open a print-friendly plate layout (use browser print dialog → Save as PDF)">Print</button>
 				<a href="/pcr/{data.plate.id}/edit" class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 			</div>
 		</div>

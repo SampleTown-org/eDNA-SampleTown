@@ -11,7 +11,9 @@
 
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
-	let showPlateView = $state(false);
+	// Plate layout shows by default — operators verify well placement before
+	// submitting (matches /pcr/new, requested via in-app feedback).
+	let showPlateView = $state(true);
 	let plateFormat = $state<8 | 96 | 384>(96);
 	let wellAssignments = $state<Record<string, string>>({});
 
@@ -175,11 +177,28 @@
 	let saving = $state(false);
 	let errorMsg = $state('');
 
+	// Libraries that haven't been dragged into a well in PlateView. The
+	// wellAssignments map is keyed by well_label → source_id, so the
+	// "assigned" set is the set of values; rows whose source_id isn't in
+	// it haven't been placed yet.
+	const unassignedRows = $derived.by(() => {
+		const placed = new Set(Object.values(wellAssignments));
+		return rows.filter((r) => !placed.has(r.source_id));
+	});
+
 	async function submit() {
 		if (!plate.plate_name.trim()) { errorMsg = 'Plate name is required'; return; }
 		if (!plate.library_type.trim()) { errorMsg = 'Library Strategy (SRA) is required — pick one from the dropdown'; return; }
 		if (rows.length === 0) { errorMsg = 'Add at least one library'; return; }
 		if (rows.some(r => !r.library_name.trim())) { errorMsg = 'All library names are required'; return; }
+		if (rows.length > plateFormat) {
+			errorMsg = `Too many libraries (${rows.length}) for a ${plateFormat}-well plate. Switch to a larger plate format or split into multiple plates.`;
+			return;
+		}
+		if (unassignedRows.length > 0) {
+			errorMsg = `${unassignedRows.length} librar${unassignedRows.length !== 1 ? 'ies are' : 'y is'} not placed in a well. Drag them into the plate layout above before creating.`;
+			return;
+		}
 		saving = true; errorMsg = '';
 
 		// Invert wellAssignments (well → source_id) so we can look up the well
@@ -349,29 +368,53 @@
 		</div>
 	</div>
 
-	<!-- Plate layout (collapsible) -->
+	<!-- Plate layout (collapsible, expanded by default). Sits immediately
+	     above the Create button so operators can verify well placement
+	     right before submitting. Mirrors /pcr/new. -->
 	{#if rows.length > 0}
-	<div class="rounded-lg border border-slate-800 bg-slate-900/30">
+	{@const overCapacity = rows.length > plateFormat}
+	<div class="rounded-lg border {overCapacity ? 'border-red-800' : 'border-slate-800'} bg-slate-900/30">
 		<button
 			type="button"
 			onclick={() => (showPlateView = !showPlateView)}
 			class="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-300 hover:text-white"
 		>
 			<span class="font-semibold">Plate layout</span>
-			<span class="text-xs text-slate-500">{showPlateView ? '▾' : '▸'}</span>
+			<span class="flex items-center gap-3">
+				<span class="text-xs {overCapacity ? 'text-red-400' : 'text-slate-500'}">
+					{rows.length}/{plateFormat} wells
+				</span>
+				<span class="text-xs text-slate-500">{showPlateView ? '▾' : '▸'}</span>
+			</span>
 		</button>
 		{#if showPlateView}
 			<div class="p-4 border-t border-slate-800">
 				<PlateView items={plateItems} bind:wellAssignments bind:format={plateFormat} />
+				{#if overCapacity}
+					<p class="mt-3 text-sm text-red-400">
+						{rows.length} libraries exceed the {plateFormat}-well capacity. Switch
+						plate format above, or remove libraries before creating.
+					</p>
+				{/if}
 			</div>
 		{/if}
 	</div>
 	{/if}
 
-	<!-- Per-library table -->
+	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
+	<div class="flex gap-3 pt-2">
+		<button onclick={submit} disabled={saving || rows.length === 0 || rows.length > plateFormat || unassignedRows.length > 0} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
+			{saving ? 'Creating...' : `Create Plate and ${rows.length} Librar${rows.length !== 1 ? 'ies' : 'y'}`}
+		</button>
+		<a href="/libraries" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Cancel</a>
+	</div>
+
+	<!-- Libraries to be created — at the bottom of the page so the plate
+	     layout (the operator's primary verification surface) sits closer
+	     to the Create button. -->
 	{#if rows.length > 0}
-	<div class="overflow-x-auto">
-		<p class="text-sm font-semibold text-slate-300 mb-2">Libraries ({rows.length})</p>
+	<div class="overflow-x-auto pt-4">
+		<p class="text-sm font-semibold text-slate-300 mb-2">Libraries to be Created ({rows.length})</p>
 		<table class="w-full text-sm">
 			<thead>
 				<tr class="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
@@ -408,7 +451,20 @@
 							<option value="">--</option>
 							{#each data.picklists.barcode as opt}<option value={opt.value}>{opt.label}</option>{/each}
 						</select></td>
-					<td class="py-2 pr-3"><input type="number" step="any" bind:value={rows[i].final_concentration_ng_ul} class={cellInput} placeholder="--" /></td>
+					<td class="py-2 pr-3"><input
+						id="lib-conc-{i}"
+						type="number"
+						step="any"
+						bind:value={rows[i].final_concentration_ng_ul}
+						class={cellInput}
+						placeholder="--"
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								(document.getElementById(`lib-conc-${i + 1}`) as HTMLInputElement | null)?.focus();
+							}
+						}}
+					/></td>
 					<td class="py-2">
 						<button onclick={() => { selectedIds.delete(row.source_id); selectedIds = new Set(selectedIds); rows = rows.filter(r => r.source_id !== row.source_id); }} class="text-slate-600 hover:text-red-400 transition-colors">✕</button>
 					</td>
@@ -418,12 +474,4 @@
 		</table>
 	</div>
 	{/if}
-
-	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
-	<div class="flex gap-3 pt-2">
-		<button onclick={submit} disabled={saving || rows.length === 0} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
-			{saving ? 'Creating...' : `Create Plate (${rows.length} librar${rows.length !== 1 ? 'ies' : 'y'})`}
-		</button>
-		<a href="/libraries" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Cancel</a>
-	</div>
 </div>

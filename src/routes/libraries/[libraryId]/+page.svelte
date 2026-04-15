@@ -4,8 +4,42 @@
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import { detectPlateFormat, downloadTSV, openPrintWindow, type PrintCell } from '$lib/plate-export';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	function exportPlateTSV() {
+		const plate = data.plate as any;
+		const libs = (data.libraries ?? []) as any[];
+		downloadTSV(
+			`${plate.plate_name}.tsv`,
+			['Well', 'Library Name', 'Source Type', 'Source Name', 'i7 Index', 'i5 Index', 'Barcode', 'Conc. ng/µL'],
+			libs.map((l) => [
+				l.well_label ?? '',
+				l.library_name ?? '',
+				l.source_type ?? '',
+				l.source_name ?? '',
+				l.index_sequence_i7 ?? '',
+				l.index_sequence_i5 ?? '',
+				l.barcode ?? '',
+				l.final_concentration_ng_ul ?? ''
+			])
+		);
+	}
+
+	function printPlateLayout() {
+		const plate = data.plate as any;
+		const libs = (data.libraries ?? []) as any[];
+		const wellMap: Record<string, PrintCell> = {};
+		for (const l of libs) {
+			if (!l.well_label) continue;
+			wellMap[l.well_label] = { primary: l.library_name ?? '', secondary: l.source_name ?? '' };
+		}
+		const format = detectPlateFormat(libs.map((l) => l.well_label));
+		const subtitle = [plate.library_type, plate.library_prep_date, `${libs.length} libraries`]
+			.filter(Boolean).join(' · ');
+		openPrintWindow({ title: plate.plate_name, subtitle, format, wellMap });
+	}
 
 	const crumbs = $derived.by(() => {
 		if (data.type === 'plate') {
@@ -65,6 +99,8 @@
 			</div>
 			<div class="flex items-center gap-3 shrink-0">
 				<EntityQR id={data.plate.id} size={96} />
+				<button onclick={exportPlateTSV} class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium" title="Download plate layout + per-library details as TSV">TSV</button>
+				<button onclick={printPlateLayout} class="hidden sm:inline-flex px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium" title="Open a print-friendly plate layout (use browser print dialog → Save as PDF)">Print</button>
 				<a href="/libraries/{data.plate.id}/edit" class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 			</div>
 		</div>
