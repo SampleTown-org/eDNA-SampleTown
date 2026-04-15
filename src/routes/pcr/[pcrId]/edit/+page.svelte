@@ -159,9 +159,6 @@
 		{/if}
 	</div>
 
-	{#if errorMsg}
-		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>
-	{/if}
 
 	{#if data.type === 'plate'}
 		<form onsubmit={(e) => { e.preventDefault(); submitPlate(); }} class="space-y-4">
@@ -236,6 +233,7 @@
 				plate detail page to open and edit it individually.
 			</p>
 
+			{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 			<div class="flex gap-3 pt-2">
 				<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 					{saving ? 'Saving...' : 'Save'}
@@ -330,6 +328,7 @@
 				<textarea bind:value={reactionForm.notes} rows="2" class={inputCls}></textarea>
 			</div>
 
+			{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 			<div class="flex gap-3 pt-2">
 				<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 					{saving ? 'Saving...' : 'Save'}

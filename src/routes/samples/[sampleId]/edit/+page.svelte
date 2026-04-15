@@ -116,10 +116,6 @@
 		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}Edit Sample</h1>
 	</div>
 
-	{#if errorMsg}
-		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>
-	{/if}
-
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-8">
 		<!-- Top: checklist + extension drive every bucket below. -->
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/40">
@@ -335,6 +331,9 @@
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>
 		</div>
 
+		{#if errorMsg}
+			<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>
+		{/if}
 		<div class="flex gap-3 pt-2">
 			<button type="submit" disabled={saving}
 				class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">

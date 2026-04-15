@@ -92,7 +92,6 @@
 <div class="max-w-3xl space-y-6">
 	<div><a href="/runs" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Runs</a>
 		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}New Sequencing Run</h1></div>
-	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-4">
 		<div class="grid grid-cols-2 gap-4">
 			<div><label for="run_name" class="block text-sm font-medium text-slate-300 mb-1">Run Name</label>
@@ -176,6 +175,7 @@
 
 		<div><label for="notes" class="block text-sm font-medium text-slate-300 mb-1">Notes</label>
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea></div>
+		{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 		<div class="flex gap-3 pt-2">
 			<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">{saving ? 'Creating...' : 'Create Run'}</button>
 			<a href="/runs" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Cancel</a>

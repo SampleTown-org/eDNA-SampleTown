@@ -135,11 +135,24 @@
 	let saving = $state(false);
 	let errorMsg = $state('');
 
+	// Reactions that haven't been dragged into a well in PlateView. The
+	// wellAssignments map is keyed by well_label → extract_id, so the
+	// "assigned" set is the set of values; rows whose extract_id isn't in
+	// it haven't been placed yet.
+	const unassignedRows = $derived.by(() => {
+		const placed = new Set(Object.values(wellAssignments));
+		return rows.filter((r) => !placed.has(r.extract_id));
+	});
+
 	async function submit() {
 		if (!plate.plate_name.trim()) { errorMsg = 'Plate name is required'; return; }
 		if (rows.length === 0) { errorMsg = 'Select at least one extract'; return; }
 		if (rows.length > plateFormat) {
 			errorMsg = `Too many reactions (${rows.length}) for a ${plateFormat}-well plate. Switch to a larger plate format or split into multiple plates.`;
+			return;
+		}
+		if (unassignedRows.length > 0) {
+			errorMsg = `${unassignedRows.length} reaction${unassignedRows.length !== 1 ? 's are' : ' is'} not placed in a well. Drag them into the plate layout above before creating.`;
 			return;
 		}
 		saving = true; errorMsg = '';
@@ -183,8 +196,6 @@
 			<button onclick={() => { cart.clearType('extract'); rows = []; selectedExtractIds = new Set(); }} class="text-xs text-slate-400 hover:text-white">Clear</button>
 		</div>
 	{/if}
-	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
-
 	<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 		<!-- Extract picker -->
 		<div class="space-y-2">
@@ -283,7 +294,36 @@
 		</div>
 	</div>
 
-	<!-- Plate layout (collapsible, expanded by default) -->
+	<!-- Per-reaction table -->
+	{#if rows.length > 0}
+	<div class="overflow-x-auto">
+		<p class="text-sm font-semibold text-slate-300 mb-2">Reactions ({rows.length})</p>
+		<table class="w-full text-sm">
+			<thead>
+				<tr class="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
+					<th class="text-left pb-2 pr-3 font-medium">Extract</th>
+					<th class="text-left pb-2 pr-3 font-medium min-w-36">Reaction Name</th>
+					<th class="text-left pb-2 pr-3 font-medium w-28">Conc. ng/µL</th>
+					<th class="pb-2 w-8"></th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-800">
+				{#each rows as row, i}
+				<tr>
+					<td class="py-2 pr-3"><div class="text-white">{row.extract_name}</div><div class="text-xs text-slate-500">{row.samp_name}</div></td>
+					<td class="py-2 pr-3"><input type="text" bind:value={rows[i].pcr_name} class={cellInput} /></td>
+					<td class="py-2 pr-3"><input type="number" step="any" bind:value={rows[i].concentration_ng_ul} class={cellInput} placeholder="--" /></td>
+					<td class="py-2"><button onclick={() => toggleExtract(row.extract_id, row.extract_name, row.samp_name)} class="text-slate-600 hover:text-red-400 transition-colors">✕</button></td>
+				</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
+	{/if}
+
+	<!-- Plate layout (collapsible, expanded by default). Sits immediately
+	     above the Create button so operators can verify well placement
+	     right before submitting. -->
 	{#if rows.length > 0}
 	{@const overCapacity = rows.length > plateFormat}
 	<div class="rounded-lg border {overCapacity ? 'border-red-800' : 'border-slate-800'} bg-slate-900/30">
@@ -314,35 +354,13 @@
 	</div>
 	{/if}
 
-	<!-- Per-reaction table -->
-	{#if rows.length > 0}
-	<div class="overflow-x-auto">
-		<p class="text-sm font-semibold text-slate-300 mb-2">Reactions ({rows.length})</p>
-		<table class="w-full text-sm">
-			<thead>
-				<tr class="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-700">
-					<th class="text-left pb-2 pr-3 font-medium">Extract</th>
-					<th class="text-left pb-2 pr-3 font-medium min-w-36">Reaction Name</th>
-					<th class="text-left pb-2 pr-3 font-medium w-28">Conc. ng/µL</th>
-					<th class="pb-2 w-8"></th>
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-slate-800">
-				{#each rows as row, i}
-				<tr>
-					<td class="py-2 pr-3"><div class="text-white">{row.extract_name}</div><div class="text-xs text-slate-500">{row.samp_name}</div></td>
-					<td class="py-2 pr-3"><input type="text" bind:value={rows[i].pcr_name} class={cellInput} /></td>
-					<td class="py-2 pr-3"><input type="number" step="any" bind:value={rows[i].concentration_ng_ul} class={cellInput} placeholder="--" /></td>
-					<td class="py-2"><button onclick={() => toggleExtract(row.extract_id, row.extract_name, row.samp_name)} class="text-slate-600 hover:text-red-400 transition-colors">✕</button></td>
-				</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-	{/if}
+	<!-- Errors render adjacent to the Create button so the cause sits next
+	     to the action that triggered it (page-wide pattern, requested via
+	     in-app feedback). -->
+	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 
 	<div class="flex gap-3 pt-2">
-		<button onclick={submit} disabled={saving || rows.length === 0 || rows.length > plateFormat} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
+		<button onclick={submit} disabled={saving || rows.length === 0 || rows.length > plateFormat || unassignedRows.length > 0} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 			{saving ? 'Creating...' : `Create Plate (${rows.length} reaction${rows.length !== 1 ? 's' : ''})`}
 		</button>
 		<a href="/pcr" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Cancel</a>

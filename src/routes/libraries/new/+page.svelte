@@ -230,8 +230,6 @@
 		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}New Library Plate</h1>
 	</div>
 
-	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
-
 	<!-- Source type selector -->
 	<div>
 		<label class="block text-sm font-medium text-slate-300 mb-2">Source</label>
@@ -421,6 +419,7 @@
 	</div>
 	{/if}
 
+	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 	<div class="flex gap-3 pt-2">
 		<button onclick={submit} disabled={saving || rows.length === 0} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 			{saving ? 'Creating...' : `Create Plate (${rows.length} librar${rows.length !== 1 ? 'ies' : 'y'})`}

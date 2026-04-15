@@ -153,8 +153,6 @@
 		</div>
 	{/if}
 
-	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
-
 	<!-- Shared across both modes so the batch shared-fields section can also
 	     attach `list="samp_taxon_id_options"` to its input. -->
 	<datalist id="samp_taxon_id_options">
@@ -269,6 +267,7 @@
 			<FieldLabel slot="notes" for="notes" label="Notes" description="Free-form notes about this extract." />
 			<textarea id="notes" bind:value={form.notes} rows="2" class={inputCls}></textarea>
 		</div>
+		{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 		<div class="flex gap-3 pt-2">
 			<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">{saving ? 'Creating...' : 'Create Extract'}</button>
 			<a href="/extracts" class="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Cancel</a>
@@ -415,6 +414,7 @@
 	</div>
 	{/if}
 
+	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 	<div class="flex gap-3 pt-2">
 		<button onclick={submitBatch} disabled={saving || rows.length === 0} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 			{saving ? 'Creating...' : `Create ${rows.length} Extract${rows.length !== 1 ? 's' : ''}`}

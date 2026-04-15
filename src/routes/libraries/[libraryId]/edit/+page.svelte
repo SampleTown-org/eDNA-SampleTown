@@ -122,10 +122,6 @@
 		{/if}
 	</div>
 
-	{#if errorMsg}
-		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>
-	{/if}
-
 	{#if data.type === 'plate'}
 		<form onsubmit={(e) => { e.preventDefault(); submitPlate(); }} class="space-y-4">
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -196,6 +192,7 @@
 				from the plate detail page.
 			</p>
 
+			{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 			<div class="flex gap-3 pt-2">
 				<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 					{saving ? 'Saving...' : 'Save'}
@@ -244,6 +241,7 @@
 				can be changed by editing the plate.
 			</p>
 
+			{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 			<div class="flex gap-3 pt-2">
 				<button type="submit" disabled={saving} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 					{saving ? 'Saving...' : 'Save'}
