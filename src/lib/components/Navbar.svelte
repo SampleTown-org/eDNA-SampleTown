@@ -23,9 +23,14 @@
 	};
 
 	/** `desktopOnly` links are hidden on <sm screens — reserved for flows that
-	 *  don't make sense on mobile (bulk import/export, etc.). */
+	 *  don't make sense on mobile.
+	 *
+	 *  Dashboard is intentionally not here — the SampleTown.org brand link
+	 *  on the left already navigates to /. Analysis is hidden until the
+	 *  pipeline-launch UI is wired up. Import/Export and Glossary are
+	 *  reachable from the Manage page (they're admin-leaning tools that
+	 *  don't need top-level real estate). */
 	const navLinks: { href: string; label: string; desktopOnly?: boolean; writerOnly?: boolean }[] = [
-		{ href: '/', label: 'Dashboard' },
 		{ href: '/projects', label: 'Projects' },
 		{ href: '/sites', label: 'Sites' },
 		{ href: '/samples', label: 'Samples' },
@@ -33,10 +38,7 @@
 		{ href: '/pcr', label: 'PCR' },
 		{ href: '/libraries', label: 'Libraries' },
 		{ href: '/runs', label: 'Runs' },
-		{ href: '/analysis', label: 'Analysis' },
-		{ href: '/export', label: 'Import/Export', desktopOnly: true },
-		{ href: '/glossary', label: 'Glossary' },
-		{ href: '/settings', label: 'Settings', writerOnly: true }
+		{ href: '/settings', label: 'Manage', writerOnly: true }
 	];
 
 	let mobileOpen = $state(false);
@@ -46,11 +48,15 @@
 	<div class="px-4">
 		<div class="flex items-center justify-between h-14">
 			<a href="/" class="flex items-center gap-2 text-ocean-400 font-bold text-lg tracking-tight">
-				<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-					<path d="M8 12c0-2 1-4 4-4s4 2 4 4-1 4-4 4-4-2-4-4z" />
+				<!-- DNA double-helix icon: two intertwining sine-like strands +
+				     four base-pair rungs. Drawn in viewBox 24×24, currentColor
+				     so it picks up the ocean-400 from the parent <a>. -->
+				<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+					<path d="M7 3c0 4 10 5 10 9s-10 5-10 9" />
+					<path d="M17 3c0 4-10 5-10 9s10 5 10 9" />
+					<path d="M9 5h6 M8 9h8 M8 15h8 M9 19h6" />
 				</svg>
-				SampleTown
+				SampleTown.org
 			</a>
 
 			<!-- Desktop nav (only for signed-in users) -->

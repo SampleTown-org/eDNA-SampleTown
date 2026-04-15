@@ -533,8 +533,32 @@
 
 <div class="max-w-5xl space-y-6">
 	<div>
-		<h1 class="text-2xl font-bold text-white">Settings</h1>
-		<p class="text-slate-400 mt-1 text-sm">Manage picklists, primer sets, and PCR protocols.</p>
+		<h1 class="text-2xl font-bold text-white">Manage</h1>
+		<p class="text-slate-400 mt-1 text-sm">Picklists, primer sets, PCR protocols, people — plus links to bulk tools below.</p>
+	</div>
+
+	<!-- Tools row: links out to the heavyweight pages that used to live in
+	     the top nav. Keeps them one click away from Manage without bloating
+	     the nav bar. -->
+	<div class="flex flex-wrap gap-2">
+		<a
+			href="/export"
+			class="px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-sm text-slate-200 transition-colors flex items-center gap-2"
+		>
+			<svg class="w-4 h-4 text-ocean-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+				<path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" />
+			</svg>
+			Import / Export
+		</a>
+		<a
+			href="/glossary"
+			class="px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-sm text-slate-200 transition-colors flex items-center gap-2"
+		>
+			<svg class="w-4 h-4 text-ocean-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+				<path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+			</svg>
+			MIxS Glossary
+		</a>
 	</div>
 
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
