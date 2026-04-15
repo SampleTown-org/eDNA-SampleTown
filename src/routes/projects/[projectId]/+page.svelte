@@ -5,6 +5,13 @@
 
 	let { data }: { data: PageData } = $props();
 
+	const siteColumns = [
+		{ key: 'site_name', label: 'Site', sortable: true },
+		{ key: 'geo_loc_name', label: 'Location', sortable: true },
+		{ key: 'env_local_scale', label: 'Feature', sortable: true },
+		{ key: 'sample_count', label: 'Samples', sortable: true }
+	];
+
 	const sampleColumns = [
 		{ key: 'samp_name', label: 'Sample', sortable: true },
 		{ key: 'mixs_checklist', label: 'Checklist', sortable: true },
@@ -85,10 +92,29 @@
 	{/if}
 
 	<div class="flex items-center justify-between">
+		<h2 class="text-lg font-semibold text-white">Sites ({data.sites.length})</h2>
+		<a
+			href="/sites/new?project_id={data.project.id}"
+			class="hidden sm:inline-flex write-only px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
+		>
+			Add Site
+		</a>
+	</div>
+
+	<DataTable
+		columns={siteColumns}
+		rows={data.sites}
+		href={(row) => `/sites/${row.id}`}
+		empty="No sites yet. Add a site first — samples are collected at sites."
+	/>
+
+	<div class="flex items-center justify-between">
 		<h2 class="text-lg font-semibold text-white">Samples ({data.samples.length})</h2>
 		<a
 			href="/samples/new?project_id={data.project.id}"
 			class="hidden sm:inline-flex write-only px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium"
+			class:opacity-50={data.sites.length === 0}
+			class:pointer-events-none={data.sites.length === 0}
 		>
 			Add Sample
 		</a>
@@ -98,6 +124,6 @@
 		columns={sampleColumns}
 		rows={data.samples}
 		href={(row) => `/samples/${row.id}`}
-		empty="No samples yet. Add one to get started."
+		empty={data.sites.length === 0 ? 'Add a site above before collecting samples.' : 'No samples yet at any of this project\u2019s sites.'}
 	/>
 </div>

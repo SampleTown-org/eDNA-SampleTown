@@ -11,6 +11,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.get(params.projectId, labId);
 	if (!project) throw error(404, 'Project not found');
 
+	const sites = db.prepare(`
+		SELECT s.*,
+			(SELECT COUNT(*) FROM samples WHERE site_id = s.id AND is_deleted = 0) AS sample_count
+		FROM sites s
+		WHERE s.project_id = ? AND s.is_deleted = 0
+		ORDER BY s.site_name
+	`).all(params.projectId);
+
 	const samples = db.prepare(`
 		SELECT s.*, st.site_name
 		FROM samples s

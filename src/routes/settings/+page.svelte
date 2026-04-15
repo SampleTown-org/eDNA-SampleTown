@@ -1342,22 +1342,47 @@
 					placeholder={backupSettings?.github_token_set ? 'leave blank to keep existing token' : 'paste your token here'} />
 				<details class="mt-2 text-xs text-slate-500">
 					<summary class="cursor-pointer text-ocean-400 hover:text-ocean-300">How to generate a token</summary>
-					<ol class="list-decimal pl-5 space-y-1 mt-2 text-slate-400">
-						<li>
-							Open
-							<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer"
-								class="text-ocean-400 hover:text-ocean-300">github.com/settings/personal-access-tokens/new</a>
-							(fine-grained tokens)
-						</li>
-						<li>Token name: anything (e.g. "SampleTown backups")</li>
-						<li>Expiration: pick what you're comfortable with — token-rotation reminder is on you</li>
-						<li>Repository access: <strong>Only select repositories</strong> &rarr; pick your backup repo</li>
-						<li>
-							Repository permissions &rarr; <strong>Contents</strong>: <strong>Read and write</strong>
-							(this is the only permission needed)
-						</li>
-						<li>Generate token, copy the value (starts with <code>github_pat_</code>), paste above</li>
-					</ol>
+					<div class="mt-2 space-y-3 text-slate-400">
+						<div>
+							<div class="text-slate-300 font-medium mb-1">For a repo you own personally:</div>
+							<ol class="list-decimal pl-5 space-y-1">
+								<li>
+									Open
+									<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer"
+										class="text-ocean-400 hover:text-ocean-300">github.com/settings/personal-access-tokens/new</a>
+									(fine-grained tokens)
+								</li>
+								<li>Token name: anything (e.g. "SampleTown backups")</li>
+								<li>Expiration: pick what you're comfortable with — rotation reminder is on you</li>
+								<li>Repository access: <strong>Only select repositories</strong> &rarr; pick your backup repo</li>
+								<li>
+									Repository permissions &rarr; <strong>Contents</strong>: <strong>Read and write</strong>
+								</li>
+								<li>Generate, copy the <code>github_pat_…</code> value, paste above</li>
+							</ol>
+						</div>
+						<div>
+							<div class="text-slate-300 font-medium mb-1">For an org-owned repo:</div>
+							<p>
+								Fine-grained PATs only work against an organization that has
+								explicitly enabled them. If you get a
+								<code class="text-amber-400">403 "Resource not accessible by personal access token"</code>
+								error, either:
+							</p>
+							<ul class="list-disc pl-5 space-y-1 mt-1">
+								<li>
+									Ask the org admin to allow fine-grained tokens (Org Settings &rarr; Personal access tokens &rarr; Allow access),
+									then redo the steps above.
+								</li>
+								<li>
+									Or fall back to a <strong>classic</strong> token at
+									<a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer"
+										class="text-ocean-400 hover:text-ocean-300">github.com/settings/tokens/new</a>
+									with the <code>repo</code> scope checked.
+								</li>
+							</ul>
+						</div>
+					</div>
 				</details>
 			</div>
 			<div>
