@@ -52,7 +52,20 @@ export const DELETE: RequestHandler = async ({ request, locals, cookies }) => {
 		// pcr protocols, saved_carts, db_snapshots, invites, feedback).
 		// users.lab_id is the only no-cascade FK touching labs — null it
 		// out first so the DELETE doesn't fail with a constraint error.
+		//
+		// defer_foreign_keys: a few intra-lab FKs use RESTRICT / NO ACTION
+		// rather than CASCADE — samples.site_id (RESTRICT), library_plates.
+		// pcr_plate_id (NO ACTION), and the primer_set_id refs on pcr_plates
+		// + pcr_amplifications. RESTRICT in particular fires immediately,
+		// not at end-of-statement, so during the cascade the engine can
+		// briefly see a samples row pointing at a sites row that's about
+		// to be deleted (or a library_plate pointing at a doomed pcr_plate)
+		// and reject. defer_foreign_keys = ON pushes ALL FK checks to
+		// commit time, by which point the whole sub-graph is gone and
+		// every constraint is satisfied. The pragma is automatically reset
+		// at the end of the transaction (it's per-tx, not session-wide).
 		db.transaction(() => {
+			db.pragma('defer_foreign_keys = ON');
 			// Drop sessions for everyone in this lab so half-loaded tabs
 			// don't keep operating against deleted data — EXCEPT the
 			// deleting admin's own session, so they get gracefully
