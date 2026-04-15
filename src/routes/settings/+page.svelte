@@ -1323,39 +1323,51 @@
 			<div>
 				<label for="bk-repo" class="block text-sm text-slate-300 mb-1">GitHub repo</label>
 				<input id="bk-repo" type="text" bind:value={backupForm.github_repo} class="w-full {inputCls} text-sm"
-					placeholder="owner/repo (e.g. Cryomics-Lab/SampleTown-data)" />
+					placeholder="owner/repository-name" />
 				<p class="text-xs text-slate-500 mt-1">
-					Snapshots land at <code>data/{backupSettings?.github_repo ? backupSettings?.github_repo.split('/')[1] : '&lt;repo&gt;'}/&lt;table&gt;.json</code>
-					— actually <code>data/&lt;lab-slug&gt;/&lt;table&gt;.json</code>, so multiple
-					labs can share one repo without overwriting each other.
+					A GitHub repository you own where backups will be written.
+					Each backup is one commit containing the latest snapshot of your
+					lab's data as JSON files.
 				</p>
 			</div>
 			<div>
 				<label for="bk-token" class="block text-sm text-slate-300 mb-1">
-					GitHub token
+					GitHub access token
 					{#if backupSettings?.github_token_set}
 						<span class="ml-2 text-xs text-green-400">●●●●  (currently set)</span>
-					{:else}
-						<span class="ml-2 text-xs text-slate-500">(not set — system fallback in use if env vars configured)</span>
 					{/if}
 				</label>
 				<input id="bk-token" type="password" bind:value={backupForm.github_token}
 					autocomplete="new-password" class="w-full {inputCls} text-sm"
-					placeholder={backupSettings?.github_token_set ? 'leave blank to keep existing token' : 'paste a PAT with write access'} />
-				<p class="text-xs text-slate-500 mt-1">
-					Use a fine-grained PAT scoped to just the backup repo with
-					Contents: read &amp; write. Stored plaintext in the SampleTown DB
-					(same risk profile as a server-side <code>.env</code>).
-				</p>
+					placeholder={backupSettings?.github_token_set ? 'leave blank to keep existing token' : 'paste your token here'} />
+				<details class="mt-2 text-xs text-slate-500">
+					<summary class="cursor-pointer text-ocean-400 hover:text-ocean-300">How to generate a token</summary>
+					<ol class="list-decimal pl-5 space-y-1 mt-2 text-slate-400">
+						<li>
+							Open
+							<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer"
+								class="text-ocean-400 hover:text-ocean-300">github.com/settings/personal-access-tokens/new</a>
+							(fine-grained tokens)
+						</li>
+						<li>Token name: anything (e.g. "SampleTown backups")</li>
+						<li>Expiration: pick what you're comfortable with — token-rotation reminder is on you</li>
+						<li>Repository access: <strong>Only select repositories</strong> &rarr; pick your backup repo</li>
+						<li>
+							Repository permissions &rarr; <strong>Contents</strong>: <strong>Read and write</strong>
+							(this is the only permission needed)
+						</li>
+						<li>Generate token, copy the value (starts with <code>github_pat_</code>), paste above</li>
+					</ol>
+				</details>
 			</div>
 			<div>
-				<label for="bk-interval" class="block text-sm text-slate-300 mb-1">Auto-backup interval (hours)</label>
+				<label for="bk-interval" class="block text-sm text-slate-300 mb-1">Auto-backup every (hours)</label>
 				<input id="bk-interval" type="number" min="0" max="8760" bind:value={backupForm.backup_interval_hours}
 					class="w-32 {inputCls} text-sm" />
 				<p class="text-xs text-slate-500 mt-1">
-					0 = manual only. Otherwise the scheduler runs an automatic
-					backup every N hours (next check at most 15 minutes after the
-					interval elapses).
+					0 means manual only — backups happen when you click Backup now.
+					Otherwise SampleTown pushes an automatic backup every N hours
+					(common picks: 24 for daily, 168 for weekly).
 				</p>
 			</div>
 			<div class="flex gap-3 pt-2">
