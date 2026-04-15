@@ -74,8 +74,14 @@ export function openPrintWindow(opts: {
 }) {
 	const { title, subtitle, format, wellMap } = opts;
 	const { rows, cols } = LAYOUTS[format];
-	const cellFont = format === 8 ? '14px' : format === 96 ? '10px' : '7px';
-	const cellSize = format === 8 ? '90px' : format === 96 ? '60px' : '32px';
+
+	// Cell sizing in mm so the grid fits a US Letter landscape page
+	// (printable area ≈ 250mm × 175mm with 18mm margins). Per-format sizes
+	// are picked to leave room for the title + row/col headers without
+	// overflowing onto a second page.
+	const cellSize = format === 8 ? 28 : format === 96 ? 20 : 9.5;
+	const cellFont = format === 8 ? '14pt' : format === 96 ? '9pt' : '5.5pt';
+	const wellFont = format === 8 ? '8pt' : format === 96 ? '6pt' : '4pt';
 
 	const headerCols = Array.from({ length: cols }, (_, i) => `<th>${i + 1}</th>`).join('');
 	const bodyRows = Array.from({ length: rows }, (_, r) => {
@@ -84,10 +90,7 @@ export function openPrintWindow(opts: {
 			const well = `${letter}${String(c + 1).padStart(2, '0')}`;
 			const item = wellMap[well];
 			if (!item) return `<td class="empty"><span class="well">${well}</span></td>`;
-			const sub = item.secondary
-				? `<div class="sub">${escapeHtml(item.secondary)}</div>`
-				: '';
-			return `<td><span class="well">${well}</span><div class="primary">${escapeHtml(item.primary)}</div>${sub}</td>`;
+			return `<td><span class="well">${well}</span><div class="primary">${escapeHtml(item.primary)}</div></td>`;
 		}).join('');
 		return `<tr><th>${letter}</th>${cells}</tr>`;
 	}).join('');
@@ -99,31 +102,32 @@ export function openPrintWindow(opts: {
 	<title>${escapeHtml(title)}</title>
 	<style>
 		* { box-sizing: border-box; }
-		body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 16px; color: #111; }
-		h1 { font-size: 18px; margin: 0 0 4px; }
-		.subtitle { font-size: 12px; color: #555; margin-bottom: 12px; }
-		table { border-collapse: collapse; }
-		th { font-weight: 500; font-size: 10px; color: #555; padding: 2px 4px; text-align: center; }
+		body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 0; margin: 0; color: #111; }
+		h1 { font-size: 14pt; margin: 0 0 2mm; }
+		.subtitle { font-size: 9pt; color: #555; margin-bottom: 4mm; }
+		table { border-collapse: collapse; table-layout: fixed; }
+		th { font-weight: 500; font-size: 7pt; color: #555; padding: 0 2px; text-align: center; }
 		td {
-			border: 1px solid #999;
-			width: ${cellSize};
-			height: ${cellSize};
+			border: 0.3mm solid #888;
+			width: ${cellSize}mm;
+			height: ${cellSize}mm;
 			vertical-align: top;
-			padding: 2px;
+			padding: 0.5mm;
 			font-size: ${cellFont};
-			line-height: 1.1;
+			line-height: 1.05;
 			overflow: hidden;
 		}
 		td.empty { background: #f5f5f5; }
-		.well { font-size: 8px; color: #999; display: block; }
+		.well { font-size: ${wellFont}; color: #999; display: block; }
 		.primary { font-weight: 600; word-break: break-all; }
-		.sub { font-size: 0.85em; color: #666; word-break: break-all; }
-		.print-instructions { font-size: 11px; color: #999; margin-top: 16px; }
+		.print-instructions { font-size: 9pt; color: #999; padding: 4mm; }
 		@media print {
 			.print-instructions { display: none; }
-			body { padding: 0; }
 		}
-		@page { size: landscape; margin: 12mm; }
+		@page { size: letter landscape; margin: 12mm; }
+		@media screen {
+			body { padding: 16px; }
+		}
 	</style>
 </head>
 <body>
@@ -133,7 +137,7 @@ export function openPrintWindow(opts: {
 		<thead><tr><th></th>${headerCols}</tr></thead>
 		<tbody>${bodyRows}</tbody>
 	</table>
-	<p class="print-instructions">Use your browser's print dialog (Ctrl+P / ⌘P) — pick "Save as PDF" as the destination if you want a file rather than a hard copy.</p>
+	<p class="print-instructions">Use your browser's print dialog (Ctrl+P / ⌘P) — pick "Save as PDF" as the destination if you want a file rather than a hard copy. Page is sized for US Letter landscape.</p>
 	<script>setTimeout(() => window.print(), 200);</script>
 </body>
 </html>`;
