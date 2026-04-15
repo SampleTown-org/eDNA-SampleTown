@@ -156,7 +156,7 @@
 
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold text-white">Sites</h1>
+		<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}Sites</h1>
 		<div class="flex items-center gap-2">
 			{#if selectedIds.size > 0}
 				<button

@@ -65,7 +65,7 @@
 <div class="max-w-3xl space-y-6">
 	<div>
 		<a href="/sites/{data.site.id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.site.site_name}</a>
-		<h1 class="text-2xl font-bold text-white mt-1">Edit Site</h1>
+		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}Edit Site</h1>
 	</div>
 
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}

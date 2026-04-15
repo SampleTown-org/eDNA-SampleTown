@@ -113,7 +113,7 @@
 <div class="max-w-3xl space-y-6">
 	<div>
 		<a href="/samples/{(data.sample as any).id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {(data.sample as any).samp_name}</a>
-		<h1 class="text-2xl font-bold text-white mt-1">Edit Sample</h1>
+		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}Edit Sample</h1>
 	</div>
 
 	{#if errorMsg}

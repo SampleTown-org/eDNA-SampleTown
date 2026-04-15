@@ -44,7 +44,7 @@
 <div class="max-w-2xl space-y-6">
 	<div>
 		<a href="/projects/{data.project.id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.project.project_name}</a>
-		<h1 class="text-2xl font-bold text-white mt-1">Edit Project</h1>
+		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}Edit Project</h1>
 	</div>
 
 	{#if errorMsg}

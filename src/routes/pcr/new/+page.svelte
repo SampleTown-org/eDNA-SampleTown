@@ -168,7 +168,7 @@
 <div class="max-w-5xl space-y-6">
 	<div>
 		<a href="/pcr" class="text-sm text-slate-400 hover:text-ocean-400">&larr; PCR</a>
-		<h1 class="text-2xl font-bold text-white mt-1">New PCR Plate</h1>
+		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}New PCR Plate</h1>
 	</div>
 
 	{#if cartExtracts.length > 0}

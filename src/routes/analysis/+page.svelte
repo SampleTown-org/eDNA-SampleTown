@@ -15,7 +15,7 @@
 
 <div class="space-y-4">
 	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold text-white">Analyses</h1>
+		<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}Analyses</h1>
 	</div>
 	<DataTable {columns} rows={data.analyses} href={(row) => `/analysis/${row.id}`} empty="No analyses yet." />
 </div>

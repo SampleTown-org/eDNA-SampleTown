@@ -89,7 +89,7 @@
 <div class="max-w-3xl space-y-6">
 	<div>
 		<a href="/runs/{data.run.id}" class="text-sm text-slate-400 hover:text-ocean-400">&larr; {data.run.run_name}</a>
-		<h1 class="text-2xl font-bold text-white mt-1">Edit Sequencing Run</h1>
+		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}Edit Sequencing Run</h1>
 	</div>
 
 	{#if errorMsg}

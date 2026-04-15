@@ -137,7 +137,7 @@
 <div class="max-w-5xl space-y-6">
 	<div>
 		<a href="/extracts" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Extracts</a>
-		<h1 class="text-2xl font-bold text-white mt-1">New Nucleic Acid Extract</h1>
+		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}New Nucleic Acid Extract</h1>
 	</div>
 
 	<!-- Mode toggle -->

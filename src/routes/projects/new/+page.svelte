@@ -46,7 +46,7 @@
 </script>
 
 <div class="max-w-2xl space-y-6">
-	<h1 class="text-2xl font-bold text-white">New Project</h1>
+	<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}New Project</h1>
 
 	{#if error}
 		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{error}</div>

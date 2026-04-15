@@ -13,12 +13,7 @@ export interface DayEvent {
 export const load: PageServerLoad = async ({ locals }) => {
 	const { labId } = requireLab(locals);
 	const db = getDb();
-
-	// Lab name for the dashboard header — surfaces which lab the viewer is
-	// currently in (only matters in the multi-lab world but cheap to load).
-	const lab = db.prepare('SELECT id, name, slug FROM labs WHERE id = ?').get(labId) as
-		| { id: string; name: string; slug: string }
-		| undefined;
+	// `lab` is provided by +layout.server.ts and inherits into data here.
 
 	const count = (sql: string) =>
 		(db.prepare(sql).get(labId) as { c: number }).c;
@@ -158,5 +153,5 @@ export const load: PageServerLoad = async ({ locals }) => {
 		updated_at: string | null;
 	}[];
 
-	return { lab, counts, events, activities };
+	return { counts, events, activities };
 };

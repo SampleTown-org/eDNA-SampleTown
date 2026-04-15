@@ -91,7 +91,7 @@
 
 <div class="max-w-3xl space-y-6">
 	<div><a href="/runs" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Runs</a>
-		<h1 class="text-2xl font-bold text-white mt-1">New Sequencing Run</h1></div>
+		<h1 class="text-2xl font-bold text-white mt-1">{data.lab?.name ? data.lab.name + " " : ""}New Sequencing Run</h1></div>
 	{#if errorMsg}<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>{/if}
 	<form onsubmit={(e) => { e.preventDefault(); submit(); }} class="space-y-4">
 		<div class="grid grid-cols-2 gap-4">
