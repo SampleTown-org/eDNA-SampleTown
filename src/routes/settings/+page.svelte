@@ -248,6 +248,51 @@
 		deleteLabBusy = false;
 	}
 
+	// --- Restore from backup state ---
+	let restoreCommits = $state<{ sha: string; message: string; date: string }[]>([]);
+	let restoreLoading = $state(false);
+	let restoreCommitSha = $state('');
+	let restoreConfirm = $state('');
+	let restoreBusy = $state(false);
+	let restoreMsg = $state('');
+	let restoreOpen = $state(false);
+
+	async function loadRestoreCommits() {
+		restoreLoading = true; restoreMsg = '';
+		const res = await fetch('/api/db/restore/commits');
+		const body = await res.json().catch(() => null);
+		if (body?.ok) {
+			restoreCommits = body.commits;
+			if (restoreCommits.length === 0) {
+				restoreMsg = 'No snapshots found in the configured repo. Push a backup first.';
+			}
+		} else {
+			restoreMsg = body?.hint ?? body?.error ?? 'Could not list commits';
+		}
+		restoreLoading = false;
+	}
+
+	async function runRestore() {
+		if (!restoreCommitSha) { restoreMsg = 'Pick a snapshot to restore from.'; return; }
+		restoreBusy = true; restoreMsg = '';
+		const res = await fetch('/api/db/restore', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ commit_sha: restoreCommitSha, confirm: restoreConfirm })
+		});
+		const body = await res.json().catch(() => null);
+		if (res.ok && body?.ok) {
+			const total = Object.values(body.counts as Record<string, number>).reduce((s, n) => s + n, 0);
+			const missingNote = body.missing?.length ? ` (skipped ${body.missing.length} table${body.missing.length === 1 ? '' : 's'} not in this snapshot)` : '';
+			restoreMsg = `Restored ${total} rows across ${Object.keys(body.counts).length} tables${missingNote}. Reload to see your data.`;
+			restoreCommitSha = '';
+			restoreConfirm = '';
+		} else {
+			restoreMsg = body?.error ?? body?.hint ?? `Restore failed (HTTP ${res.status})`;
+		}
+		restoreBusy = false;
+	}
+
 	async function runBackupNow() {
 		backupBusy = true; backupMsg = '';
 		const res = await fetch('/api/db/snapshot', {
@@ -1453,6 +1498,71 @@
 						: 'bg-amber-900/20 border-amber-800 text-amber-300'}">{backupMsg}</div>
 			{/if}
 		</form>
+
+		<!-- ====== Restore from a previous snapshot ====== -->
+		<div class="space-y-3 p-4 rounded-lg border border-amber-900/40 bg-amber-950/10">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<h3 class="text-sm font-semibold text-amber-300">Restore from backup</h3>
+					<p class="text-xs text-slate-400 mt-1">
+						Replace this lab's data with a previous snapshot from the configured
+						GitHub repo. <strong class="text-amber-300">All current data in this lab will be wiped</strong>
+						before the snapshot is loaded — backup first if you might want to undo.
+					</p>
+				</div>
+				{#if !restoreOpen}
+					<button type="button" onclick={() => { restoreOpen = true; loadRestoreCommits(); }}
+						class="px-3 py-1.5 border border-amber-800 text-amber-300 rounded-lg hover:bg-amber-900/30 text-sm font-medium shrink-0">
+						Open
+					</button>
+				{:else}
+					<button type="button" onclick={() => { restoreOpen = false; restoreMsg = ''; restoreCommitSha = ''; restoreConfirm = ''; }}
+						class="px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 text-sm font-medium shrink-0">
+						Close
+					</button>
+				{/if}
+			</div>
+
+			{#if restoreOpen}
+				{#if restoreLoading}
+					<p class="text-xs text-slate-500 italic">Loading snapshots…</p>
+				{:else if restoreCommits.length === 0}
+					<p class="text-xs text-slate-500 italic">{restoreMsg || 'No snapshots available.'}</p>
+				{:else}
+					<form onsubmit={(e) => { e.preventDefault(); runRestore(); }} class="space-y-3">
+						<div>
+							<label for="rs-commit" class="block text-xs text-slate-300 mb-1">Pick a snapshot</label>
+							<select id="rs-commit" bind:value={restoreCommitSha} class="w-full {selectCls} text-sm font-mono">
+								<option value="">— select a commit —</option>
+								{#each restoreCommits as c (c.sha)}
+									<option value={c.sha}>
+										{c.sha.slice(0, 7)} · {c.date ? new Date(c.date).toLocaleString() : ''} · {c.message.split('\n')[0].slice(0, 60)}
+									</option>
+								{/each}
+							</select>
+						</div>
+						<div>
+							<label for="rs-confirm" class="block text-xs text-slate-300 mb-1">
+								Type the lab name <code class="text-amber-300">{data.lab?.name ?? ''}</code> to confirm wipe-and-restore:
+							</label>
+							<input id="rs-confirm" type="text" bind:value={restoreConfirm}
+								autocomplete="off" class="w-full {inputCls} text-sm" />
+						</div>
+						{#if restoreMsg}
+							<div class="p-2 rounded-lg border text-xs
+								{restoreMsg.startsWith('Restored')
+									? 'bg-green-900/20 border-green-800 text-green-300'
+									: 'bg-amber-900/20 border-amber-800 text-amber-300'}">{restoreMsg}</div>
+						{/if}
+						<button type="submit"
+							disabled={restoreBusy || !restoreCommitSha || restoreConfirm !== (data.lab?.name ?? '__no__')}
+							class="px-3 py-2 bg-amber-700 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 text-sm font-medium">
+							{restoreBusy ? 'Restoring…' : 'Wipe and restore from this snapshot'}
+						</button>
+					</form>
+				{/if}
+			{/if}
+		</div>
 
 		<div>
 			<h3 class="text-sm font-semibold text-white mb-2">Recent snapshots</h3>

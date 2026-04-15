@@ -13,15 +13,41 @@ import type Database from 'better-sqlite3';
  * each other.
  */
 
+/**
+ * Tables included in every snapshot, listed in dependency-safe INSERT order
+ * (parents before children) so a restore can replay them straight through.
+ *
+ * Skipped: feedback (live admin queue), invites (transient + secrets-ish),
+ * saved_carts + saved_cart_items (private to each user, not lab-shared),
+ * db_snapshots (this lab's own backup history), sessions, oauth_states,
+ * sync_log, users, labs.
+ *
+ * run_libraries / sample_values / *_photos / entity_personnel are junction
+ * or child rows — included so a restored lab is functionally complete.
+ */
 const TABLES_TO_EXPORT = [
+	// Reference + config
+	'constrained_values',
+	'primer_sets',
+	'pcr_protocols',
+	'personnel',
+	// Top-level entities
 	'projects',
+	'sites',
 	'samples',
+	'sample_values',
+	'site_photos',
+	'sample_photos',
 	'extracts',
+	'pcr_plates',
 	'pcr_amplifications',
+	'library_plates',
 	'library_preps',
 	'sequencing_runs',
+	'analyses',
+	// Junction tables
 	'run_libraries',
-	'analyses'
+	'entity_personnel'
 ];
 
 interface GitHubConfig {
@@ -116,28 +142,279 @@ export async function testLabConnection(
 }
 
 /** Export all lab-scoped tables as JSON, filtered by the caller's lab_id.
- *  Prevents cross-lab data leakage into the snapshot repo. */
+ *  Prevents cross-lab data leakage into the snapshot repo.
+ *
+ *  Most tables carry lab_id directly. Junction / child tables filter via
+ *  the parent row's lab_id — see the per-table case below. */
 export function exportTablesAsJson(labId: string): Record<string, unknown[]> {
 	const db = getDb();
 	const data: Record<string, unknown[]> = {};
 	for (const table of TABLES_TO_EXPORT) {
-		// Tables are from a hardcoded allowlist — safe to interpolate. Every
-		// listed table carries lab_id (projects, samples, extracts, pcr_amps,
-		// library_preps, sequencing_runs, run_libraries, analyses).
-		// run_libraries is the junction table — filter via parent run.
-		if (table === 'run_libraries') {
-			data[table] = db
-				.prepare(
-					`SELECT rl.* FROM run_libraries rl
-					 JOIN sequencing_runs sr ON sr.id = rl.run_id
-					 WHERE sr.lab_id = ?`
-				)
-				.all(labId);
-		} else {
-			data[table] = db.prepare(`SELECT * FROM ${table} WHERE lab_id = ?`).all(labId);
+		// Tables are from a hardcoded allowlist — safe to interpolate.
+		switch (table) {
+			case 'sample_values':
+				data[table] = db
+					.prepare(
+						`SELECT sv.* FROM sample_values sv
+						 JOIN samples s ON s.id = sv.sample_id
+						 WHERE s.lab_id = ?`
+					)
+					.all(labId);
+				break;
+			case 'site_photos':
+				data[table] = db
+					.prepare(
+						`SELECT sp.* FROM site_photos sp
+						 JOIN sites s ON s.id = sp.site_id
+						 WHERE s.lab_id = ?`
+					)
+					.all(labId);
+				break;
+			case 'sample_photos':
+				data[table] = db
+					.prepare(
+						`SELECT sp.* FROM sample_photos sp
+						 JOIN samples s ON s.id = sp.sample_id
+						 WHERE s.lab_id = ?`
+					)
+					.all(labId);
+				break;
+			case 'run_libraries':
+				data[table] = db
+					.prepare(
+						`SELECT rl.* FROM run_libraries rl
+						 JOIN sequencing_runs sr ON sr.id = rl.run_id
+						 WHERE sr.lab_id = ?`
+					)
+					.all(labId);
+				break;
+			case 'entity_personnel':
+				data[table] = db
+					.prepare(
+						`SELECT ep.* FROM entity_personnel ep
+						 JOIN personnel p ON p.id = ep.personnel_id
+						 WHERE p.lab_id = ?`
+					)
+					.all(labId);
+				break;
+			default:
+				data[table] = db.prepare(`SELECT * FROM ${table} WHERE lab_id = ?`).all(labId);
 		}
 	}
 	return data;
+}
+
+/**
+ * List recent snapshot commits in the lab's configured GitHub repo.
+ * Filters to commits that touched this lab's path (so a shared repo's
+ * commits for OTHER labs don't show up). Capped at 30.
+ */
+export async function listSnapshotCommits(
+	labId: string
+): Promise<{ ok: true; commits: { sha: string; message: string; date: string }[] } | { ok: false; status: number | null; error: string; hint?: string }> {
+	const db = getDb();
+	const resolved = resolveLabConfig(db, labId);
+	if (!resolved) {
+		return { ok: false, status: null, error: 'No GitHub repo and/or token configured for this lab.' };
+	}
+	const { config, lab } = resolved;
+	const [owner, repo] = config.repo.split('/');
+	const path = `data/${lab.slug}`;
+	try {
+		const res = await fetch(
+			`https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(path)}&per_page=30`,
+			{
+				headers: {
+					Authorization: `Bearer ${config.token}`,
+					Accept: 'application/vnd.github+json',
+					'X-GitHub-Api-Version': '2022-11-28'
+				}
+			}
+		);
+		if (!res.ok) {
+			const body = await res.text();
+			return { ok: false, status: res.status, error: body.slice(0, 500) };
+		}
+		const list = (await res.json()) as Array<{
+			sha: string;
+			commit: { message: string; author?: { date: string } };
+		}>;
+		return {
+			ok: true,
+			commits: list.map((c) => ({
+				sha: c.sha,
+				message: c.commit.message,
+				date: c.commit.author?.date ?? ''
+			}))
+		};
+	} catch (err) {
+		return {
+			ok: false,
+			status: null,
+			error: err instanceof Error ? err.message : String(err)
+		};
+	}
+}
+
+/**
+ * Pull every TABLES_TO_EXPORT JSON file at the given commit and replace
+ * the lab's data with it. The whole replace runs in one transaction with
+ * deferred FKs so the wipe + reload doesn't trip RESTRICT/NO_ACTION
+ * intermediate states.
+ *
+ * Tables that aren't present in the snapshot (e.g. older snapshots that
+ * predate a TABLES_TO_EXPORT addition) are left as zero-row restores —
+ * the existing rows for that table are still wiped, since we can't
+ * partial-restore safely.
+ *
+ * Override: every restored row's `lab_id` is forcibly set to the caller's
+ * current lab id, in case a snapshot is restored into a different lab
+ * (forking from another lab's repo).
+ *
+ * Returns counts per-table on success, or a structured error.
+ */
+export async function restoreSnapshot(
+	labId: string,
+	commitSha: string
+): Promise<
+	| { ok: true; counts: Record<string, number>; missing: string[] }
+	| { ok: false; status: number | null; error: string; hint?: string }
+> {
+	const db = getDb();
+	const resolved = resolveLabConfig(db, labId);
+	if (!resolved) {
+		return { ok: false, status: null, error: 'No GitHub repo and/or token configured for this lab.' };
+	}
+	const { config, lab } = resolved;
+	const [owner, repo] = config.repo.split('/');
+
+	// Fetch each table's JSON at the requested commit. Missing files (404)
+	// are tolerated — we record them in `missing` and treat as empty data.
+	const fetched: Record<string, unknown[]> = {};
+	const missing: string[] = [];
+	for (const table of TABLES_TO_EXPORT) {
+		const path = `data/${lab.slug}/${table}.json`;
+		const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(commitSha)}`;
+		const res = await fetch(url, {
+			headers: {
+				Authorization: `Bearer ${config.token}`,
+				Accept: 'application/vnd.github.raw+json',
+				'X-GitHub-Api-Version': '2022-11-28'
+			}
+		});
+		if (res.status === 404) {
+			missing.push(table);
+			fetched[table] = [];
+			continue;
+		}
+		if (!res.ok) {
+			const body = await res.text();
+			return {
+				ok: false,
+				status: res.status,
+				error: `Fetching ${path}: ${body.slice(0, 300)}`
+			};
+		}
+		try {
+			fetched[table] = (await res.json()) as unknown[];
+		} catch (err) {
+			return {
+				ok: false,
+				status: null,
+				error: `Parsing ${path} as JSON failed: ${err instanceof Error ? err.message : err}`
+			};
+		}
+	}
+
+	// Replay into the DB. Wipe in reverse-dependency order, insert in
+	// dependency order — but with deferred FKs the order is mostly
+	// cosmetic (the engine checks at commit). Schema-evolution safety:
+	// build INSERT column lists from the actual table_info, intersected
+	// with the snapshot row keys, so a snapshot that pre-dates a new
+	// column doesn't error on the missing key.
+	const counts: Record<string, number> = {};
+	try {
+		db.transaction(() => {
+			db.pragma('defer_foreign_keys = ON');
+			// Wipe existing lab data, child tables first to be tidy.
+			for (const t of [...TABLES_TO_EXPORT].reverse()) {
+				wipeLabTable(db, t, labId);
+			}
+			// Re-insert in declared order.
+			for (const t of TABLES_TO_EXPORT) {
+				counts[t] = restoreTable(db, t, fetched[t], labId);
+			}
+		})();
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		return { ok: false, status: null, error: msg };
+	}
+
+	return { ok: true, counts, missing };
+}
+
+/** DELETE all rows for `table` belonging to this lab. Mirrors the lab-
+ *  scoping logic in exportTablesAsJson. */
+function wipeLabTable(db: Database.Database, table: string, labId: string) {
+	switch (table) {
+		case 'sample_values':
+			db.prepare(
+				'DELETE FROM sample_values WHERE sample_id IN (SELECT id FROM samples WHERE lab_id = ?)'
+			).run(labId);
+			break;
+		case 'site_photos':
+			db.prepare(
+				'DELETE FROM site_photos WHERE site_id IN (SELECT id FROM sites WHERE lab_id = ?)'
+			).run(labId);
+			break;
+		case 'sample_photos':
+			db.prepare(
+				'DELETE FROM sample_photos WHERE sample_id IN (SELECT id FROM samples WHERE lab_id = ?)'
+			).run(labId);
+			break;
+		case 'run_libraries':
+			db.prepare(
+				'DELETE FROM run_libraries WHERE run_id IN (SELECT id FROM sequencing_runs WHERE lab_id = ?)'
+			).run(labId);
+			break;
+		case 'entity_personnel':
+			db.prepare(
+				'DELETE FROM entity_personnel WHERE personnel_id IN (SELECT id FROM personnel WHERE lab_id = ?)'
+			).run(labId);
+			break;
+		default:
+			db.prepare(`DELETE FROM ${table} WHERE lab_id = ?`).run(labId);
+	}
+}
+
+/** INSERT every row from `rows` into `table`, building the column list
+ *  from the intersection of the table's actual columns and the row's
+ *  keys (so snapshots that pre-date a column addition don't error).
+ *  Forces lab_id to the restoring lab's id for tables that have one. */
+function restoreTable(
+	db: Database.Database,
+	table: string,
+	rows: unknown[],
+	labId: string
+): number {
+	if (!rows || rows.length === 0) return 0;
+	const tableCols = new Set(
+		(db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name)
+	);
+	const hasLabId = tableCols.has('lab_id');
+	const sample = rows[0] as Record<string, unknown>;
+	const keys = Object.keys(sample).filter((k) => tableCols.has(k));
+	if (keys.length === 0) return 0;
+	const placeholders = keys.map(() => '?').join(',');
+	const stmt = db.prepare(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`);
+	let n = 0;
+	for (const raw of rows) {
+		const row = raw as Record<string, unknown>;
+		const values = keys.map((k) => (k === 'lab_id' && hasLabId ? labId : row[k] ?? null));
+		stmt.run(...values);
+		n++;
+	}
+	return n;
 }
 
 /**

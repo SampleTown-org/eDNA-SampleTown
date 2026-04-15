@@ -87,6 +87,8 @@ function requiresAdmin(pathname: string, method: string): boolean {
 		if (pathname === '/api/lab/settings/test' && method === 'GET') return true;
 		// GET /api/db/snapshots lists this lab's backup history (admin-only)
 		if (pathname === '/api/db/snapshots' && method === 'GET') return true;
+		// GET /api/db/restore/commits lists pickable commits for restore
+		if (pathname === '/api/db/restore/commits' && method === 'GET') return true;
 		return false;
 	}
 	return ADMIN_WRITE_PREFIXES.some((p) => pathname.startsWith(p));
