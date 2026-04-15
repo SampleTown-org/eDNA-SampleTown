@@ -62,7 +62,8 @@ const ADMIN_WRITE_PREFIXES = [
 	'/api/users', // covers /api/users and /api/users/[id]/...
 	'/api/db/',
 	'/api/feedback/', // covers /api/feedback/[id] PUT/DELETE
-	'/api/invites'    // covers /api/invites and /api/invites/[token]
+	'/api/invites',   // covers /api/invites and /api/invites/[token]
+	'/api/lab/'       // covers /api/lab/settings (lab-level config edits)
 ];
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -75,6 +76,10 @@ function requiresAdmin(pathname: string, method: string): boolean {
 		if (pathname === '/api/users' && method === 'GET') return true;
 		// GET /api/invites is admin-only (active + used invites for the lab)
 		if (pathname === '/api/invites' && method === 'GET') return true;
+		// GET /api/lab/settings is admin-only (exposes whether token is set)
+		if (pathname === '/api/lab/settings' && method === 'GET') return true;
+		// GET /api/db/snapshots lists this lab's backup history (admin-only)
+		if (pathname === '/api/db/snapshots' && method === 'GET') return true;
 		return false;
 	}
 	return ADMIN_WRITE_PREFIXES.some((p) => pathname.startsWith(p));

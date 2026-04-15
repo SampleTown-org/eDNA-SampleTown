@@ -4,6 +4,7 @@ import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 import schema from './schema.sql?raw';
 import { seedConstrainedValues } from './seed-constrained-values';
+import { startBackupScheduler } from './github';
 
 const DB_PATH = process.env.DB_PATH || 'data/sampletown.db';
 
@@ -39,6 +40,10 @@ export function getDb(): Database.Database {
 		const defaultLabId = getDefaultLabId(_db);
 		seedConstrainedValues(_db, defaultLabId);
 		seedDefaultAdmin(_db, defaultLabId);
+		// Kick off the periodic GitHub-backup scheduler. No-op if already
+		// started; safe to call from the lazy-init path because it just
+		// installs a setInterval and returns.
+		startBackupScheduler();
 	}
 	return _db;
 }
@@ -238,6 +243,15 @@ function runMigrations(db: Database.Database) {
 	// Project metadata extras — added 2026-04-15 per beta feedback.
 	addColumn('projects', 'contact_email TEXT');
 	addColumn('projects', 'funding_sources TEXT');
+	// Per-lab GitHub backup config — added 2026-04-15. Replaces the
+	// global GITHUB_REPO/GITHUB_TOKEN env vars (those still work as a
+	// fallback for backward compat on the original install).
+	addColumn('labs', 'github_repo TEXT');
+	addColumn('labs', 'github_token TEXT');
+	addColumn('labs', 'backup_interval_hours INTEGER');
+	addColumn('labs', 'last_backup_at TEXT');
+	addColumn('db_snapshots', 'error_message TEXT');
+	addColumn('db_snapshots', 'is_automatic INTEGER NOT NULL DEFAULT 0');
 	addColumn('users', 'avatar_emoji TEXT');
 	addColumn('extracts', 'nucl_acid_type TEXT');
 	addColumn('pcr_amplifications', 'total_volume_ul REAL');

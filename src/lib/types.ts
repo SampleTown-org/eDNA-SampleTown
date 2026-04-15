@@ -7,6 +7,10 @@ export interface Lab {
 	id: string;
 	name: string;
 	slug: string;
+	github_repo: string | null;
+	github_token: string | null;
+	backup_interval_hours: number | null;
+	last_backup_at: string | null;
 	created_at: string;
 	updated_at: string;
 }

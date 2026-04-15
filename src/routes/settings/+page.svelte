@@ -83,7 +83,7 @@
 		return 'MIxS';
 	}
 
-	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback' | 'labels';
+	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback' | 'labels' | 'backup';
 
 	// --- Search filter (shared across the list-based tabs, reset on tab switch) ---
 	let searchQuery = $state('');
@@ -153,6 +153,82 @@
 		if (i.used_at) return { label: `used by ${i.used_by_username ?? '(deleted)'}`, cls: 'text-slate-500' };
 		if (new Date(i.expires_at) < new Date()) return { label: 'expired', cls: 'text-amber-500' };
 		return { label: 'active', cls: 'text-green-400' };
+	}
+
+	// --- Backup tab state. Lazy-loaded the first time the tab opens to
+	// avoid an extra round-trip on the initial Manage page load. ---
+	let backupSettings = $state<{
+		github_repo: string | null;
+		github_token_set: boolean;
+		backup_interval_hours: number | null;
+		last_backup_at: string | null;
+	} | null>(null);
+	let backupHistory = $state<any[]>([]);
+	let backupForm = $state({ github_repo: '', github_token: '', backup_interval_hours: 0 });
+	let backupLoaded = $state(false);
+	let backupBusy = $state(false);
+	let backupMsg = $state('');
+
+	async function loadBackupData() {
+		if (backupLoaded) return;
+		backupLoaded = true;
+		const [sRes, hRes] = await Promise.all([
+			fetch('/api/lab/settings'),
+			fetch('/api/db/snapshots')
+		]);
+		if (sRes.ok) {
+			backupSettings = await sRes.json();
+			backupForm.github_repo = backupSettings?.github_repo ?? '';
+			backupForm.github_token = '';
+			backupForm.backup_interval_hours = backupSettings?.backup_interval_hours ?? 0;
+		}
+		if (hRes.ok) backupHistory = await hRes.json();
+	}
+
+	async function saveBackupSettings() {
+		backupBusy = true; backupMsg = '';
+		// Empty github_token field = "leave alone" (don't overwrite an existing
+		// secret accidentally). Only send the field if the admin actually
+		// typed something OR explicitly chose to clear it.
+		const body: Record<string, unknown> = {
+			github_repo: backupForm.github_repo.trim(),
+			backup_interval_hours: Number(backupForm.backup_interval_hours) || null
+		};
+		if (backupForm.github_token.trim()) body.github_token = backupForm.github_token.trim();
+		const res = await fetch('/api/lab/settings', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		if (res.ok) {
+			backupMsg = 'Saved.';
+			// Re-fetch so token-set flag and computed values stay in sync.
+			backupLoaded = false;
+			await loadBackupData();
+			backupForm.github_token = '';
+		} else {
+			backupMsg = (await res.json().catch(() => ({}))).error || 'Save failed';
+		}
+		backupBusy = false;
+	}
+
+	async function runBackupNow() {
+		backupBusy = true; backupMsg = '';
+		const res = await fetch('/api/db/snapshot', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ message: `Manual snapshot ${new Date().toISOString()}` })
+		});
+		if (res.ok) {
+			const r = await res.json();
+			backupMsg = `Pushed commit ${r.sha?.slice(0, 7) ?? ''}`;
+		} else {
+			backupMsg = (await res.json().catch(() => ({}))).error || 'Backup failed';
+		}
+		// Refresh history + last_backup_at
+		backupLoaded = false;
+		await loadBackupData();
+		backupBusy = false;
 	}
 
 	// Search-filtered views (matches helper is defined further down in script).
@@ -353,7 +429,7 @@
 
 	// Support ?tab= URL parameter to deep-link to a category
 	const urlTab = $page.url.searchParams.get('tab');
-	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : 'category';
+	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : urlTab === 'backup' ? 'backup' : 'category';
 	const initialCategory = (urlTab && urlTab in CATEGORY_LABELS) ? urlTab : 'geo_loc_name';
 
 	let tabType = $state<TabType>(initialTab);
@@ -633,6 +709,9 @@
 		<button onclick={() => { tabType = 'protocols'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'protocols' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">PCR Protocols</button>
 		<button onclick={() => { tabType = 'people'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'people' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">People</button>
 		<button onclick={() => { tabType = 'labels'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'labels' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Labels</button>
+		{#if data.isAdmin}
+			<button onclick={() => { tabType = 'backup'; resetSearch(); loadBackupData(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'backup' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Backup</button>
+		{/if}
 		{#if data.isAdmin}
 			<button onclick={() => { tabType = 'feedback'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'feedback' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">
 				Feedback
@@ -1221,5 +1300,126 @@
 
 	{:else if tabType === 'labels'}
 	<LabelGenerator />
+
+	{:else if tabType === 'backup'}
+	<div class="space-y-6">
+		<div>
+			<h2 class="text-base font-semibold text-white">GitHub Backup</h2>
+			<p class="text-sm text-slate-400 mt-0.5">
+				Push a JSON snapshot of every project / sample / extract / PCR / library /
+				run / analysis row in this lab to a GitHub repo. Use it for off-box
+				disaster recovery and version-controlled provenance.
+			</p>
+		</div>
+
+		{#if backupMsg}
+			<div class="p-3 rounded-lg border text-sm
+				{backupMsg.startsWith('Pushed') || backupMsg === 'Saved.'
+					? 'bg-green-900/20 border-green-800 text-green-300'
+					: 'bg-amber-900/20 border-amber-800 text-amber-300'}">{backupMsg}</div>
+		{/if}
+
+		<form onsubmit={(e) => { e.preventDefault(); saveBackupSettings(); }} class="space-y-4 p-4 rounded-lg bg-slate-800/30">
+			<div>
+				<label for="bk-repo" class="block text-sm text-slate-300 mb-1">GitHub repo</label>
+				<input id="bk-repo" type="text" bind:value={backupForm.github_repo} class="w-full {inputCls} text-sm"
+					placeholder="owner/repo (e.g. Cryomics-Lab/SampleTown-data)" />
+				<p class="text-xs text-slate-500 mt-1">
+					Snapshots land at <code>data/{backupSettings?.github_repo ? backupSettings?.github_repo.split('/')[1] : '&lt;repo&gt;'}/&lt;table&gt;.json</code>
+					— actually <code>data/&lt;lab-slug&gt;/&lt;table&gt;.json</code>, so multiple
+					labs can share one repo without overwriting each other.
+				</p>
+			</div>
+			<div>
+				<label for="bk-token" class="block text-sm text-slate-300 mb-1">
+					GitHub token
+					{#if backupSettings?.github_token_set}
+						<span class="ml-2 text-xs text-green-400">●●●●  (currently set)</span>
+					{:else}
+						<span class="ml-2 text-xs text-slate-500">(not set — system fallback in use if env vars configured)</span>
+					{/if}
+				</label>
+				<input id="bk-token" type="password" bind:value={backupForm.github_token}
+					autocomplete="new-password" class="w-full {inputCls} text-sm"
+					placeholder={backupSettings?.github_token_set ? 'leave blank to keep existing token' : 'paste a PAT with write access'} />
+				<p class="text-xs text-slate-500 mt-1">
+					Use a fine-grained PAT scoped to just the backup repo with
+					Contents: read &amp; write. Stored plaintext in the SampleTown DB
+					(same risk profile as a server-side <code>.env</code>).
+				</p>
+			</div>
+			<div>
+				<label for="bk-interval" class="block text-sm text-slate-300 mb-1">Auto-backup interval (hours)</label>
+				<input id="bk-interval" type="number" min="0" max="8760" bind:value={backupForm.backup_interval_hours}
+					class="w-32 {inputCls} text-sm" />
+				<p class="text-xs text-slate-500 mt-1">
+					0 = manual only. Otherwise the scheduler runs an automatic
+					backup every N hours (next check at most 15 minutes after the
+					interval elapses).
+				</p>
+			</div>
+			<div class="flex gap-3 pt-2">
+				<button type="submit" disabled={backupBusy}
+					class="px-3 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 text-sm font-medium">
+					{backupBusy ? 'Saving…' : 'Save settings'}
+				</button>
+				<button type="button" onclick={runBackupNow} disabled={backupBusy}
+					class="px-3 py-2 border border-slate-700 text-slate-200 rounded-lg hover:bg-slate-800 disabled:opacity-50 text-sm font-medium">
+					{backupBusy ? 'Working…' : 'Backup now'}
+				</button>
+				{#if backupSettings?.last_backup_at}
+					<span class="text-xs text-slate-500 self-center">
+						Last successful: {new Date(backupSettings.last_backup_at).toLocaleString()}
+					</span>
+				{/if}
+			</div>
+		</form>
+
+		<div>
+			<h3 class="text-sm font-semibold text-white mb-2">Recent snapshots</h3>
+			{#if backupHistory.length === 0}
+				<p class="text-sm text-slate-500 italic">No snapshots yet. Click <strong>Backup now</strong> to push one.</p>
+			{:else}
+				<div class="space-y-2">
+					{#each backupHistory as s (s.id)}
+						<div class="p-3 rounded-lg border border-slate-800 bg-slate-900/40 text-sm">
+							<div class="flex items-start justify-between gap-3">
+								<div class="flex-1 min-w-0">
+									<div class="flex items-center gap-2 flex-wrap">
+										{#if s.status === 'pushed'}
+											<span class="text-xs px-1.5 py-0.5 rounded bg-green-900/40 text-green-300">pushed</span>
+										{:else if s.status === 'failed'}
+											<span class="text-xs px-1.5 py-0.5 rounded bg-red-900/40 text-red-300">failed</span>
+										{:else}
+											<span class="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">{s.status}</span>
+										{/if}
+										<span class="text-xs text-slate-500">{s.is_automatic ? 'auto' : 'manual'}</span>
+										{#if s.commit_sha}
+											{#if backupSettings?.github_repo}
+												<a href="https://github.com/{backupSettings.github_repo}/commit/{s.commit_sha}"
+													target="_blank" rel="noopener noreferrer"
+													class="text-xs font-mono text-ocean-400 hover:text-ocean-300">
+													{s.commit_sha.slice(0, 7)}
+												</a>
+											{:else}
+												<span class="text-xs font-mono text-slate-400">{s.commit_sha.slice(0, 7)}</span>
+											{/if}
+										{/if}
+										<span class="text-xs text-slate-500">{new Date(s.created_at).toLocaleString()}</span>
+									</div>
+									{#if s.commit_message}
+										<div class="text-xs text-slate-400 mt-1 truncate">{s.commit_message}</div>
+									{/if}
+									{#if s.error_message}
+										<div class="text-xs text-red-400 mt-1 break-words">{s.error_message}</div>
+									{/if}
+								</div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</div>
 	{/if}
 </div>

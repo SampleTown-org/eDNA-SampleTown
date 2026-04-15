@@ -16,6 +16,17 @@ CREATE TABLE IF NOT EXISTS labs (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,           -- url-safe identifier, also used for default-lab env var
+    -- GitHub backup config. github_repo is "owner/repo"; github_token is a
+    -- PAT with write access. Stored plaintext (same risk profile as the
+    -- legacy GITHUB_REPO/GITHUB_TOKEN env vars). When NULL, falls back to
+    -- the env vars for backward compatibility on single-lab installs.
+    github_repo TEXT,
+    github_token TEXT,
+    -- Automated backup. NULL or 0 = manual only. Otherwise the scheduler
+    -- runs a snapshot every N hours. Last successful run timestamp drives
+    -- the "is it time to back up again" check.
+    backup_interval_hours INTEGER,
+    last_backup_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -749,6 +760,13 @@ CREATE TABLE IF NOT EXISTS db_snapshots (
     commit_sha TEXT,
     commit_message TEXT,
     snapshot_path TEXT,
+    -- Free-text reason a 'failed' snapshot failed; NULL on success rows.
+    -- Surfaced in the Backup tab so admins can debug auth/repo problems
+    -- without chasing pm2 logs.
+    error_message TEXT,
+    -- Marks rows produced by the periodic scheduler vs an admin clicking
+    -- "Backup now". Useful for the UI history view.
+    is_automatic INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
         'pending', 'committed', 'pushed', 'failed'
     )),
