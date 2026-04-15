@@ -87,11 +87,13 @@
 	{#if data.type === 'plate'}
 	<!-- PLATE VIEW -->
 	<div>
-		<Breadcrumb items={crumbs} />
-		<div class="flex items-start justify-between mt-1 gap-4">
-			<div class="flex items-center gap-3 flex-wrap">
-				<h1 class="text-2xl font-bold text-white">{data.plate.plate_name}</h1>
-				<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{data.plate.target_gene}{data.plate.target_subfragment ? ` ${data.plate.target_subfragment}` : ''}</span>
+		<div class="flex items-start justify-between gap-4">
+			<div>
+				<div class="flex items-center gap-3 flex-wrap">
+					<h1 class="text-2xl font-bold text-white">{data.plate.plate_name}</h1>
+					<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">{data.plate.target_gene}{data.plate.target_subfragment ? ` ${data.plate.target_subfragment}` : ''}</span>
+				</div>
+				<Breadcrumb items={crumbs} />
 			</div>
 			<div class="flex items-center gap-3 shrink-0">
 				<EntityQR id={data.plate.id} size={96} />
@@ -162,9 +164,11 @@
 	{:else}
 	<!-- SINGLE REACTION VIEW (backward compat) -->
 	<div>
-		<Breadcrumb items={crumbs} />
-		<div class="flex items-start justify-between mt-1 gap-4">
-			<h1 class="text-2xl font-bold text-white">{data.pcr.pcr_name}</h1>
+		<div class="flex items-start justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-bold text-white">{data.pcr.pcr_name}</h1>
+				<Breadcrumb items={crumbs} />
+			</div>
 			<div class="flex items-center gap-3 shrink-0">
 				<EntityQR id={data.pcr.id} size={96} />
 				<a href="/pcr/{data.pcr.id}/edit" class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>

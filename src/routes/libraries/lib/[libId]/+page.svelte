@@ -56,21 +56,13 @@
 
 <div class="space-y-6">
 	<div>
-		<Breadcrumb items={crumbs} />
-		<div class="flex items-start justify-between mt-1 gap-4">
-			<h1 class="text-2xl font-bold text-white">{data.library.library_name}</h1>
+		<div class="flex items-start justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-bold text-white">{data.library.library_name}</h1>
+				<Breadcrumb items={crumbs} />
+			</div>
 			<EntityQR id={data.library.id} size={96} />
 		</div>
-		<p class="text-slate-400 mt-1">
-			{#if data.source}
-				<a href="/samples/{data.source.sample_id}" class="text-ocean-400 hover:text-ocean-300">{data.source.sample_name}</a>
-				&rarr;
-				<a href="/{data.source.type === 'PCR' ? 'pcr/reaction' : 'extracts'}/{data.source.id}" class="text-ocean-400 hover:text-ocean-300">{data.source.name}</a>
-			{/if}
-			{#if data.plate}
-				&middot; Plate: <a href="/libraries/{data.plate.id}" class="text-ocean-400 hover:text-ocean-300">{data.plate.plate_name}</a>
-			{/if}
-		</p>
 	</div>
 
 	<div class="rounded-lg border border-slate-800 p-5">

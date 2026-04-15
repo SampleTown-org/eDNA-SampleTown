@@ -177,25 +177,21 @@
 
 <div class="space-y-6">
 	<div>
-		<Breadcrumb items={crumbs} />
-		<div class="flex items-start justify-between mt-1 gap-4">
-			<div class="flex items-center gap-3 flex-wrap">
-				<h1 class="text-2xl font-bold text-white">{sample.samp_name}</h1>
-				<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">
-					{sample.mixs_checklist}{sample.extension ? ' + ' + sample.extension : ''}
-				</span>
+		<div class="flex items-start justify-between gap-4">
+			<div>
+				<div class="flex items-center gap-3 flex-wrap">
+					<h1 class="text-2xl font-bold text-white">{sample.samp_name}</h1>
+					<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">
+						{sample.mixs_checklist}{sample.extension ? ' + ' + sample.extension : ''}
+					</span>
+				</div>
+				<Breadcrumb items={crumbs} />
 			</div>
 			<div class="flex items-center gap-3 shrink-0">
 				<EntityQR id={sample.id as string} size={96} />
 				<a href="/samples/{sample.id}/edit" class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 			</div>
 		</div>
-		<p class="text-slate-400 mt-1">
-			Project: <a href="/projects/{sample.project_id}" class="text-ocean-400 hover:text-ocean-300">{sample.project_name}</a>
-			{#if sample.site_name}
-				&middot; Site: <a href="/sites/{sample.site_id}" class="text-ocean-400 hover:text-ocean-300">{sample.site_name}</a>
-			{/if}
-		</p>
 	</div>
 
 	<!-- Identity / what + when -->

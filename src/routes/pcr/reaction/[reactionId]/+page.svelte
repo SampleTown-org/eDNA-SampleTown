@@ -50,21 +50,16 @@
 
 <div class="space-y-6">
 	<div>
-		<Breadcrumb items={crumbs} />
-		<div class="flex items-start justify-between mt-1 gap-4">
-			<h1 class="text-2xl font-bold text-white">{data.pcr.pcr_name}</h1>
+		<div class="flex items-start justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-bold text-white">{data.pcr.pcr_name}</h1>
+				<Breadcrumb items={crumbs} />
+			</div>
 			<div class="flex items-center gap-3 shrink-0">
 				<EntityQR id={data.pcr.id} size={96} />
 				<a href="/pcr/{data.pcr.id}/edit" class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium">Edit</a>
 			</div>
 		</div>
-		<p class="text-slate-400 mt-1">
-			<a href="/samples/{data.pcr.sample_id}" class="text-ocean-400 hover:text-ocean-300">{data.pcr.samp_name}</a>
-			&rarr; <a href="/extracts/{data.pcr.extract_id}" class="text-ocean-400 hover:text-ocean-300">{data.pcr.extract_name}</a>
-			{#if data.pcr.plate_name}
-				&middot; Plate: <a href="/pcr/{data.pcr.plate_id}" class="text-ocean-400 hover:text-ocean-300">{data.pcr.plate_name}</a>
-			{/if}
-		</p>
 	</div>
 
 	<div class="rounded-lg border border-slate-800 p-5">
