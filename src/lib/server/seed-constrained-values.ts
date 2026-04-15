@@ -269,16 +269,16 @@ const NAMING_TEMPLATES = [
 /**
  * Seed picklists, primer sets, and PCR protocols for a specific lab. Called
  * once per lab on creation (default lab at install time, new labs via
- * scripts/create-lab.mjs). All seeds are scoped to the passed lab_id so each
- * lab gets its own customizable copy.
+ * scripts/create-lab.mjs or self-serve setup). All seeds are scoped to the
+ * passed lab_id so each lab gets its own customizable copy.
  *
- * Each category is seeded only if currently empty *for this lab*, so operator
- * edits are never clobbered. New SEED_DATA entries added between releases are
- * back-filled into already-seeded categories via INSERT OR IGNORE.
+ * Each category is seeded only if currently empty *for this lab*, so
+ * operator edits are never clobbered. NB: there's no migration layer — if
+ * SEED_DATA gains new entries in a later release, existing labs do NOT
+ * automatically pick them up. Operators add the entries via the Manage UI
+ * (or wipe their lab and re-create to get a fresh seed).
  */
 export function seedConstrainedValues(db: Database.Database, labId: string) {
-	backfillMissingEntries(db, labId);
-
 	const insert = db.prepare(
 		'INSERT OR IGNORE INTO constrained_values (id, lab_id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)'
 	);
@@ -334,34 +334,5 @@ export function seedConstrainedValues(db: Database.Database, labId: string) {
 function normalizeSeedEntry(entry: SeedEntry): { value: string; label: string } {
 	if (typeof entry === 'string') return { value: entry, label: entry };
 	return entry;
-}
-
-/**
- * For categories that already have rows for this lab (so the empty-category
- * seed won't run), insert any SEED_DATA entries that are missing. Uses
- * INSERT OR IGNORE keyed on (lab_id, category, value). Handles the case
- * where SEED_DATA grows between releases.
- */
-function backfillMissingEntries(db: Database.Database, labId: string) {
-	const exists = db.prepare(
-		'SELECT 1 FROM constrained_values WHERE lab_id = ? AND category = ? AND value = ? LIMIT 1'
-	);
-	const insert = db.prepare(
-		'INSERT INTO constrained_values (id, lab_id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)'
-	);
-	const maxOrder = db.prepare(
-		'SELECT COALESCE(MAX(sort_order), -1) AS m FROM constrained_values WHERE lab_id = ? AND category = ?'
-	);
-	for (const [category, entries] of Object.entries(SEED_DATA)) {
-		let nextOrder: number | null = null;
-		for (const entry of entries) {
-			const { value, label } = normalizeSeedEntry(entry);
-			if (exists.get(labId, category, value)) continue;
-			if (nextOrder === null) {
-				nextOrder = ((maxOrder.get(labId, category) as { m: number }).m) + 1;
-			}
-			insert.run(labId, category, value, label, nextOrder++);
-		}
-	}
 }
 
