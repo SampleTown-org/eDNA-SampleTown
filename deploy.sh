@@ -43,8 +43,13 @@ cd "$APP_DIR"
 git pull --ff-only origin "$BRANCH"
 npm ci --production=false
 npm run build
-env $(grep -v '^#' .env | grep -v '^$' | xargs) PORT="$PORT" HOST=0.0.0.0 \
-    pm2 restart sampletown --update-env
+# Source .env into the current shell so pm2 inherits every variable. The
+# old `env $(grep .env | xargs)` approach mangled any value containing a
+# space (e.g. DEFAULT_LAB_NAME="Cryomics Lab") because xargs re-tokenized
+# on whitespace. `set -a; source` respects shell quoting and preserves the
+# exact value.
+set -a; . ./.env; set +a
+PORT="$PORT" HOST=0.0.0.0 pm2 restart sampletown --update-env
 echo ">> Status:"
 pm2 list
 EOF
