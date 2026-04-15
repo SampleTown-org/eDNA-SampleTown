@@ -200,14 +200,28 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(body)
 		});
-		if (res.ok) {
-			backupMsg = 'Saved.';
-			// Re-fetch so token-set flag and computed values stay in sync.
-			backupLoaded = false;
-			await loadBackupData();
-			backupForm.github_token = '';
-		} else {
+		if (!res.ok) {
 			backupMsg = (await res.json().catch(() => ({}))).error || 'Save failed';
+			backupBusy = false;
+			return;
+		}
+		// Re-fetch so token-set flag and computed values stay in sync.
+		backupLoaded = false;
+		await loadBackupData();
+		backupForm.github_token = '';
+		// Immediately verify the saved (repo, token) combo against GitHub
+		// so the admin gets a clear ✓/✗ on the form itself instead of
+		// having to click Backup now and read the snapshot history to find
+		// out their config doesn't actually work. (Beta feedback: a "failed"
+		// row in the history made it look like Save was failing.)
+		const test = await fetch('/api/lab/settings/test').then((r) => r.json()).catch(() => null);
+		if (test?.ok) {
+			backupMsg = 'Saved. Connection to GitHub verified.';
+		} else if (test) {
+			const status = test.status ? ` (HTTP ${test.status})` : '';
+			backupMsg = `Saved, but couldn\u2019t reach the repo${status}: ${test.hint ?? test.error}`;
+		} else {
+			backupMsg = 'Saved.';
 		}
 		backupBusy = false;
 	}
@@ -1314,7 +1328,7 @@
 
 		{#if backupMsg}
 			<div class="p-3 rounded-lg border text-sm
-				{backupMsg.startsWith('Pushed') || backupMsg === 'Saved.'
+				{backupMsg.startsWith('Pushed') || backupMsg.startsWith('Saved. Connection') || backupMsg === 'Saved.'
 					? 'bg-green-900/20 border-green-800 text-green-300'
 					: 'bg-amber-900/20 border-amber-800 text-amber-300'}">{backupMsg}</div>
 		{/if}

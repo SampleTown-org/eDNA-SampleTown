@@ -78,6 +78,8 @@ function requiresAdmin(pathname: string, method: string): boolean {
 		if (pathname === '/api/invites' && method === 'GET') return true;
 		// GET /api/lab/settings is admin-only (exposes whether token is set)
 		if (pathname === '/api/lab/settings' && method === 'GET') return true;
+		// GET /api/lab/settings/test exercises the configured GitHub token
+		if (pathname === '/api/lab/settings/test' && method === 'GET') return true;
 		// GET /api/db/snapshots lists this lab's backup history (admin-only)
 		if (pathname === '/api/db/snapshots' && method === 'GET') return true;
 		return false;

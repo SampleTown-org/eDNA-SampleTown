@@ -51,6 +51,70 @@ function resolveLabConfig(db: Database.Database, labId: string): { config: GitHu
 	return { config: { token, repo }, lab };
 }
 
+/**
+ * Quick connectivity check: hits GET ref/heads/main with the lab's
+ * configured repo + token. Doesn't push anything; just confirms the
+ * permissions chain works before the admin commits to a full snapshot.
+ *
+ * Returns a structured result so the UI can show an actionable message
+ * (rather than a raw GitHub error string).
+ */
+export async function testLabConnection(
+	labId: string
+): Promise<{ ok: true } | { ok: false; status: number | null; error: string; hint?: string }> {
+	const db = getDb();
+	const resolved = resolveLabConfig(db, labId);
+	if (!resolved) {
+		return {
+			ok: false,
+			status: null,
+			error: 'No GitHub repo and/or token configured for this lab.'
+		};
+	}
+	const { config } = resolved;
+	const [owner, repo] = config.repo.split('/');
+	if (!owner || !repo) {
+		return {
+			ok: false,
+			status: null,
+			error: 'GitHub repo must be in "owner/repo" format.'
+		};
+	}
+	try {
+		const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/ref/heads/main`, {
+			headers: {
+				Authorization: `Bearer ${config.token}`,
+				Accept: 'application/vnd.github+json',
+				'X-GitHub-Api-Version': '2022-11-28'
+			}
+		});
+		if (res.ok) return { ok: true };
+
+		// Translate the common failure modes into a one-line user-friendly
+		// hint so the admin doesn't have to read raw GitHub JSON.
+		const body = await res.text();
+		let hint: string | undefined;
+		if (res.status === 401) {
+			hint = 'Token is invalid or expired. Generate a new one and re-paste.';
+		} else if (res.status === 403) {
+			hint =
+				'Token does not have permission for this repo. Check Repository access + Contents: Read and write on the token, and that the org has approved it.';
+		} else if (res.status === 404) {
+			hint =
+				'Repo or main branch not found. Make sure the repo exists, the token can see it, and the repo has at least one commit on the main branch (an empty repo has no main).';
+		} else if (res.status === 409) {
+			hint = 'Repo exists but is empty. Initialize it with at least one commit (e.g. add a README) and try again.';
+		}
+		return { ok: false, status: res.status, error: body.slice(0, 500), hint };
+	} catch (err) {
+		return {
+			ok: false,
+			status: null,
+			error: err instanceof Error ? err.message : String(err)
+		};
+	}
+}
+
 /** Export all lab-scoped tables as JSON, filtered by the caller's lab_id.
  *  Prevents cross-lab data leakage into the snapshot repo. */
 export function exportTablesAsJson(labId: string): Record<string, unknown[]> {
