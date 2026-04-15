@@ -1410,11 +1410,9 @@
 				disaster recovery and version-controlled provenance.
 			</p>
 			<p class="text-sm text-slate-400 mt-2">
-				<strong class="text-amber-300">Not backed up:</strong> photo files
-				(only the metadata rows — the JPEGs themselves stay on the server),
-				user accounts and sessions, lab settings (including the GitHub token
-				you pasted above), saved carts, active invites, the feedback queue,
-				and the backup history itself.
+				<strong class="text-amber-300">Not backed up:</strong> photo files,
+				user accounts and sessions, lab settings, saved carts,
+				and the feedback queue.
 			</p>
 		</div>
 
