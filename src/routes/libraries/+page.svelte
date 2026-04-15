@@ -117,7 +117,7 @@
 					Update Cart ({selectedIds.size})
 				</button>
 			{/if}
-			<a href="/libraries/new" class="hidden sm:inline-flex write-only px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Plate</a>
+			<a href="/libraries/new" class="hidden sm:inline-flex write-only px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Library</a>
 		</div>
 	</div>
 

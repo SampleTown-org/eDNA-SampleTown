@@ -81,12 +81,19 @@
 					     nav than to the account utilities. -->
 					<button
 						onclick={() => { cart.toggleSidebar(); if (cart.count === 0 && !cart.sidebarOpen) cart.openSidebar(); }}
-						class="relative px-2 py-1 text-sm transition-colors {cart.sidebarOpen ? 'text-ocean-400' : 'text-slate-400 hover:text-white'}"
-						title="{cart.sidebarOpen ? 'Close' : 'Open'} cart"
+						class="relative p-1 transition-colors {cart.sidebarOpen ? 'text-ocean-400' : 'text-slate-400 hover:text-white'}"
+						title="{cart.sidebarOpen ? 'Close' : 'Open'} cart ({cart.count})"
+						aria-label="{cart.sidebarOpen ? 'Close' : 'Open'} cart"
 					>
-						Cart
+						<!-- Shopping-cart icon. Same visual weight as the
+						     other right-side icons (search, scan). -->
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+							<path d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13l-1.6 4.6a1 1 0 00.9 1.4H19" />
+							<circle cx="9" cy="20" r="1.5" />
+							<circle cx="17" cy="20" r="1.5" />
+						</svg>
 						{#if cart.count > 0}
-							<span class="absolute -top-1 -right-1 w-4 h-4 bg-ocean-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+							<span class="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 bg-ocean-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
 								{cart.count}
 							</span>
 						{/if}

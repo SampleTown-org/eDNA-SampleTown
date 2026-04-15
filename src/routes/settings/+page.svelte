@@ -1349,13 +1349,6 @@
 			</p>
 		</div>
 
-		{#if backupMsg}
-			<div class="p-3 rounded-lg border text-sm
-				{backupMsg.startsWith('Pushed') || backupMsg.startsWith('Saved. Connection') || backupMsg === 'Saved.'
-					? 'bg-green-900/20 border-green-800 text-green-300'
-					: 'bg-amber-900/20 border-amber-800 text-amber-300'}">{backupMsg}</div>
-		{/if}
-
 		<form onsubmit={(e) => { e.preventDefault(); saveBackupSettings(); }} class="space-y-4 p-4 rounded-lg bg-slate-800/30">
 			<div>
 				<label for="bk-repo" class="block text-sm text-slate-300 mb-1">GitHub repo</label>
@@ -1447,6 +1440,18 @@
 					</span>
 				{/if}
 			</div>
+
+			<!-- Result of the most recent Save / Backup-now action.
+			     Lives BELOW the buttons so it shows up where the eye
+			     already is after clicking — beta feedback was that an
+			     above-the-form notification looked like a static page
+			     header and got missed. -->
+			{#if backupMsg}
+				<div class="p-3 rounded-lg border text-sm
+					{backupMsg.startsWith('Pushed') || backupMsg.startsWith('Saved. Connection') || backupMsg === 'Saved.'
+						? 'bg-green-900/20 border-green-800 text-green-300'
+						: 'bg-amber-900/20 border-amber-800 text-amber-300'}">{backupMsg}</div>
+			{/if}
 		</form>
 
 		<div>

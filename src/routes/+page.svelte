@@ -17,16 +17,17 @@
 
 	// --- Event calendar ---------------------------------------------------
 	const EVENT_COLORS: Record<string, { dot: string; label: string }> = {
-		// Sites used to be sky-400 — too close to ocean-400 for sample
-		// collection, the two dots were indistinguishable on the calendar.
-		// Fuchsia is far enough from every other event color that even the
-		// 1×1 dots in the calendar grid read clearly.
-		site:          { dot: 'bg-fuchsia-400', label: 'Site' },
-		sample:        { dot: 'bg-ocean-400',   label: 'Sample collection' },
-		extract:       { dot: 'bg-emerald-400', label: 'Extraction' },
-		pcr_plate:     { dot: 'bg-amber-400',   label: 'PCR plate' },
-		library_plate: { dot: 'bg-violet-400',  label: 'Library prep' },
-		run:           { dot: 'bg-rose-400',    label: 'Sequencing run' }
+		// ROYGBIV order matching the wet-lab workflow: a sample's life moves
+		// red → violet through these stages. Lets the eye scan a date in
+		// the calendar and infer which stage the activity was at without
+		// reading the legend. (Drops indigo since we have six stages, not
+		// seven.)
+		site:          { dot: 'bg-red-400',    label: 'Site' },
+		sample:        { dot: 'bg-orange-400', label: 'Sample collection' },
+		extract:       { dot: 'bg-yellow-400', label: 'Extraction' },
+		pcr_plate:     { dot: 'bg-green-400',  label: 'PCR plate' },
+		library_plate: { dot: 'bg-blue-400',   label: 'Library prep' },
+		run:           { dot: 'bg-violet-400', label: 'Sequencing run' }
 	};
 	// Backward compat for the calendar aggregates which use short type names
 	const CAL_TYPE_MAP: Record<string, string> = {
