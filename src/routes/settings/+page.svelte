@@ -1409,6 +1409,13 @@
 				run / analysis row in this lab to a GitHub repo. Use it for off-box
 				disaster recovery and version-controlled provenance.
 			</p>
+			<p class="text-sm text-slate-400 mt-2">
+				<strong class="text-amber-300">Not backed up:</strong> photo files
+				(only the metadata rows — the JPEGs themselves stay on the server),
+				user accounts and sessions, lab settings (including the GitHub token
+				you pasted above), saved carts, active invites, the feedback queue,
+				and the backup history itself.
+			</p>
 		</div>
 
 		<form onsubmit={(e) => { e.preventDefault(); saveBackupSettings(); }} class="space-y-4 p-4 rounded-lg bg-slate-800/30">
