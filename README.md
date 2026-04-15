@@ -27,19 +27,26 @@ Tracks the full chain: **Project → Site → Sample → Extract → PCR → Lib
 - **Saved carts** — build a cart across any entity types, save it with a name, optionally make it public so other users can load it. Cart UI is a side column on desktop and a dismissible drawer on mobile
 - **Mobile browse** — read-only UI on phones: list pages, detail pages, maps, and the scanner all work; creation/edit buttons are hidden. Field data entry is desktop (or the future offline PWA) only
 
+### Multi-tenancy
+- **Multi-lab on one install** — every top-level entity carries a `lab_id`; cross-lab reads/writes return 404 (no existence-leak). One deployment hosts an arbitrary number of labs, each with its own picklists, primer sets, PCR protocols, personnel, and projects/data
+- **Self-serve onboarding** — anyone can sign in via GitHub OAuth and either create their own lab (becoming its admin) or accept an invite to an existing one. No SSH or DBA required
+- **Lab invites** — admins generate single-use, time-limited invite tokens in Manage → People; the token URL is auto-copied to the clipboard. Atomic `UPDATE WHERE used_at IS NULL` so concurrent acceptances can't double-spend
+- **Per-lab GitHub backup + restore** — each lab configures its own GitHub repo + PAT in Manage → Backup. Snapshots commit to `data/<lab-slug>/<table>.json`. Auto-backup on a configurable interval (with no-op skip when nothing changed). Restore replays a chosen commit's snapshot back into the lab inside a single deferred-FK transaction, preserving created_by attribution
+- **Danger zone** — admins self-delete their own account (with last-admin guard) or delete the whole lab (cascading wipe with typed-name confirmation)
+
 ### Ops
-- **Hybrid auth + RBAC** — GitHub OAuth (`arctic`) for normal use, local bcrypt accounts as a LAN-only fallback. All `/api/*` mutations require a session; settings writes require `role=admin`; `role=viewer` is read-only everywhere. First admin is bootstrapped by seeding `admin/admin` on an empty DB (forced password change on first login)
-- **Rate limited** — login (5/min/IP), feedback POST (5/min/IP), MIxS import (10/h/IP, 10 MB cap, 10 k row cap)
-- **Dashboard activity log** — every entity creation + modification flows into a single searchable activity list on the dashboard, with a calendar-grid view, per-user attribution, and full-text search across name/ID/type/date
-- **Feedback form** — single-line form on the bottom of every page captures the current URL for context; admins triage in `/settings` → Feedback
-- **GitHub-backed snapshots** — JSON exports of every table can be committed to a configured GitHub repo for version control
+- **Hybrid auth + RBAC** — GitHub OAuth (`arctic`) for normal use, local bcrypt accounts as a LAN-only fallback. All `/api/*` mutations require a session and lab membership; settings writes require `role=admin`; `role=viewer` is read-only everywhere. First admin is bootstrapped by seeding `admin/admin` on an empty DB (forced password change on first login)
+- **Defense-in-depth security headers** — strict CSP via SvelteKit's `kit.csp` (per-page sha256 hashes for inline SSR scripts), HSTS when ORIGIN is HTTPS, X-Frame-Options DENY, nosniff everywhere, strict-origin-when-cross-origin Referrer-Policy
+- **Rate limited** — login (5/min/IP), feedback POST (5/min/IP), MIxS import (10/h/IP, 10 MB cap, 10 k row cap), lab-create (3/day/IP), invite-join (10/h/IP), password-change (5/min/user)
+- **Dashboard activity log** — every entity creation + modification flows into a single searchable activity list on the dashboard, with a ROYGBIV calendar-grid view, per-user attribution, and full-text search across name/ID/type/date
+- **Feedback form** — single-line form on the bottom of every page captures the current URL for context; admins triage in Manage → Feedback. Lab-scoped queue + anonymous (NULL-lab) fallthrough
 
 ## Tech stack
 
 - **SvelteKit 2** + **Svelte 5 runes** + **Tailwind CSS 3**
-- **better-sqlite3** with WAL mode
+- **better-sqlite3** with WAL mode (schema-driven; no migration layer)
 - **arctic** (OAuth) + **bcrypt** (local auth)
-- **Leaflet** (maps), **xlsx** / SheetJS (Excel I/O)
+- **Leaflet** (maps, self-hosted CSS + tiles via OSM), **xlsx** from SheetJS CDN (NCBI BioSample template support, patched for CVE-2023-30533)
 - **html5-qrcode** (camera scanner), **qrcode** + **jspdf** (label generation)
 - Adapter: `@sveltejs/adapter-node`
 
@@ -60,7 +67,7 @@ npm run build
 node build/index.js           # honors PORT, HOST, ORIGIN env vars
 ```
 
-The SQLite file is created at `data/sampletown.db` on first run, schema is applied from `src/lib/server/schema.sql`, and constrained-value picklists are seeded from `src/lib/server/seed-constrained-values.ts` (primers, protocols, kits, naming templates, etc.).
+The SQLite file is created at `data/sampletown.db` on first run, schema is applied from `src/lib/server/schema.sql`, the default lab is created from `DEFAULT_LAB_NAME`, and that lab's picklists are seeded from `src/lib/server/seed-constrained-values.ts` (primers, protocols, kits, naming templates, etc.). There's no migration layer — `schema.sql` is the only source of truth; schema changes are wipe-and-reseed.
 
 ## Configuration
 
@@ -70,11 +77,12 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
 |---|---|
 | `AUTH_MODE` | `local`, `github`, or `hybrid` |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth app credentials |
-| `GITHUB_REPO` | `owner/repo` for DB snapshot commits |
-| `GITHUB_TOKEN` | PAT used by Octokit to push JSON snapshots |
 | `DB_PATH` | SQLite file path (default `data/sampletown.db`) |
 | `ORIGIN` | Public origin URL — required for SvelteKit CSRF and Secure cookies |
 | `BODY_SIZE_LIMIT` | Max request body size in bytes (default 512 KB — bump to ≥15 MB if you use photo uploads) |
+| `DEFAULT_LAB_NAME` | Name of the lab created on first boot (default `"Cryomics Lab"`) |
+| `ADDRESS_HEADER` / `XFF_DEPTH` | Set to `X-Forwarded-For` / `1` when running behind nginx so rate limiting keys on the real client IP, not 127.0.0.1 |
+| `GITHUB_REPO` / `GITHUB_TOKEN` | Optional fallback repo + token for backups when a lab hasn't configured its own per-lab values (per-lab config in Manage → Backup is the preferred path) |
 
 ## Auth model
 
@@ -84,8 +92,11 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
 - **API authorization** is enforced centrally in `src/hooks.server.ts`:
   - Anonymous: only `POST /api/feedback`
   - Authenticated: all other `/api/*`
-  - Admin: any mutation under `/api/settings/`, `/api/personnel`, `/api/db/`, plus `GET /api/feedback`. The `/settings` page itself is also admin-gated.
-- **Bootstrapping the first admin**: SampleTown auto-seeds a default `admin/admin` user on first startup (when the `users` table is empty). The seeded account has `must_change_password=1` so the first login is forced to set a real password before anything else works. **Bootstrap from a private network or SSH tunnel BEFORE exposing the app publicly** — the literal `admin/admin` is exploitable until the first login changes it.
+  - Admin (lab-scoped): mutations under `/api/users/`, `/api/db/`, `/api/feedback/`, `/api/invites`, `/api/lab/` plus the corresponding admin-only GETs (full feedback queue, user list, invite list, lab settings, snapshot history)
+  - Lab membership: every signed-in user who isn't on the lab-setup or self-account whitelist is required to have `lab_id` populated; otherwise they're bounced to `/auth/setup-lab`
+  - Cross-lab access: `assertLabOwnsRow(table, id, labId)` returns 404 (intentional, no existence-leak) if a row belongs to another lab
+- **Bootstrapping the first admin**: SampleTown auto-seeds a default `admin/admin` user assigned to the default lab on first startup (when the `users` table is empty). The seeded account has `must_change_password=1` so the first login is forced to set a real password before anything else works. **Bootstrap from a private network or SSH tunnel BEFORE exposing the app publicly** — the literal `admin/admin` is exploitable until the first login changes it.
+- **Self-serve onboarding** (no SSH required): subsequent users sign in with GitHub OAuth and either start their own lab via `/auth/setup-lab` (becoming its admin, picklists/primers/protocols seeded fresh) or accept an invite token from an existing lab admin. Local accounts are still admin-created via Manage → People for ship/LAN fallback scenarios.
 
 ## Repo layout
 
@@ -93,15 +104,17 @@ The SQLite file is created at `data/sampletown.db` on first run, schema is appli
 src/
 ├── lib/
 │   ├── server/
-│   │   ├── db.ts                       # better-sqlite3 singleton + schema bootstrap + migrations
-│   │   ├── schema.sql                  # full DDL (inlined via ?raw import)
-│   │   ├── seed-constrained-values.ts  # picklist + primer set + protocol seeds + backfill
+│   │   ├── db.ts                       # better-sqlite3 singleton + schema bootstrap + default-lab seed
+│   │   ├── schema.sql                  # full DDL (inlined via ?raw import) — single source of truth
+│   │   ├── seed-constrained-values.ts  # per-lab picklist + primer set + protocol seeds
+│   │   ├── lab-setup.ts                # createLab() + slug derivation (shared by API + CLI)
+│   │   ├── lab-scope.ts                # assertLabOwnsRow() cross-lab guard (404 on miss)
 │   │   ├── schemas/
 │   │   │   ├── auth.ts                 # zod schemas for user/personnel endpoints
 │   │   │   └── lab.ts                  # zod schemas for runs/plates/PCR endpoints
 │   │   ├── validation.ts               # parseBody() zod helper
 │   │   ├── auth.ts                     # sessions, OAuth, bcrypt, sweep
-│   │   ├── guards.ts                   # requireUser / requireAdmin
+│   │   ├── guards.ts                   # requireUser / requireAdmin / requireLab / requireLabAdmin
 │   │   ├── api-errors.ts               # safe SQLite-error wrapper
 │   │   ├── rate-limit.ts               # in-memory sliding window
 │   │   ├── entity-personnel.ts         # set/get/bulk personnel attribution
@@ -109,7 +122,7 @@ src/
 │   │   ├── constrained-values.ts       # picklist loader
 │   │   ├── mixs-io.ts                  # MIxS TSV/xlsx import + export
 │   │   ├── mixs-validator.ts           # server-only ajv validator against LinkML JSON Schema
-│   │   └── github.ts                   # Octokit DB-snapshot commits
+│   │   └── github.ts                   # per-lab DB-snapshot push, restore, and scheduler
 │   ├── mixs/
 │   │   ├── schema/v6.3.0/              # checked-in LinkML YAML + JSON Schema + VERSION
 │   │   ├── generated/v6.3.0/           # compact runtime indices (slots/classes/enums.json)
@@ -130,14 +143,17 @@ src/
 └── routes/
     ├── projects/  sites/  samples/     # CRUD pages (list, new, edit, [id])
     ├── extracts/  pcr/  libraries/  runs/  analysis/
-    ├── settings/                       # Naming, picklists, primers, protocols, people, feedback
+    ├── settings/                       # "Manage": picklists, primers, protocols, people + invites, labels, backup + restore, feedback, danger zone
     ├── export/                         # MIxS import / export UI
     ├── glossary/                       # searchable MIxS slot reference
+    ├── account/                        # avatar, password, self-delete
+    ├── auth/                           # login, GitHub callback, setup-lab, join/[token], change-password, logout
     └── api/                            # REST endpoints (one folder per resource)
 
 scripts/
 ├── mixs-build-index.mjs                # YAML → runtime JSON indices
-└── mixs-update.mjs                     # fetch a new MIxS release + diff report
+├── mixs-update.mjs                     # fetch a new MIxS release + diff report
+└── create-lab.mjs                      # CLI bootstrap for a new lab (alternative to self-serve signup)
 ```
 
 ## Documentation

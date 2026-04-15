@@ -18,7 +18,7 @@ Or with overrides:
 
 ```bash
 APP_DIR=/srv/sampletown PORT=3001 NODE_VERSION=20 \
-    REPO_URL=https://github.com/<owner>/SampleTown.git \
+    REPO_URL=https://github.com/sampletown-org/edna-sampletown.git \
     bash setup.sh
 ```
 
