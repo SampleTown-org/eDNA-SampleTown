@@ -8,12 +8,24 @@
 	// service worker caches it.
 	import 'leaflet/dist/leaflet.css';
 
+	type NativeLandLayer = 'territories' | 'languages' | 'treaties';
+	const NATIVE_LAND_LAYERS: NativeLandLayer[] = ['territories', 'languages', 'treaties'];
+	const NATIVE_LAND_LABELS: Record<NativeLandLayer, string> = {
+		territories: 'Territories',
+		languages: 'Languages',
+		treaties: 'Treaties'
+	};
+
 	interface Props {
 		latitude: number | null;
 		longitude: number | null;
 		onchange?: (lat: number, lng: number) => void;
 		height?: string;
 		readonly?: boolean;
+		/** Show the Native Land Digital overlay toggles (territories /
+		 *  languages / treaties). Defaults to true; pass false to hide on maps
+		 *  where the toggle would clutter (e.g. small previews). */
+		showNativeLand?: boolean;
 		/**
 		 * Multi-marker mode. Each marker can optionally specify a `color` (any
 		 * CSS color string, typically `hsl(...)`) — when set, the marker is
@@ -43,13 +55,31 @@
 		onboxselect?: (ids: string[]) => void;
 	}
 
-	let { latitude = $bindable(), longitude = $bindable(), onchange, height = '300px', readonly = false, markers = [], onboxselect }: Props = $props();
+	let { latitude = $bindable(), longitude = $bindable(), onchange, height = '300px', readonly = false, markers = [], onboxselect, showNativeLand = true }: Props = $props();
 
 	let mapEl: HTMLDivElement;
 	let map: any;
 	let marker: any;
 	let markerLayer: any;
 	let L: any;
+
+	// Native Land Digital overlay state. Each enabled layer fetches its
+	// features for the current map centre on toggle and on every map
+	// move (debounced). Unavailable upstream → silently empty layer + a
+	// one-line note in the toggle panel.
+	let nlEnabled = $state<Record<NativeLandLayer, boolean>>({
+		territories: false,
+		languages: false,
+		treaties: false
+	});
+	let nlLayers: Partial<Record<NativeLandLayer, any>> = {};
+	let nlLoading = $state<Record<NativeLandLayer, boolean>>({
+		territories: false,
+		languages: false,
+		treaties: false
+	});
+	let nlUnavailable = $state<string | null>(null);
+	let nlFetchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	/** Escape operator-entered strings before injecting into popup HTML — site
 	 *  names, column values, etc. Defense-in-depth: keeps any stray angle
@@ -112,8 +142,84 @@
 			if (onboxselect) setupBoxSelect();
 		}
 
+		// Re-fetch any active Native Land overlay when the operator pans/zooms
+		// to a new area. Debounced so a single drag doesn't trigger dozens of
+		// requests.
+		if (showNativeLand) {
+			map.on('moveend', () => {
+				if (nlFetchTimer) clearTimeout(nlFetchTimer);
+				nlFetchTimer = setTimeout(() => {
+					for (const layer of NATIVE_LAND_LAYERS) {
+						if (nlEnabled[layer]) fetchNativeLand(layer);
+					}
+				}, 500);
+			});
+		}
+
 		return () => { map.remove(); };
 	});
+
+	async function fetchNativeLand(layer: NativeLandLayer) {
+		if (!map || !L) return;
+		const center = map.getCenter();
+		nlLoading[layer] = true;
+		try {
+			const res = await fetch(`/api/native-land?layer=${layer}&lat=${center.lat}&lng=${center.lng}`);
+			if (!res.ok) {
+				nlUnavailable = `Layer fetch failed (${res.status})`;
+				return;
+			}
+			const body = await res.json();
+			if (body.unavailable) {
+				nlUnavailable = body.unavailable;
+				return;
+			}
+			nlUnavailable = null;
+			// Replace the existing overlay for this layer.
+			if (nlLayers[layer]) {
+				nlLayers[layer].remove();
+				nlLayers[layer] = undefined;
+			}
+			if (!body.features || body.features.length === 0) return;
+			const geo = L.geoJSON(body, {
+				style: (feature: any) => ({
+					color: feature?.properties?.color ?? '#888',
+					weight: 2,
+					opacity: 0.85,
+					fillColor: feature?.properties?.color ?? '#888',
+					fillOpacity: 0.18
+				}),
+				onEachFeature: (feature: any, lyr: any) => {
+					const p = feature.properties ?? {};
+					const link = p.description
+						? `<a href="${escapeHtml(p.description)}" target="_blank" rel="noopener noreferrer" style="color:#0ea5e9">native-land.ca →</a>`
+						: '';
+					lyr.bindPopup(
+						`<div style="font-weight:600">${escapeHtml(p.name || 'Unknown')}</div>` +
+						`<div style="margin-top:2px;font-size:11px;color:#64748b">${escapeHtml(NATIVE_LAND_LABELS[layer])}</div>` +
+						(link ? `<div style="margin-top:4px;font-size:11px">${link}</div>` : '')
+					);
+				}
+			});
+			geo.addTo(map);
+			nlLayers[layer] = geo;
+		} catch (err) {
+			console.error('native-land fetch failed', err);
+			nlUnavailable = 'fetch failed';
+		} finally {
+			nlLoading[layer] = false;
+		}
+	}
+
+	function toggleNativeLand(layer: NativeLandLayer) {
+		nlEnabled[layer] = !nlEnabled[layer];
+		if (nlEnabled[layer]) {
+			fetchNativeLand(layer);
+		} else if (nlLayers[layer]) {
+			nlLayers[layer].remove();
+			nlLayers[layer] = undefined;
+		}
+	}
 
 	/**
 	 * Re-render the marker layer. Pulled into its own function so the reactive
@@ -246,4 +352,40 @@
 	});
 </script>
 
-<div bind:this={mapEl} class="rounded-lg border border-slate-700 z-0" style="height: {height}; background: #1e293b;"></div>
+<div class="relative">
+	<div bind:this={mapEl} class="rounded-lg border border-slate-700 z-0" style="height: {height}; background: #1e293b;"></div>
+	{#if showNativeLand}
+		<!-- Native Land Digital overlay toggles. Sits absolutely over the
+		     map's top-right; pointer-events allowed only on the panel itself
+		     so the rest of the map stays interactive. Acknowledgement linked
+		     per Native Land's attribution guidelines. -->
+		<div class="absolute top-2 right-2 z-[400] bg-slate-900/95 border border-slate-700 rounded-lg p-2 text-xs text-slate-300 shadow-lg backdrop-blur-sm">
+			<div class="font-semibold text-slate-200 mb-1 flex items-center gap-1.5">
+				<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+				Native Land
+			</div>
+			<div class="space-y-0.5">
+				{#each NATIVE_LAND_LAYERS as layer}
+					<label class="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors">
+						<input
+							type="checkbox"
+							checked={nlEnabled[layer]}
+							onchange={() => toggleNativeLand(layer)}
+							class="accent-ocean-500"
+						/>
+						<span>{NATIVE_LAND_LABELS[layer]}</span>
+						{#if nlLoading[layer]}<span class="text-slate-500">…</span>{/if}
+					</label>
+				{/each}
+			</div>
+			{#if nlUnavailable}
+				<p class="mt-1.5 text-[10px] text-slate-500 max-w-[180px]">Overlay unavailable: {nlUnavailable}</p>
+			{:else if Object.values(nlEnabled).some((v) => v)}
+				<p class="mt-1.5 text-[10px] text-slate-500">
+					Data:
+					<a href="https://native-land.ca" target="_blank" rel="noopener noreferrer" class="text-ocean-400 hover:text-ocean-300">native-land.ca</a>
+				</p>
+			{/if}
+		</div>
+	{/if}
+</div>
