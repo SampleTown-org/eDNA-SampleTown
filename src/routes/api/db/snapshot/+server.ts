@@ -13,5 +13,5 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		throw error(500, 'Snapshot failed — check GITHUB_TOKEN and GITHUB_REPO');
 	}
 
-	return json({ ok: true, sha: result.sha });
+	return json({ ok: true, sha: result.sha, unchanged: result.unchanged ?? false });
 };

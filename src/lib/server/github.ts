@@ -429,7 +429,7 @@ export async function commitSnapshot(
 	labId: string,
 	message: string,
 	options: { automatic?: boolean } = {}
-): Promise<{ sha: string } | null> {
+): Promise<{ sha: string; unchanged?: boolean } | null> {
 	const automatic = options.automatic ? 1 : 0;
 	const db = getDb();
 	const resolved = resolveLabConfig(db, labId);
@@ -475,6 +475,19 @@ export async function commitSnapshot(
 			base_tree: baseTreeSha,
 			tree
 		});
+
+		// Skip the commit if nothing changed since the last snapshot. Git
+		// deduplicates trees by content hash, so if every blob is identical
+		// to what already exists at this path, the new tree's SHA equals
+		// the parent commit's tree SHA — meaning a fresh commit would be
+		// empty. Don't make it (keeps the GitHub commit list clean) and
+		// don't pollute db_snapshots history with a no-op row either.
+		// Bumps last_backup_at though, so the scheduler knows we checked
+		// and doesn't keep retrying every tick.
+		if (treeRes.sha === baseTreeSha) {
+			db.prepare("UPDATE labs SET last_backup_at = datetime('now') WHERE id = ?").run(labId);
+			return { sha: latestSha, unchanged: true };
+		}
 
 		// Create commit
 		const newCommitRes = await ghApi(config, `POST /repos/${owner}/${repo}/git/commits`, {

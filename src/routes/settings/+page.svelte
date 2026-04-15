@@ -315,7 +315,11 @@
 		});
 		if (res.ok) {
 			const r = await res.json();
-			backupMsg = `Pushed commit ${r.sha?.slice(0, 7) ?? ''}`;
+			if (r.unchanged) {
+				backupMsg = 'No data changes since last snapshot — nothing to commit.';
+			} else {
+				backupMsg = `Pushed commit ${r.sha?.slice(0, 7) ?? ''}`;
+			}
 		} else {
 			backupMsg = (await res.json().catch(() => ({}))).error || 'Backup failed';
 		}
@@ -1506,7 +1510,7 @@
 			     header and got missed. -->
 			{#if backupMsg}
 				<div class="p-3 rounded-lg border text-sm
-					{backupMsg.startsWith('Pushed') || backupMsg.startsWith('Saved. Connection') || backupMsg === 'Saved.'
+					{backupMsg.startsWith('Pushed') || backupMsg.startsWith('Saved. Connection') || backupMsg.startsWith('No data changes') || backupMsg === 'Saved.'
 						? 'bg-green-900/20 border-green-800 text-green-300'
 						: 'bg-amber-900/20 border-amber-800 text-amber-300'}">{backupMsg}</div>
 			{/if}
