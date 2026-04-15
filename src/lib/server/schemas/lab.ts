@@ -99,8 +99,14 @@ const peopleField = z.unknown().optional();
 // library_type is operator-managed picklist vocabulary — no
 // hardcoded enum, just a non-empty string up to SHORT_TEXT length. The DB
 // column is NOT NULL so we require a value, but the picklist is the sole
-// source of truth for what values are valid.
-const LIBRARY_TYPE = z.string().trim().min(1).max(200);
+// source of truth for what values are valid. Custom message: the form
+// labels this field "Library Strategy (SRA)" — the raw field name was
+// confusing operators when surfaced verbatim in inline errors.
+const LIBRARY_TYPE = z
+	.string()
+	.trim()
+	.min(1, 'Library Type / Strategy is required (pick one from the dropdown)')
+	.max(200);
 
 // library_plates.platform allows 'other'; sequencing_runs.platform does not.
 const PLATFORM_WITH_OTHER = z.enum([

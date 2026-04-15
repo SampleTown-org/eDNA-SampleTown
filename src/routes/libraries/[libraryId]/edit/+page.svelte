@@ -49,7 +49,7 @@
 
 	async function submitPlate() {
 		if (!plateForm.plate_name.trim()) { errorMsg = 'Plate name is required'; return; }
-		if (!plateForm.library_type) { errorMsg = 'Library type is required'; return; }
+		if (!plateForm.library_type) { errorMsg = 'Library Strategy (SRA) is required — pick one from the dropdown'; return; }
 		saving = true; errorMsg = '';
 
 		const body = {

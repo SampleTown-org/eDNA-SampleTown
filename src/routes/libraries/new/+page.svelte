@@ -177,6 +177,7 @@
 
 	async function submit() {
 		if (!plate.plate_name.trim()) { errorMsg = 'Plate name is required'; return; }
+		if (!plate.library_type.trim()) { errorMsg = 'Library Strategy (SRA) is required — pick one from the dropdown'; return; }
 		if (rows.length === 0) { errorMsg = 'Add at least one library'; return; }
 		if (rows.some(r => !r.library_name.trim())) { errorMsg = 'All library names are required'; return; }
 		saving = true; errorMsg = '';
