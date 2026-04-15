@@ -1,11 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
-import { requireUser } from '$lib/server/guards';
+import { requireLab } from '$lib/server/guards';
 import { apiError } from '$lib/server/api-errors';
 
 interface CartRow {
 	id: string;
+	lab_id: string;
 	user_id: string;
 	name: string;
 	is_public: number;
@@ -13,18 +14,19 @@ interface CartRow {
 	updated_at: string;
 }
 
-function loadCart(id: string): CartRow {
+function loadCart(id: string, labId: string): CartRow {
 	const db = getDb();
 	const row = db.prepare(
-		'SELECT id, user_id, name, is_public, created_at, updated_at FROM saved_carts WHERE id = ?'
+		'SELECT id, lab_id, user_id, name, is_public, created_at, updated_at FROM saved_carts WHERE id = ?'
 	).get(id) as CartRow | undefined;
-	if (!row) throw error(404, 'Cart not found');
+	// 404 (not 403) if cross-lab — don't confirm existence.
+	if (!row || row.lab_id !== labId) throw error(404, 'Cart not found');
 	return row;
 }
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-	const user = requireUser(locals);
-	const cart = loadCart(params.id);
+	const { user, labId } = requireLab(locals);
+	const cart = loadCart(params.id, labId);
 	if (cart.user_id !== user.id && cart.is_public !== 1) {
 		throw error(403, 'Not your cart');
 	}
@@ -38,9 +40,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 /** Rename or toggle public. Owner only. */
 export const PUT: RequestHandler = async ({ params, request, locals }) => {
-	const user = requireUser(locals);
+	const { user, labId } = requireLab(locals);
 	try {
-		const cart = loadCart(params.id);
+		const cart = loadCart(params.id, labId);
 		if (cart.user_id !== user.id) throw error(403, 'Not your cart');
 		const body = await request.json();
 		const name = typeof body?.name === 'string' ? body.name.trim() : cart.name;
@@ -58,9 +60,9 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 };
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
-	const user = requireUser(locals);
+	const { user, labId } = requireLab(locals);
 	try {
-		const cart = loadCart(params.id);
+		const cart = loadCart(params.id, labId);
 		if (cart.user_id !== user.id) throw error(403, 'Not your cart');
 		const db = getDb();
 		db.prepare('DELETE FROM saved_carts WHERE id = ?').run(params.id);

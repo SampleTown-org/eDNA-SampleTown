@@ -30,14 +30,18 @@ const TABLES: { type: EntityType; table: string; softDelete: boolean }[] = [
 
 export function findEntityById(
 	db: Database.Database,
-	id: string
+	id: string,
+	labId: string
 ): { type: EntityType; id: string } | null {
 	if (!/^[0-9a-f]{32}$/i.test(id)) return null;
+	// Lab-scope gate: every scannable entity table carries lab_id, so a
+	// cross-lab lookup returns null (indistinguishable from "not found") —
+	// a QR code printed by lab A can't be resolved while signed into lab B.
 	for (const { type, table, softDelete } of TABLES) {
 		const sql = softDelete
-			? `SELECT id FROM ${table} WHERE id = ? AND is_deleted = 0`
-			: `SELECT id FROM ${table} WHERE id = ?`;
-		const row = db.prepare(sql).get(id);
+			? `SELECT id FROM ${table} WHERE id = ? AND lab_id = ? AND is_deleted = 0`
+			: `SELECT id FROM ${table} WHERE id = ? AND lab_id = ?`;
+		const row = db.prepare(sql).get(id, labId);
 		if (row) return { type, id };
 	}
 	return null;

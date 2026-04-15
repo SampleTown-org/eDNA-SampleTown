@@ -2,6 +2,8 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { splitSampleBody, replaceSampleValues, loadSampleValues } from '$lib/server/sample-body';
 
@@ -14,26 +16,31 @@ const orMissing = (v: unknown): string => {
 	return typeof cleaned === 'string' && cleaned ? cleaned : MIXS_MISSING;
 };
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
 	const sample = db.prepare(`
 		SELECT s.*, st.lat_lon, st.latitude, st.longitude, st.geo_loc_name,
 			st.env_broad_scale, st.env_local_scale, st.site_name
 		FROM samples s
 		JOIN sites st ON st.id = s.site_id
-		WHERE s.id = ? AND s.is_deleted = 0
-	`).get(params.id) as Record<string, unknown> | undefined;
+		WHERE s.id = ? AND s.is_deleted = 0 AND s.lab_id = ?
+	`).get(params.id, labId) as Record<string, unknown> | undefined;
 	if (!sample) throw error(404, 'Sample not found');
 	const people = getEntityPersonnel('sample', params.id!);
 	const values = loadSampleValues(db, params.id!);
 	return json({ ...sample, ...values, people });
 };
 
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		const { labId } = requireLab(locals);
 		const raw = await request.json();
 		const { core: data, values } = splitSampleBody(raw);
 		const db = getDb();
+		// Existence + lab-ownership in one guard. 404 (not 403) so we don't
+		// confirm the row exists in another lab.
+		assertLabOwnsRow(db, 'samples', params.id!, labId, 'Sample not found');
 		const existing = db.prepare('SELECT id FROM samples WHERE id = ? AND is_deleted = 0').get(params.id);
 		if (!existing) throw error(404, 'Sample not found');
 
@@ -43,6 +50,9 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		if (!data?.site_id) {
 			return json({ error: 'site_id is required' }, { status: 400 });
 		}
+		// The new site_id must also belong to this lab (can't re-parent a
+		// sample into another lab's site).
+		assertLabOwnsRow(db, 'sites', data.site_id as string, labId, 'Site not found');
 
 		db.prepare(
 			`UPDATE samples SET
@@ -116,9 +126,11 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
+		const { labId } = requireLab(locals);
 		const db = getDb();
+		assertLabOwnsRow(db, 'samples', params.id!, labId, 'Sample not found');
 		db.prepare("UPDATE samples SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?").run(
 			params.id
 		);

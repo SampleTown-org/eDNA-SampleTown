@@ -17,12 +17,136 @@ export function getDb(): Database.Database {
 		_db = new Database(DB_PATH);
 		_db.pragma('journal_mode = WAL');
 		_db.pragma('foreign_keys = ON');
+		// Pre-schema migrations drop tables whose shape has changed in a way
+		// that ALTER TABLE can't handle (e.g. adding a NOT NULL FK column).
+		// They run BEFORE schema.exec so the CREATE TABLE IF NOT EXISTS
+		// statements rebuild the tables with the new shape.
+		preSchemaMigrations(_db);
 		_db.exec(schema);
 		runMigrations(_db);
-		seedConstrainedValues(_db);
-		seedDefaultAdmin(_db);
+		seedDefaultLab(_db);
+		// Seed picklists for the default lab. New labs get their own seeds
+		// via scripts/create-lab.mjs which calls seedConstrainedValues directly.
+		const defaultLabId = getDefaultLabId(_db);
+		seedConstrainedValues(_db, defaultLabId);
+		seedDefaultAdmin(_db, defaultLabId);
 	}
 	return _db;
+}
+
+/**
+ * One-shot reset for installs that predate the multi-lab migration.
+ *
+ * Detects by "no labs table + existing users table". When triggered, drops
+ * every table that now requires a NOT NULL lab_id column (can't be added via
+ * ALTER TABLE in SQLite without a table rebuild). Users, sessions,
+ * oauth_states, feedback, and sync_log are preserved — users and feedback
+ * get a nullable lab_id column added post-schema and backfilled to the
+ * default lab; sessions are wiped so everyone re-logs-in with the new
+ * `lab_id` populated into `locals.user`.
+ *
+ * Safe to run more than once: the `labs` check makes it idempotent.
+ */
+function preSchemaMigrations(db: Database.Database) {
+	const hasLabs = db
+		.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='labs'")
+		.get();
+	if (hasLabs) return;
+
+	const hasUsers = db
+		.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+		.get();
+	if (!hasUsers) return; // fresh install — schema.exec will build everything cleanly
+
+	console.log(
+		'[migration] multi-lab reset: dropping project data, preserving users + feedback'
+	);
+
+	// Force-disable FK enforcement for the drop cascade — we're intentionally
+	// wiping dependent tables, so FK errors from orphaned rows would be noise.
+	db.pragma('foreign_keys = OFF');
+	const tablesToReset = [
+		'analyses',
+		'run_libraries',
+		'sequencing_runs',
+		'library_preps',
+		'library_plates',
+		'pcr_amplifications',
+		'pcr_plates',
+		'extracts',
+		'sample_values',
+		'sample_photos',
+		'samples',
+		'site_photos',
+		'sites',
+		'projects',
+		'saved_cart_items',
+		'saved_carts',
+		'entity_personnel',
+		'personnel',
+		'constrained_values',
+		'primer_sets',
+		'pcr_protocols',
+		'db_snapshots'
+	];
+	for (const t of tablesToReset) {
+		try {
+			db.exec(`DROP TABLE IF EXISTS ${t}`);
+		} catch (err) {
+			console.warn(`[migration] drop ${t} failed (non-fatal):`, err instanceof Error ? err.message : err);
+		}
+	}
+	// Invalidate all existing sessions — lab_id needs to flow into locals.user
+	// on next login, and some sessions may belong to rows we've just reset.
+	try {
+		db.exec('DELETE FROM sessions');
+	} catch {
+		/* sessions table may not exist yet */
+	}
+	db.pragma('foreign_keys = ON');
+}
+
+/**
+ * Create the default lab on first run AFTER schema.exec has built the labs
+ * table. Idempotent — no-op once any lab exists.
+ *
+ * The default lab name comes from DEFAULT_LAB_NAME (env) with a fallback of
+ * "Cryomics Lab" for continuity with the production deployment. Slug is
+ * derived from the name. Subsequent labs are created by
+ * scripts/create-lab.mjs — there's no UI for creating labs because the
+ * blast radius (and potential for accidental lab-duplication) is too high.
+ */
+function seedDefaultLab(db: Database.Database) {
+	const existing = db.prepare('SELECT COUNT(*) AS c FROM labs').get() as { c: number };
+	if (existing.c > 0) return;
+
+	const name = process.env.DEFAULT_LAB_NAME || 'Cryomics Lab';
+	const slug = name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '') || 'default';
+	const id = generateId();
+	db.prepare('INSERT INTO labs (id, name, slug) VALUES (?, ?, ?)').run(id, name, slug);
+	console.log(`[seed] Created default lab "${name}" (${slug})`);
+
+	// Backfill post-migration users + feedback to the default lab. Sessions
+	// were already cleared in preSchemaMigrations so affected users will
+	// log in fresh with the new lab_id in locals.user.
+	try {
+		db.prepare('UPDATE users SET lab_id = ? WHERE lab_id IS NULL').run(id);
+		db.prepare('UPDATE feedback SET lab_id = ? WHERE lab_id IS NULL').run(id);
+	} catch {
+		/* columns may not exist yet on very-first-run; addColumn below handles it */
+	}
+}
+
+/** Return the default lab's id — used by seeds (default admin, picklists). */
+export function getDefaultLabId(db: Database.Database): string {
+	const row = db
+		.prepare('SELECT id FROM labs ORDER BY created_at ASC LIMIT 1')
+		.get() as { id: string } | undefined;
+	if (!row) throw new Error('No labs exist — seedDefaultLab did not run');
+	return row.id;
 }
 
 /**
@@ -57,6 +181,11 @@ function runMigrations(db: Database.Database) {
 		}
 	};
 	addColumn('users', 'is_deleted INTEGER NOT NULL DEFAULT 0');
+	// Multi-lab: nullable on users so pre-approval GitHub-OAuth signups can
+	// land without a lab; nullable on feedback for anonymous / pre-migration
+	// rows. seedDefaultLab() backfills existing NULLs to the default lab.
+	addColumn('users', 'lab_id TEXT REFERENCES labs(id)');
+	addColumn('feedback', 'lab_id TEXT REFERENCES labs(id)');
 	addColumn('pcr_amplifications', 'well_label TEXT');
 	addColumn('library_preps', 'well_label TEXT');
 	addColumn('users', 'avatar_emoji TEXT');
@@ -71,63 +200,9 @@ function runMigrations(db: Database.Database) {
 	renameColumn('pcr_plates', 'pcr_conditions', 'pcr_cond');
 	renameColumn('pcr_amplifications', 'pcr_conditions', 'pcr_cond');
 	renameColumn('pcr_protocols', 'pcr_conditions', 'pcr_cond');
-
-	// Merge the lab-position roles (PI, Postdoc, etc.) that used to be a
-	// hardcoded list on the Personnel dropdown into the person_role picklist,
-	// so all role sources live in constrained_values. Case-insensitive dedup
-	// against existing entries — nothing is overwritten or removed.
-	mergeIntoPicklist(db, 'person_role', [
-		'PI', 'Co-PI', 'Lab Manager', 'Postdoc',
-		'PhD Student', 'MSc Student', 'Undergrad',
-		'Field Tech', 'Lab Tech', 'Bioinformatician',
-		'Collaborator', 'Other'
-	]);
-
-	// Add the per-reaction / per-library naming-template defaults for installs
-	// that seeded before these entries existed. Only inserts if the exact
-	// (category, value) pair is missing — never overwrites operator edits.
-	mergeNamingTemplates(db, [
-		{ value: 'pcr_name', label: '{Extract}_{Gene}' },
-		{ value: 'library_name', label: '{Source}_LIB' }
-	]);
-}
-
-function mergeNamingTemplates(db: Database.Database, entries: { value: string; label: string }[]) {
-	const exists = db.prepare(
-		"SELECT 1 FROM constrained_values WHERE category = 'naming_template' AND value = ?"
-	);
-	const insert = db.prepare(
-		`INSERT INTO constrained_values (category, value, label, sort_order, is_active)
-		 VALUES ('naming_template', ?, ?, ?, 1)`
-	);
-	const maxSort = db.prepare(
-		"SELECT COALESCE(MAX(sort_order), 0) AS m FROM constrained_values WHERE category = 'naming_template'"
-	);
-	let sort = (maxSort.get() as { m: number }).m;
-	for (const e of entries) {
-		if (exists.get(e.value)) continue;
-		sort += 10;
-		insert.run(e.value, e.label, sort);
-	}
-}
-
-function mergeIntoPicklist(db: Database.Database, category: string, values: string[]) {
-	const existsStmt = db.prepare(
-		'SELECT 1 FROM constrained_values WHERE category = ? AND LOWER(value) = LOWER(?)'
-	);
-	const insertStmt = db.prepare(
-		`INSERT INTO constrained_values (category, value, label, sort_order, is_active)
-		 VALUES (?, ?, ?, ?, 1)`
-	);
-	const maxSortStmt = db.prepare(
-		'SELECT COALESCE(MAX(sort_order), 0) AS m FROM constrained_values WHERE category = ?'
-	);
-	let sort = (maxSortStmt.get(category) as { m: number }).m;
-	for (const v of values) {
-		if (existsStmt.get(category, v)) continue;
-		sort += 10;
-		insertStmt.run(category, v, v, sort);
-	}
+	// NB: pre-multi-lab-merge backfills for person_role and naming_template
+	// were removed — multi-lab migration wipes constrained_values anyway,
+	// and SEED_DATA now includes all those entries inline.
 }
 
 export function generateId(): string {
@@ -159,7 +234,7 @@ export function resolveId(suggested: unknown): string {
  * Bootstrap from a private network or SSH tunnel and change the password
  * BEFORE exposing the app on the public internet.
  */
-function seedDefaultAdmin(db: Database.Database) {
+function seedDefaultAdmin(db: Database.Database, defaultLabId: string) {
 	const count = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
 	if (count > 0) return;
 
@@ -168,8 +243,8 @@ function seedDefaultAdmin(db: Database.Database) {
 	// throwaway placeholder password.
 	const hash = bcrypt.hashSync('admin', 12);
 	db.prepare(
-		`INSERT INTO users (id, username, password_hash, role, is_local_account, is_approved, must_change_password)
-		 VALUES (?, 'admin', ?, 'admin', 1, 1, 1)`
-	).run(id, hash);
+		`INSERT INTO users (id, lab_id, username, password_hash, role, is_local_account, is_approved, must_change_password)
+		 VALUES (?, ?, 'admin', ?, 'admin', 1, 1, 1)`
+	).run(id, defaultLabId, hash);
 	console.log('[seed] Created default admin user (admin/admin) — change the password on first login');
 }

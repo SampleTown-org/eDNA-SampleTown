@@ -5,6 +5,8 @@ import { parseMixsTsv, xlsxToTsv, getImportableFields, SITE_FIELDS } from '$lib/
 import { parseLatLon } from '$lib/mixs/validators';
 import { checkRate } from '$lib/server/rate-limit';
 import { apiError } from '$lib/server/api-errors';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { findNearbySites, haversineKm } from '$lib/server/proximity';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { validateRow } from '$lib/server/mixs-validator';
@@ -18,6 +20,7 @@ const MAX_ROWS = 10_000;
 const DEFAULT_SITE_MATCH_KM = 1;
 
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
+	const { user, labId } = requireLab(locals);
 	// Rate limit per IP: 1 request / second. Hooks already require a session.
 	const ip = getClientAddress();
 	if (!checkRate(`import:${ip}`, 1, 1_000)) {
@@ -105,6 +108,13 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		return json({ error: 'TSV data and project_id are required' }, { status: 400 });
 	}
 
+	// Cross-lab guard: the supplied project must belong to the caller's lab.
+	// Done before any parsing so a cross-lab attempt never touches the TSV.
+	{
+		const db = getDb();
+		assertLabOwnsRow(db, 'projects', projectId, labId, 'Project not found');
+	}
+
 	const { samples, errors, headers, column_map } = parseMixsTsv(tsv, columnMap);
 
 	if (samples.length > MAX_ROWS) {
@@ -122,7 +132,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		if (lat == null || lon == null) {
 			return { sample: s, lat, lon, matched_site: null as { id: string; site_name: string; distance_km: number } | null, new_site: false };
 		}
-		const nearby = findNearbySites(lat, lon, siteMatchKm, projectId);
+		const nearby = findNearbySites(lat, lon, siteMatchKm, projectId, labId);
 		return { sample: s, lat, lon, matched_site: nearby[0] ?? null, new_site: false };
 	});
 
@@ -240,20 +250,20 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
 	// Insert sites and samples
 	const db = getDb();
-	const userId = locals.user?.id ?? null;
+	const userId = user.id;
 	const inserted: any[] = [];
 	const insertErrors: string[] = [...errors];
 	let matchedCount = 0;
 	let newSiteCount = 0;
 
 	const insertSiteStmt = db.prepare(`
-		INSERT INTO sites (id, project_id, site_name, lat_lon, latitude, longitude,
+		INSERT INTO sites (id, lab_id, project_id, site_name, lat_lon, latitude, longitude,
 			geo_loc_name, env_broad_scale, env_local_scale, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	const insertStmt = db.prepare(`
-		INSERT INTO samples (id, project_id, site_id, mixs_checklist, extension,
+		INSERT INTO samples (id, lab_id, project_id, site_id, mixs_checklist, extension,
 			samp_name, collection_date, env_medium,
 			depth, elev, host_taxid, specific_host,
 			temp, salinity, ph, diss_oxygen, pressure, turbidity, chlorophyll, nitrate, phosphate,
@@ -263,7 +273,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			ref_biomaterial, isol_growth_condt, tax_ident,
 			filter_type, collector_name,
 			notes, created_by)
-		VALUES (?, ?, ?, ?, ?,
+		VALUES (?, ?, ?, ?, ?, ?,
 			?, ?, ?,
 			?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -282,6 +292,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			if (insertedSiteIds.has(site.id)) continue;
 			insertSiteStmt.run(
 				site.id,
+				labId,
 				projectId,
 				site.site_name,
 				site.lat_lon,
@@ -310,6 +321,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
 				insertStmt.run(
 					id,
+					labId,
 					projectId,
 					siteId,
 					sample.mixs_checklist || defaultChecklist,

@@ -1,8 +1,10 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireLab } from '$lib/server/guards';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
 	const pcr = db.prepare(`SELECT p.*, e.extract_name, e.id as extract_id, s.samp_name, s.id as sample_id,
 		pl.plate_name, pl.id as plate_id, ps.target_gene
@@ -11,7 +13,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		JOIN samples s ON s.id = e.sample_id
 		LEFT JOIN pcr_plates pl ON pl.id = p.plate_id
 		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
-		WHERE p.id = ? AND p.is_deleted = 0`).get(params.reactionId);
+		WHERE p.id = ? AND p.is_deleted = 0 AND p.lab_id = ?`).get(params.reactionId, labId);
 	if (!pcr) throw error(404, 'PCR reaction not found');
 	const libraries = db.prepare('SELECT * FROM library_preps WHERE pcr_id = ? AND is_deleted = 0 ORDER BY created_at DESC').all(params.reactionId);
 	return { pcr, libraries };

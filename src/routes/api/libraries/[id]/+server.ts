@@ -2,18 +2,24 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
-	const row = db.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0').get(params.id);
+	const row = db
+		.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.id, labId);
 	if (!row) throw error(404, 'Library prep not found');
 	return json(row);
 };
 
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		const { labId } = requireLab(locals);
 		const data = await request.json();
 		if (!data?.library_name?.trim()) {
 			return json({ error: 'library_name is required' }, { status: 400 });
@@ -22,6 +28,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'library_type is required' }, { status: 400 });
 		}
 		const db = getDb();
+		assertLabOwnsRow(db, 'library_preps', params.id!, labId, 'Library prep not found');
 		db.prepare(
 			`UPDATE library_preps SET
 				library_name = ?, library_type = ?, library_prep_kit = ?,
@@ -51,9 +58,11 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
+		const { labId } = requireLab(locals);
 		const db = getDb();
+		assertLabOwnsRow(db, 'library_preps', params.id!, labId, 'Library prep not found');
 		db.prepare(
 			"UPDATE library_preps SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?"
 		).run(params.id);

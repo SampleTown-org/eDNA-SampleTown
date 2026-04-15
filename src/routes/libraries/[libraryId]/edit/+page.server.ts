@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireLab } from '$lib/server/guards';
 import { getConstrainedValues } from '$lib/server/constrained-values';
 import { getActivePersonnel } from '$lib/server/personnel';
 import { getEntityPersonnel } from '$lib/server/entity-personnel';
@@ -10,15 +11,23 @@ import { getEntityPersonnel } from '$lib/server/entity-personnel';
  * plates and individual library_preps. Try as a plate first; fall back to
  * an individual library if no plate matches.
  */
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
 
 	const plate = db
-		.prepare('SELECT * FROM library_plates WHERE id = ? AND is_deleted = 0')
-		.get(params.libraryId);
+		.prepare('SELECT * FROM library_plates WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.libraryId, labId);
 	if (plate) {
-		const personnel = getActivePersonnel();
-		const picklists = getConstrainedValues('person_role', 'library_strategy', 'library_source', 'library_selection', 'library_prep_kit');
+		const personnel = getActivePersonnel(labId);
+		const picklists = getConstrainedValues(
+			labId,
+			'person_role',
+			'library_strategy',
+			'library_source',
+			'library_selection',
+			'library_prep_kit'
+		);
 		const people = getEntityPersonnel('library_plate', params.libraryId).map((p) => ({
 			personnel_id: p.personnel_id,
 			role: p.role
@@ -27,9 +36,9 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	const library = db
-		.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0')
-		.get(params.libraryId);
+		.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.libraryId, labId);
 	if (!library) throw error(404, 'Library plate or library not found');
-	const picklists = getConstrainedValues('barcode');
+	const picklists = getConstrainedValues(labId, 'barcode');
 	return { type: 'library' as const, library, picklists };
 };

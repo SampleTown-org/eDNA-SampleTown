@@ -11,7 +11,7 @@ import type { User } from '$lib/types';
 // inside JOINs (e.g. validateSession joins sessions s × users u, where both
 // tables have an `id` column).
 const SAFE_USER_COLS = `
-	u.id, u.github_id, u.username, u.display_name, u.email, u.avatar_url, u.avatar_emoji,
+	u.id, u.lab_id, u.github_id, u.username, u.display_name, u.email, u.avatar_url, u.avatar_emoji,
 	u.role, u.is_local_account, u.is_approved, u.must_change_password,
 	u.created_at, u.updated_at
 `;
@@ -202,8 +202,10 @@ export async function verifyUserPassword(userId: string, password: string): Prom
 }
 
 // Dummy hash used to keep verifyLocalUser timing constant when the username
-// doesn't exist. Generated once at startup; the password "x" never matches it.
-const DUMMY_BCRYPT_HASH = bcrypt.hashSync('does-not-matter', 10);
+// doesn't exist. Must use the same cost as real password hashes — otherwise
+// bcrypt.compare takes less wall-clock time for unknown usernames than for
+// known ones, re-opening the enumeration channel this is meant to close.
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync('does-not-matter', BCRYPT_COST);
 
 export async function verifyLocalUser(username: string, password: string): Promise<User | null> {
 	const db = getDb();

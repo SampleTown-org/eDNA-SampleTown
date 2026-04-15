@@ -24,23 +24,42 @@ function getConfig(): GitHubConfig | null {
 	return { token, repo };
 }
 
-/** Export all tables as JSON */
-export function exportTablesAsJson(): Record<string, unknown[]> {
+/** Export all lab-scoped tables as JSON, filtered by the caller's lab_id.
+ *  Prevents cross-lab data leakage into the snapshot repo. */
+export function exportTablesAsJson(labId: string): Record<string, unknown[]> {
 	const db = getDb();
 	const data: Record<string, unknown[]> = {};
 	for (const table of TABLES_TO_EXPORT) {
-		data[table] = db.prepare(`SELECT * FROM ${table}`).all();
+		// Tables are from a hardcoded allowlist — safe to interpolate. Every
+		// listed table carries lab_id (projects, samples, extracts, pcr_amps,
+		// library_preps, sequencing_runs, run_libraries, analyses). If we
+		// ever add a non-lab-scoped table to TABLES_TO_EXPORT, the WHERE
+		// clause will fail with "no such column: lab_id" — caught by tests.
+		if (table === 'run_libraries') {
+			// Junction table — filter via the parent sequencing_runs row.
+			data[table] = db
+				.prepare(
+					`SELECT rl.* FROM run_libraries rl
+					 JOIN sequencing_runs sr ON sr.id = rl.run_id
+					 WHERE sr.lab_id = ?`
+				)
+				.all(labId);
+		} else {
+			data[table] = db.prepare(`SELECT * FROM ${table} WHERE lab_id = ?`).all(labId);
+		}
 	}
 	return data;
 }
 
-/** Commit a snapshot of all tables to GitHub */
-export async function commitSnapshot(message: string): Promise<{ sha: string } | null> {
+/** Commit a snapshot of this lab's tables to GitHub. The snapshot repo is
+ *  global (single GITHUB_REPO env var); in a multi-lab deployment each lab
+ *  shares the same repo but writes to lab-scoped paths. */
+export async function commitSnapshot(labId: string, message: string): Promise<{ sha: string } | null> {
 	const config = getConfig();
 	if (!config) return null;
 
 	const db = getDb();
-	const data = exportTablesAsJson();
+	const data = exportTablesAsJson(labId);
 	const [owner, repo] = config.repo.split('/');
 
 	try {
@@ -52,6 +71,14 @@ export async function commitSnapshot(message: string): Promise<{ sha: string } |
 		const commitRes = await ghApi(config, `GET /repos/${owner}/${repo}/git/commits/${latestSha}`);
 		const baseTreeSha = commitRes.tree.sha;
 
+		// Look up the lab slug once — used to scope the emitted path so
+		// multiple labs sharing the same snapshot repo don't overwrite
+		// each other's JSON files.
+		const lab = db.prepare('SELECT slug FROM labs WHERE id = ?').get(labId) as
+			| { slug: string }
+			| undefined;
+		const labPathPrefix = lab ? `data/${lab.slug}` : 'data';
+
 		// Create blobs for each table
 		const tree: { path: string; mode: string; type: string; sha: string }[] = [];
 		for (const [table, rows] of Object.entries(data)) {
@@ -61,7 +88,7 @@ export async function commitSnapshot(message: string): Promise<{ sha: string } |
 				encoding: 'utf-8'
 			});
 			tree.push({
-				path: `data/${table}.json`,
+				path: `${labPathPrefix}/${table}.json`,
 				mode: '100644',
 				type: 'blob',
 				sha: blobRes.sha
@@ -87,15 +114,15 @@ export async function commitSnapshot(message: string): Promise<{ sha: string } |
 		});
 
 		// Log snapshot
-		db.prepare(`INSERT INTO db_snapshots (commit_sha, commit_message, status) VALUES (?, ?, 'pushed')`)
-			.run(newCommitRes.sha, message);
+		db.prepare(`INSERT INTO db_snapshots (lab_id, commit_sha, commit_message, status) VALUES (?, ?, ?, 'pushed')`)
+			.run(labId, newCommitRes.sha, message);
 
 		return { sha: newCommitRes.sha };
 	} catch (err) {
 		console.error('GitHub snapshot failed:', err);
 		// Queue for later
-		db.prepare(`INSERT INTO db_snapshots (commit_sha, commit_message, status) VALUES (NULL, ?, 'failed')`)
-			.run(message);
+		db.prepare(`INSERT INTO db_snapshots (lab_id, commit_sha, commit_message, status) VALUES (?, NULL, ?, 'failed')`)
+			.run(labId, message);
 		return null;
 	}
 }

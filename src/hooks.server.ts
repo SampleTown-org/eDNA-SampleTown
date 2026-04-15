@@ -1,7 +1,50 @@
 import type { Handle } from '@sveltejs/kit';
 import { json, redirect } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { validateSession, maybeSweepExpired } from '$lib/server/auth';
+import { validateSession, maybeSweepExpired, isSecureOrigin } from '$lib/server/auth';
+
+/**
+ * Security headers applied to every non-asset response.
+ *
+ *   CSP: default-src 'self' blocks external script/style by default. Svelte's
+ *     hydration code is emitted as separate <script src> tags so no inline
+ *     scripts are needed; style-src allows inline because Svelte component
+ *     styles compile to <style> blocks with hashed classnames. Leaflet tiles
+ *     come from openstreetmap.org — add to img-src.
+ *   HSTS: only when ORIGIN is https. 180-day window is a conservative start;
+ *     bump once we're confident the cert chain won't break.
+ *   Referrer-Policy: same-origin so third-party services we link out to
+ *     (NCBI, GitHub) don't see the exact page path.
+ *   X-Frame-Options: prevent the app from being embedded in another origin's
+ *     iframe (clickjacking defense).
+ *   X-Content-Type-Options: stop MIME sniffing globally; the photo routes
+ *     also set this explicitly as defense in depth.
+ *
+ * CSP nonces would let us drop 'unsafe-inline' for styles, but SvelteKit
+ * doesn't generate them out of the box. Accept the tradeoff for now.
+ */
+const CSP = [
+	"default-src 'self'",
+	"script-src 'self'",
+	"style-src 'self' 'unsafe-inline'",
+	"img-src 'self' data: https://*.tile.openstreetmap.org https://avatars.githubusercontent.com",
+	"font-src 'self' data:",
+	"connect-src 'self'",
+	"frame-ancestors 'none'",
+	"base-uri 'self'",
+	"form-action 'self'"
+].join('; ');
+
+function applySecurityHeaders(response: Response) {
+	response.headers.set('Content-Security-Policy', CSP);
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('X-Frame-Options', 'DENY');
+	response.headers.set('Referrer-Policy', 'same-origin');
+	response.headers.set('Permissions-Policy', 'geolocation=(self), camera=(self)');
+	if (isSecureOrigin()) {
+		response.headers.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+	}
+}
 
 /**
  * Routes under /api/* that are reachable without authentication.
@@ -157,5 +200,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		throw redirect(302, '/auth/change-password');
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+	applySecurityHeaders(response);
+	return response;
 };

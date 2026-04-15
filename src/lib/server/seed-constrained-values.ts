@@ -26,7 +26,11 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		'field tech',
 		'lab tech',
 		'student',
-		'analyst'
+		'analyst',
+		// Lab-position roles — used for Personnel records + attribution.
+		'PI', 'Co-PI', 'Lab Manager', 'Postdoc',
+		'PhD Student', 'MSc Student', 'Undergrad',
+		'Bioinformatician', 'Collaborator', 'Other'
 	],
 	geo_loc_name: [
 		'Canada: British Columbia', 'Canada: Alberta', 'Canada: Ontario', 'Canada: Quebec',
@@ -262,60 +266,66 @@ const NAMING_TEMPLATES = [
 	{ value: 'run_name', label: 'RUN_{Date}_{Instrument}' },
 ];
 
-export function seedConstrainedValues(db: Database.Database) {
-	// Seed each category only if it's currently empty, so operator-added
-	// values are never clobbered and deactivated entries don't come back.
-	// Missing entries from SEED_DATA are back-filled into already-seeded
-	// categories (INSERT OR IGNORE keyed on category+value).
-	backfillMissingEntries(db);
+/**
+ * Seed picklists, primer sets, and PCR protocols for a specific lab. Called
+ * once per lab on creation (default lab at install time, new labs via
+ * scripts/create-lab.mjs). All seeds are scoped to the passed lab_id so each
+ * lab gets its own customizable copy.
+ *
+ * Each category is seeded only if currently empty *for this lab*, so operator
+ * edits are never clobbered. New SEED_DATA entries added between releases are
+ * back-filled into already-seeded categories via INSERT OR IGNORE.
+ */
+export function seedConstrainedValues(db: Database.Database, labId: string) {
+	backfillMissingEntries(db, labId);
 
 	const insert = db.prepare(
-		'INSERT OR IGNORE INTO constrained_values (id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)'
+		'INSERT OR IGNORE INTO constrained_values (id, lab_id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)'
 	);
 	const countByCategory = db.prepare(
-		'SELECT COUNT(*) AS count FROM constrained_values WHERE category = ?'
+		'SELECT COUNT(*) AS count FROM constrained_values WHERE lab_id = ? AND category = ?'
 	);
 	const seedCategory = db.transaction((category: string, entries: SeedEntry[]) => {
 		entries.forEach((entry, i) => {
 			const { value, label } = normalizeSeedEntry(entry);
-			insert.run(category, value, label, i);
+			insert.run(labId, category, value, label, i);
 		});
 	});
 	for (const [category, entries] of Object.entries(SEED_DATA)) {
-		const { count } = countByCategory.get(category) as { count: number };
+		const { count } = countByCategory.get(labId, category) as { count: number };
 		if (count === 0) seedCategory(category, entries);
 	}
 
 	// Seed naming templates
-	const namingCount = db.prepare("SELECT COUNT(*) AS count FROM constrained_values WHERE category = 'naming_template'").get() as { count: number };
+	const namingCount = db.prepare("SELECT COUNT(*) AS count FROM constrained_values WHERE lab_id = ? AND category = 'naming_template'").get(labId) as { count: number };
 	if (namingCount.count === 0) {
-		const insertNaming = db.prepare('INSERT OR IGNORE INTO constrained_values (id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)');
+		const insertNaming = db.prepare('INSERT OR IGNORE INTO constrained_values (id, lab_id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)');
 		const insertAllNaming = db.transaction(() => {
-			NAMING_TEMPLATES.forEach((t, i) => insertNaming.run('naming_template', t.value, t.label, i));
+			NAMING_TEMPLATES.forEach((t, i) => insertNaming.run(labId, 'naming_template', t.value, t.label, i));
 		});
 		insertAllNaming();
 	}
 
 	// Seed primer sets
-	const primerCount = db.prepare('SELECT COUNT(*) AS count FROM primer_sets').get() as { count: number };
+	const primerCount = db.prepare('SELECT COUNT(*) AS count FROM primer_sets WHERE lab_id = ?').get(labId) as { count: number };
 	if (primerCount.count === 0) {
 		const insert = db.prepare(`INSERT OR IGNORE INTO primer_sets
-			(id, name, target_gene, target_subfragment, forward_primer_name, forward_primer_seq, reverse_primer_name, reverse_primer_seq, reference, sort_order)
-			VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+			(id, lab_id, name, target_gene, target_subfragment, forward_primer_name, forward_primer_seq, reverse_primer_name, reverse_primer_seq, reference, sort_order)
+			VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 		const insertAll = db.transaction(() => {
-			PRIMER_SETS.forEach((p, i) => insert.run(p.name, p.target_gene, p.target_subfragment, p.forward_primer_name, p.forward_primer_seq, p.reverse_primer_name, p.reverse_primer_seq, p.reference, i));
+			PRIMER_SETS.forEach((p, i) => insert.run(labId, p.name, p.target_gene, p.target_subfragment, p.forward_primer_name, p.forward_primer_seq, p.reverse_primer_name, p.reverse_primer_seq, p.reference, i));
 		});
 		insertAll();
 	}
 
 	// Seed PCR protocols
-	const protocolCount = db.prepare('SELECT COUNT(*) AS count FROM pcr_protocols').get() as { count: number };
+	const protocolCount = db.prepare('SELECT COUNT(*) AS count FROM pcr_protocols WHERE lab_id = ?').get(labId) as { count: number };
 	if (protocolCount.count === 0) {
 		const insert = db.prepare(`INSERT OR IGNORE INTO pcr_protocols
-			(id, name, polymerase, annealing_temp_c, num_cycles, pcr_cond, sort_order)
-			VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?)`);
+			(id, lab_id, name, polymerase, annealing_temp_c, num_cycles, pcr_cond, sort_order)
+			VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?)`);
 		const insertAll = db.transaction(() => {
-			PCR_PROTOCOLS.forEach((p, i) => insert.run(p.name, p.polymerase, p.annealing_temp_c, p.num_cycles, p.pcr_cond, i));
+			PCR_PROTOCOLS.forEach((p, i) => insert.run(labId, p.name, p.polymerase, p.annealing_temp_c, p.num_cycles, p.pcr_cond, i));
 		});
 		insertAll();
 	}
@@ -327,31 +337,30 @@ function normalizeSeedEntry(entry: SeedEntry): { value: string; label: string } 
 }
 
 /**
- * For categories that already have rows (so the empty-category seed won't
- * run), insert any SEED_DATA entries that are missing. Uses INSERT OR IGNORE
- * keyed on (category, value) so it never duplicates. Handles the case where
- * SEED_DATA grows between releases (e.g. ITS_amplicon + whole_genome added
- * after library_type's CHECK was dropped).
+ * For categories that already have rows for this lab (so the empty-category
+ * seed won't run), insert any SEED_DATA entries that are missing. Uses
+ * INSERT OR IGNORE keyed on (lab_id, category, value). Handles the case
+ * where SEED_DATA grows between releases.
  */
-function backfillMissingEntries(db: Database.Database) {
+function backfillMissingEntries(db: Database.Database, labId: string) {
 	const exists = db.prepare(
-		'SELECT 1 FROM constrained_values WHERE category = ? AND value = ? LIMIT 1'
+		'SELECT 1 FROM constrained_values WHERE lab_id = ? AND category = ? AND value = ? LIMIT 1'
 	);
 	const insert = db.prepare(
-		'INSERT INTO constrained_values (id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?)'
+		'INSERT INTO constrained_values (id, lab_id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)'
 	);
 	const maxOrder = db.prepare(
-		'SELECT COALESCE(MAX(sort_order), -1) AS m FROM constrained_values WHERE category = ?'
+		'SELECT COALESCE(MAX(sort_order), -1) AS m FROM constrained_values WHERE lab_id = ? AND category = ?'
 	);
 	for (const [category, entries] of Object.entries(SEED_DATA)) {
 		let nextOrder: number | null = null;
 		for (const entry of entries) {
 			const { value, label } = normalizeSeedEntry(entry);
-			if (exists.get(category, value)) continue;
+			if (exists.get(labId, category, value)) continue;
 			if (nextOrder === null) {
-				nextOrder = ((maxOrder.get(category) as { m: number }).m) + 1;
+				nextOrder = ((maxOrder.get(labId, category) as { m: number }).m) + 1;
 			}
-			insert.run(category, value, label, nextOrder++);
+			insert.run(labId, category, value, label, nextOrder++);
 		}
 	}
 }

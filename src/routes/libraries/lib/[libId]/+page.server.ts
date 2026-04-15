@@ -1,10 +1,14 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireLab } from '$lib/server/guards';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
-	const library = db.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0').get(params.libId);
+	const library = db
+		.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.libId, labId);
 	if (!library) throw error(404, 'Library not found');
 
 	let source: { type: string; name: string; id: string; sample_name?: string; sample_id?: string } | null = null;

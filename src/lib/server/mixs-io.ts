@@ -79,16 +79,21 @@ const SITE_SLOT_SET = new Set<string>(SITE_SLOT_COLUMNS);
  * MIxS slot column set for generic dumps.
  */
 export function exportMixsTsv(options: {
+	labId: string;
 	projectId?: string;
 	checklist?: string;
 	extension?: string;
-} = {}): string {
+}): string {
 	const db = getDb();
 	const siteSelect = SITE_SLOT_COLUMNS.map((c) => `st.${c} AS site_${c}`).join(', ');
 	// project_name comes from the joined projects table (no duplicate column
 	// on samples). nucl_acid_ext / nucl_acid_amp come from the most recent
 	// extract + pcr_plate via correlated subqueries so the emitted TSV carries
 	// canonical values even though they live on downstream tables.
+	// Lab-scope gate: filter by s.lab_id — the downstream extract / pcr_plate
+	// subqueries inherit scope through the sample_id join so no additional
+	// lab_id filter is needed there (an extract can only belong to a sample
+	// that belongs to this lab).
 	let query = `SELECT s.*, ${siteSelect},
 		p.project_name AS proj_project_name,
 		(SELECT e.nucl_acid_ext FROM extracts e
@@ -111,8 +116,8 @@ export function exportMixsTsv(options: {
 		FROM samples s
 		JOIN sites st ON st.id = s.site_id
 		JOIN projects p ON p.id = s.project_id
-		WHERE s.is_deleted = 0`;
-	const params: string[] = [];
+		WHERE s.is_deleted = 0 AND s.lab_id = ?`;
+	const params: string[] = [options.labId];
 	if (options.projectId) { query += ' AND s.project_id = ?'; params.push(options.projectId); }
 	if (options.checklist) { query += ' AND s.mixs_checklist = ?'; params.push(options.checklist); }
 	query += ' ORDER BY s.samp_name';

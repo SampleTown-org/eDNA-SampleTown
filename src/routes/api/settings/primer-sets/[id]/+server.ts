@@ -2,11 +2,15 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
+	const { labId } = requireLab(locals);
 	const data = await request.json();
 	const db = getDb();
 	try {
+		assertLabOwnsRow(db, 'primer_sets', params.id!, labId, 'Primer set not found');
 		db.prepare(`UPDATE primer_sets SET name = ?, target_gene = ?, target_subfragment = ?,
 			forward_primer_name = ?, forward_primer_seq = ?, reverse_primer_name = ?, reverse_primer_seq = ?,
 			reference = ?, is_active = ?, sort_order = ? WHERE id = ?`).run(
@@ -18,8 +22,10 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	} catch (err) { return apiError(err); }
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
+	assertLabOwnsRow(db, 'primer_sets', params.id!, labId, 'Primer set not found');
 	db.prepare('DELETE FROM primer_sets WHERE id = ?').run(params.id);
 	return json({ ok: true });
 };

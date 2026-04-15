@@ -1,10 +1,12 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireLab } from '$lib/server/guards';
 import { getEntityPersonnel } from '$lib/server/entity-personnel';
 import { loadSampleValues } from '$lib/server/sample-body';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
 
 	const sampleRow = db.prepare(`
@@ -14,8 +16,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		FROM samples s
 		JOIN projects p ON p.id = s.project_id
 		JOIN sites st ON st.id = s.site_id
-		WHERE s.id = ? AND s.is_deleted = 0
-	`).get(params.sampleId) as Record<string, unknown> | undefined;
+		WHERE s.id = ? AND s.is_deleted = 0 AND s.lab_id = ?
+	`).get(params.sampleId, labId) as Record<string, unknown> | undefined;
 	if (!sampleRow) throw error(404, 'Sample not found');
 
 	// Spread sample_values onto the sample object — gives the detail page

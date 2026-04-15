@@ -2,8 +2,21 @@
 // Core entity types
 // ============================================================
 
+/** Lab (tenant). Every top-level entity carries a lab_id pointing here. */
+export interface Lab {
+	id: string;
+	name: string;
+	slug: string;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface User {
 	id: string;
+	/** Lab membership. Null only for GitHub-OAuth signups that haven't yet
+	 *  been approved + assigned to a lab by an admin. Once non-null, scoped
+	 *  access to every lab-owned resource flows from this field. */
+	lab_id: string | null;
 	github_id: number | null;
 	username: string;
 	display_name: string | null;
@@ -20,6 +33,7 @@ export interface User {
 
 export interface Project {
 	id: string;
+	lab_id: string;
 	project_name: string;
 	description: string | null;
 	pi_name: string | null;
@@ -32,6 +46,7 @@ export interface Project {
 
 export interface Site {
 	id: string;
+	lab_id: string;
 	project_id: string;
 	site_name: string;
 	description: string | null;
@@ -64,6 +79,7 @@ export type MixsExtension = string;
 
 export interface Sample {
 	id: string;
+	lab_id: string;
 	project_id: string;
 	site_id: string;
 	mixs_checklist: MixsChecklist;
@@ -133,6 +149,7 @@ export interface Sample {
 
 export interface Extract {
 	id: string;
+	lab_id: string;
 	sample_id: string;
 	extract_name: string;
 	extraction_date: string | null;
@@ -159,6 +176,7 @@ export interface Extract {
 
 export interface PcrPlate {
 	id: string;
+	lab_id: string;
 	plate_name: string;
 	pcr_date: string | null;
 	primer_set_id: string | null;
@@ -183,6 +201,7 @@ export interface PcrPlate {
 
 export interface PcrAmplification {
 	id: string;
+	lab_id: string;
 	plate_id: string | null;
 	extract_id: string;
 	pcr_name: string;
@@ -215,6 +234,7 @@ export type Platform = 'ILLUMINA' | 'OXFORD_NANOPORE' | 'PACBIO' | 'ION_TORRENT'
 
 export interface LibraryPlate {
 	id: string;
+	lab_id: string;
 	plate_name: string;
 	library_prep_date: string | null;
 	library_type: LibraryType;
@@ -236,6 +256,7 @@ export interface LibraryPlate {
 
 export interface LibraryPrep {
 	id: string;
+	lab_id: string;
 	library_plate_id: string | null;
 	pcr_id: string | null;
 	extract_id: string | null;
@@ -263,6 +284,7 @@ export interface LibraryPrep {
 
 export interface SequencingRun {
 	id: string;
+	lab_id: string;
 	run_name: string;
 	run_date: string | null;
 	platform: Platform;
@@ -294,6 +316,7 @@ export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 'c
 
 export interface Analysis {
 	id: string;
+	lab_id: string;
 	run_id: string;
 	pipeline: string;
 	pipeline_version: string | null;

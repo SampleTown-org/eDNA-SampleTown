@@ -2,7 +2,8 @@ import { json, error } from '@sveltejs/kit';
 import { writeFileSync } from 'fs';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
-import { requireUser } from '$lib/server/guards';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { apiError } from '$lib/server/api-errors';
 import {
 	ALLOWED_IMAGE_MIME,
@@ -12,8 +13,10 @@ import {
 } from '$lib/server/entity-photos';
 
 /** List (non-deleted) photos for a site. */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
+	assertLabOwnsRow(db, 'sites', params.id!, labId, 'Site not found');
 	const site = db.prepare('SELECT id FROM sites WHERE id = ? AND is_deleted = 0').get(params.id);
 	if (!site) throw error(404, 'Site not found');
 	const rows = db.prepare(
@@ -27,9 +30,10 @@ export const GET: RequestHandler = async ({ params }) => {
 
 /** Upload one photo (multipart/form-data, field name `file`, optional `caption`). */
 export const POST: RequestHandler = async ({ params, request, locals }) => {
-	const user = requireUser(locals);
+	const { user, labId } = requireLab(locals);
 	try {
 		const db = getDb();
+		assertLabOwnsRow(db, 'sites', params.id!, labId, 'Site not found');
 		const site = db.prepare('SELECT id FROM sites WHERE id = ? AND is_deleted = 0').get(params.id);
 		if (!site) throw error(404, 'Site not found');
 

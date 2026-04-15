@@ -37,7 +37,8 @@ export function findNearbySites(
 	lat: number,
 	lon: number,
 	maxKm: number = 1,
-	projectId?: string | null
+	projectId?: string | null,
+	labId?: string | null
 ): NearbySite[] {
 	const db = getDb();
 
@@ -51,7 +52,12 @@ export function findNearbySites(
 	const minLon = lon - lonPad;
 	const maxLon = lon + lonPad;
 
-	const baseQuery = `
+	// Build the filter clauses dynamically so we can index on lab_id /
+	// project_id when callers supply them. labId is the primary isolation
+	// boundary — cross-lab proximity matches leak the existence of another
+	// lab's sites, so a non-null labId should always be supplied from
+	// authenticated paths.
+	let q = `
 		SELECT id, site_name, latitude, longitude
 		FROM sites
 		WHERE is_deleted = 0
@@ -59,13 +65,11 @@ export function findNearbySites(
 		  AND latitude BETWEEN ? AND ?
 		  AND longitude BETWEEN ? AND ?
 	`;
-	const rows = projectId
-		? (db
-				.prepare(baseQuery + ' AND project_id = ?')
-				.all(minLat, maxLat, minLon, maxLon, projectId) as Omit<NearbySite, 'distance_km'>[])
-		: (db
-				.prepare(baseQuery)
-				.all(minLat, maxLat, minLon, maxLon) as Omit<NearbySite, 'distance_km'>[]);
+	const params: (string | number)[] = [minLat, maxLat, minLon, maxLon];
+	if (labId) { q += ' AND lab_id = ?'; params.push(labId); }
+	if (projectId) { q += ' AND project_id = ?'; params.push(projectId); }
+
+	const rows = db.prepare(q).all(...params) as Omit<NearbySite, 'distance_km'>[];
 
 	return rows
 		.map((r) => ({

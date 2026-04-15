@@ -2,25 +2,32 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { parseBody } from '$lib/server/validation';
 import { PcrPlateUpdateBody } from '$lib/server/schemas/lab';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
-	const plate = db.prepare('SELECT * FROM pcr_plates WHERE id = ? AND is_deleted = 0').get(params.id);
+	const plate = db
+		.prepare('SELECT * FROM pcr_plates WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.id, labId);
 	if (!plate) throw error(404, 'PCR plate not found');
 	const people = getEntityPersonnel('pcr_plate', params.id!);
 	return json({ ...plate, people });
 };
 
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
+	const { labId } = requireLab(locals);
 	const parsed = parseBody(PcrPlateUpdateBody, await request.json().catch(() => null));
 	if (!parsed.ok) return parsed.response;
 	const data = parsed.data;
 
 	try {
 		const db = getDb();
+		assertLabOwnsRow(db, 'pcr_plates', params.id!, labId, 'PCR plate not found');
 		db.prepare(
 			`UPDATE pcr_plates SET
 				plate_name = ?, pcr_date = ?, primer_set_id = ?, target_subfragment = ?,
@@ -57,9 +64,11 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
+		const { labId } = requireLab(locals);
 		const db = getDb();
+		assertLabOwnsRow(db, 'pcr_plates', params.id!, labId, 'PCR plate not found');
 		db.prepare(
 			"UPDATE pcr_plates SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?"
 		).run(params.id);

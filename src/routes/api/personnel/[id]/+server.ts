@@ -2,16 +2,20 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { parseBody } from '$lib/server/validation';
 import { PersonnelUpdateBody } from '$lib/server/schemas/auth';
 
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
+	const { labId } = requireLab(locals);
 	const parsed = parseBody(PersonnelUpdateBody, await request.json().catch(() => null));
 	if (!parsed.ok) return parsed.response;
 	const data = parsed.data;
 
 	const db = getDb();
 	try {
+		assertLabOwnsRow(db, 'personnel', params.id!, labId, 'Personnel not found');
 		db.prepare(
 			`UPDATE personnel
 			   SET full_name = ?, email = ?, role = ?, institution = ?,
@@ -40,8 +44,10 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
+	assertLabOwnsRow(db, 'personnel', params.id!, labId, 'Personnel not found');
 	db.prepare('DELETE FROM personnel WHERE id = ?').run(params.id);
 	return json({ ok: true });
 };

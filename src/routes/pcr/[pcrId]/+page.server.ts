@@ -1,17 +1,19 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireLab } from '$lib/server/guards';
 import { getEntityPersonnel } from '$lib/server/entity-personnel';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
 
 	// Try as plate first (JOIN primer_sets for target_gene display)
 	const plate = db.prepare(`
 		SELECT p.*, ps.target_gene FROM pcr_plates p
 		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
-		WHERE p.id = ? AND p.is_deleted = 0
-	`).get(params.pcrId);
+		WHERE p.id = ? AND p.is_deleted = 0 AND p.lab_id = ?
+	`).get(params.pcrId, labId);
 	if (plate) {
 		const reactions = db.prepare(`
 			SELECT r.*, e.extract_name, s.samp_name, s.id as sample_id, ps.target_gene
@@ -41,7 +43,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		JOIN extracts e ON e.id = p.extract_id
 		JOIN samples s ON s.id = e.sample_id
 		LEFT JOIN primer_sets ps ON ps.id = p.primer_set_id
-		WHERE p.id = ? AND p.is_deleted = 0`).get(params.pcrId);
+		WHERE p.id = ? AND p.is_deleted = 0 AND p.lab_id = ?`).get(params.pcrId, labId);
 	if (!pcr) throw error(404, 'PCR plate or reaction not found');
 
 	const libraries = db.prepare('SELECT * FROM library_preps WHERE pcr_id = ? AND is_deleted = 0 ORDER BY created_at DESC').all(params.pcrId);

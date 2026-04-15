@@ -1,9 +1,11 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireLab } from '$lib/server/guards';
 import { getEntityPersonnel } from '$lib/server/entity-personnel';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
 
 	// Try as library plate first
@@ -11,8 +13,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		SELECT p.*, pp.plate_name AS pcr_plate_name
 		FROM library_plates p
 		LEFT JOIN pcr_plates pp ON pp.id = p.pcr_plate_id
-		WHERE p.id = ? AND p.is_deleted = 0
-	`).get(params.libraryId);
+		WHERE p.id = ? AND p.is_deleted = 0 AND p.lab_id = ?
+	`).get(params.libraryId, labId);
 	if (plate) {
 		const libraries = db.prepare(`
 			SELECT l.*,
@@ -37,7 +39,9 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	// Fall back to individual library
-	const library = db.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0').get(params.libraryId);
+	const library = db
+		.prepare('SELECT * FROM library_preps WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.libraryId, labId);
 	if (!library) throw error(404, 'Library plate or library not found');
 
 	let source: { type: string; name: string; id: string; sample_name?: string; sample_id?: string } | null = null;

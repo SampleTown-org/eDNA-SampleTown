@@ -1,17 +1,17 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
-import { requireUser } from '$lib/server/guards';
+import { requireLab } from '$lib/server/guards';
 import { apiError } from '$lib/server/api-errors';
 
 /**
  * GET /api/saved-carts
- * Returns carts the current user owns + public carts from everyone else.
- * Shaped so the cart sidebar can render "Mine" and "Public" sections
- * without a second request.
+ * Returns carts the current user owns + public carts from everyone else in
+ * the same lab. Public carts are lab-scoped: another lab's public carts are
+ * invisible.
  */
 export const GET: RequestHandler = async ({ locals }) => {
-	const user = requireUser(locals);
+	const { user, labId } = requireLab(locals);
 	const db = getDb();
 	const rows = db.prepare(`
 		SELECT sc.id, sc.name, sc.is_public, sc.created_at, sc.updated_at,
@@ -22,9 +22,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 			(SELECT COUNT(*) FROM saved_cart_items WHERE cart_id = sc.id) AS item_count
 		FROM saved_carts sc
 		LEFT JOIN users u ON u.id = sc.user_id
-		WHERE sc.user_id = ? OR sc.is_public = 1
+		WHERE sc.lab_id = ? AND (sc.user_id = ? OR sc.is_public = 1)
 		ORDER BY sc.updated_at DESC
-	`).all(user.id);
+	`).all(labId, user.id);
 	return json(rows);
 };
 
@@ -34,7 +34,7 @@ export const GET: RequestHandler = async ({ locals }) => {
  * Creates a new saved cart for the current user.
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
-	const user = requireUser(locals);
+	const { user, labId } = requireLab(locals);
 	try {
 		const body = await request.json();
 		const name = typeof body?.name === 'string' ? body.name.trim() : '';
@@ -49,14 +49,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const db = getDb();
 		const id = generateId();
 		const insertCart = db.prepare(
-			`INSERT INTO saved_carts (id, user_id, name, is_public) VALUES (?, ?, ?, ?)`
+			`INSERT INTO saved_carts (id, lab_id, user_id, name, is_public) VALUES (?, ?, ?, ?, ?)`
 		);
 		const insertItem = db.prepare(
 			`INSERT INTO saved_cart_items (cart_id, position, entity_type, entity_id, label, sublabel)
 			 VALUES (?, ?, ?, ?, ?, ?)`
 		);
 		const tx = db.transaction(() => {
-			insertCart.run(id, user.id, name, isPublic);
+			insertCart.run(id, labId, user.id, name, isPublic);
 			items.forEach((it: { type?: string; id?: string; label?: string; sublabel?: string }, i: number) => {
 				if (!it?.type || !it?.id) return;
 				insertItem.run(id, i, it.type, it.id, it.label ?? null, it.sublabel ?? null);

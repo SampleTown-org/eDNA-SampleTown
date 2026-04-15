@@ -3,24 +3,31 @@ import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { parseLatLon } from '$lib/mixs/validators';
 import { apiError } from '$lib/server/api-errors';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 
 /** Coerce empty strings to null (CHECK constraints on enum cols reject ''). */
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
-	const site = db.prepare('SELECT * FROM sites WHERE id = ? AND is_deleted = 0').get(params.id);
+	const site = db
+		.prepare('SELECT * FROM sites WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.id, labId);
 	if (!site) throw error(404, 'Site not found');
 	return json(site);
 };
 
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		const { labId } = requireLab(locals);
 		const data = await request.json();
 		if (!data?.site_name?.trim()) {
 			return json({ error: 'site_name is required' }, { status: 400 });
 		}
 		const db = getDb();
+		assertLabOwnsRow(db, 'sites', params.id!, labId, 'Site not found');
 		const coords = parseLatLon(data.lat_lon || '');
 
 		db.prepare(
@@ -52,9 +59,11 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
+		const { labId } = requireLab(locals);
 		const db = getDb();
+		assertLabOwnsRow(db, 'sites', params.id!, labId, 'Site not found');
 		db.prepare("UPDATE sites SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?").run(
 			params.id
 		);

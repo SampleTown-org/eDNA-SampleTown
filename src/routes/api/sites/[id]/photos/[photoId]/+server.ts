@@ -2,7 +2,8 @@ import { json, error } from '@sveltejs/kit';
 import { readFileSync, existsSync, unlinkSync } from 'fs';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
-import { requireUser } from '$lib/server/guards';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { apiError } from '$lib/server/api-errors';
 import { photoFilePath } from '$lib/server/entity-photos';
 
@@ -24,7 +25,10 @@ function loadPhoto(siteId: string, photoId: string): PhotoRow {
 }
 
 /** Stream the binary. Browsers use this URL as <img src>. */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
+	const db = getDb();
+	assertLabOwnsRow(db, 'sites', params.id!, labId, 'Photo not found');
 	const photo = loadPhoto(params.id, params.photoId);
 	const path = photoFilePath('site', photo.filename);
 	if (!existsSync(path)) throw error(404, 'Photo file missing');
@@ -32,6 +36,10 @@ export const GET: RequestHandler = async ({ params }) => {
 	return new Response(bytes, {
 		headers: {
 			'Content-Type': photo.mime_type,
+			// Prevent MIME sniffing. file.type is user-supplied on upload, so
+			// without nosniff a crafted image/jpeg payload could be rendered
+			// as HTML by older browsers that content-sniff.
+			'X-Content-Type-Options': 'nosniff',
 			// Cache aggressively — photo ids are content-stable (generated once
 			// and never overwritten). An explicit DELETE invalidates the row.
 			'Cache-Control': 'private, max-age=3600'
@@ -41,10 +49,11 @@ export const GET: RequestHandler = async ({ params }) => {
 
 /** Soft-delete the photo row and remove the on-disk file. */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
-	requireUser(locals);
+	const { labId } = requireLab(locals);
 	try {
-		const photo = loadPhoto(params.id, params.photoId);
 		const db = getDb();
+		assertLabOwnsRow(db, 'sites', params.id!, labId, 'Photo not found');
+		const photo = loadPhoto(params.id, params.photoId);
 		db.prepare('UPDATE site_photos SET is_deleted = 1 WHERE id = ?').run(photo.id);
 		db.prepare("UPDATE sites SET updated_at = datetime('now') WHERE id = ?").run(params.id);
 		const path = photoFilePath('site', photo.filename);

@@ -47,7 +47,14 @@ export const UserUpdateBody = z.object({
 	role: roleEnum.optional(),
 	is_approved: boolish.optional(),
 	display_name: optionalShortText,
-	email: optionalShortText
+	email: optionalShortText,
+	// Admin-only: assign / reassign a user to a lab. Validated as a 32-char
+	// hex id; a null value explicitly unsets lab membership (leaving the
+	// user in limbo — they can log in but can't see any lab data).
+	lab_id: z.preprocess(
+		(v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+		z.string().length(32).nullable().optional()
+	)
 });
 
 export const ResetPasswordBody = z.object({

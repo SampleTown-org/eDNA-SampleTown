@@ -1,10 +1,12 @@
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireLab } from '$lib/server/guards';
 import { attachPeopleSummary } from '$lib/server/entity-personnel';
 import { getSlot } from '$lib/mixs/schema-index';
 import { MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
 	const samples = db.prepare(`
 		SELECT s.*, p.project_name, st.site_name, st.geo_loc_name, st.lat_lon,
@@ -13,9 +15,9 @@ export const load: PageServerLoad = async () => {
 		FROM samples s
 		JOIN projects p ON p.id = s.project_id
 		JOIN sites st ON st.id = s.site_id
-		WHERE s.is_deleted = 0
+		WHERE s.is_deleted = 0 AND s.lab_id = ?
 		ORDER BY s.created_at DESC
-	`).all() as Record<string, unknown>[];
+	`).all(labId) as Record<string, unknown>[];
 
 	// Pivot sample_values EAV onto each sample row so the table can surface
 	// any MIxS slot (or misc_param:* tag) as an optional column.
@@ -23,8 +25,8 @@ export const load: PageServerLoad = async () => {
 		SELECT sv.sample_id, sv.slot, sv.value
 		FROM sample_values sv
 		JOIN samples s ON s.id = sv.sample_id
-		WHERE s.is_deleted = 0 AND sv.value IS NOT NULL AND sv.value <> ''
-	`).all() as { sample_id: string; slot: string; value: string }[];
+		WHERE s.is_deleted = 0 AND s.lab_id = ? AND sv.value IS NOT NULL AND sv.value <> ''
+	`).all(labId) as { sample_id: string; slot: string; value: string }[];
 
 	const byId = new Map<string, Record<string, unknown>>();
 	for (const s of samples) byId.set(s.id as string, s);
@@ -77,7 +79,9 @@ export const load: PageServerLoad = async () => {
 		.sort((a, b) => a.title.localeCompare(b.title));
 
 	const samplesWithPeople = attachPeopleSummary('sample', samples as { id: string }[]);
-	const projects = db.prepare('SELECT id, project_name FROM projects ORDER BY project_name').all();
+	const projects = db
+		.prepare('SELECT id, project_name FROM projects WHERE lab_id = ? ORDER BY project_name')
+		.all(labId);
 
 	return { samples: samplesWithPeople, projects, availableParameters };
 };

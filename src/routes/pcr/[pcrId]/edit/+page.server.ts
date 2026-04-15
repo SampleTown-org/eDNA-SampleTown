@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getDb } from '$lib/server/db';
+import { requireLab } from '$lib/server/guards';
 import { getConstrainedValues } from '$lib/server/constrained-values';
 import { getActivePersonnel } from '$lib/server/personnel';
 import { getEntityPersonnel } from '$lib/server/entity-personnel';
@@ -12,21 +13,22 @@ import { getEntityPersonnel } from '$lib/server/entity-personnel';
  * back to a reaction if no plate matches. Each branch loads the data
  * the matching .svelte form needs.
  */
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
 
 	const plate = db
-		.prepare('SELECT * FROM pcr_plates WHERE id = ? AND is_deleted = 0')
-		.get(params.pcrId);
+		.prepare('SELECT * FROM pcr_plates WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.pcrId, labId);
 	if (plate) {
-		const personnel = getActivePersonnel();
-		const picklists = getConstrainedValues('person_role');
+		const personnel = getActivePersonnel(labId);
+		const picklists = getConstrainedValues(labId, 'person_role');
 		const primerSets = db
-			.prepare('SELECT * FROM primer_sets WHERE is_active = 1 ORDER BY sort_order, name')
-			.all();
+			.prepare('SELECT * FROM primer_sets WHERE lab_id = ? AND is_active = 1 ORDER BY sort_order, name')
+			.all(labId);
 		const pcrProtocols = db
-			.prepare('SELECT * FROM pcr_protocols WHERE is_active = 1 ORDER BY sort_order, name')
-			.all();
+			.prepare('SELECT * FROM pcr_protocols WHERE lab_id = ? AND is_active = 1 ORDER BY sort_order, name')
+			.all(labId);
 		const people = getEntityPersonnel('pcr_plate', params.pcrId).map((p) => ({
 			personnel_id: p.personnel_id,
 			role: p.role
@@ -35,8 +37,8 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	const pcr = db
-		.prepare('SELECT * FROM pcr_amplifications WHERE id = ? AND is_deleted = 0')
-		.get(params.pcrId);
+		.prepare('SELECT * FROM pcr_amplifications WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.pcrId, labId);
 	if (!pcr) throw error(404, 'PCR plate or reaction not found');
 	return { type: 'reaction' as const, pcr, picklists: {} };
 };

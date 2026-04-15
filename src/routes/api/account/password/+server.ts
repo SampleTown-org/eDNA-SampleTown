@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { setUserPassword, verifyUserPassword } from '$lib/server/auth';
+import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { requireUser } from '$lib/server/guards';
 import { checkRate } from '$lib/server/rate-limit';
@@ -16,7 +17,7 @@ import { ChangeOwnPasswordBody } from '$lib/server/schemas/auth';
  * - Validates length on the new password via the zod schema.
  * - Clears must_change_password as a side effect of setUserPassword.
  */
-export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
+export const POST: RequestHandler = async ({ request, locals, cookies, getClientAddress }) => {
 	const user = requireUser(locals);
 
 	// Rate limit per user: 5 / minute. Stops a stolen-cookie attacker from
@@ -39,6 +40,18 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		// depth — the zod schema and the function-level check enforce the
 		// same rules so a future caller that bypasses the schema is still safe.
 		await setUserPassword(user.id, new_password);
+
+		// Invalidate every OTHER session for this user. If the password change
+		// was triggered because of a suspected compromise, the attacker's
+		// cookie is killed; the caller's current session stays alive so they
+		// don't have to re-log in.
+		const currentSessionId = cookies.get('session');
+		const db = getDb();
+		if (currentSessionId) {
+			db.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').run(user.id, currentSessionId);
+		} else {
+			db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+		}
 
 		return json({ ok: true });
 	} catch (err) {

@@ -11,8 +11,8 @@
 		"mixs:update": "node scripts/mixs-update.mjs"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-node": "^2.0.0",
-		"@sveltejs/kit": "^2.0.0",
+		"@sveltejs/adapter-node": "^5.5.4",
+		"@sveltejs/kit": "^2.57.1",
 		"@types/bcrypt": "^6.0.0",
 		"@types/better-sqlite3": "^7.6.13",
 		"autoprefixer": "^10.4.0",
@@ -35,8 +35,11 @@
 		"jspdf": "^4.2.1",
 		"leaflet": "^1.9.4",
 		"qrcode": "^1.5.4",
-		"xlsx": "^0.18.5",
+		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
 		"zod": "^4.3.6"
+	},
+	"overrides": {
+		"cookie": "^0.7.2"
 	},
 	"type": "module"
 }

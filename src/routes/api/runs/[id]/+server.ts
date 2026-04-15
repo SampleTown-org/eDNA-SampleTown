@@ -2,25 +2,40 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
+import { requireLab } from '$lib/server/guards';
+import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { setEntityPersonnel, getEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { parseBody } from '$lib/server/validation';
 import { RunUpdateBody } from '$lib/server/schemas/lab';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	const { labId } = requireLab(locals);
 	const db = getDb();
-	const row = db.prepare('SELECT * FROM sequencing_runs WHERE id = ? AND is_deleted = 0').get(params.id);
+	const row = db
+		.prepare('SELECT * FROM sequencing_runs WHERE id = ? AND is_deleted = 0 AND lab_id = ?')
+		.get(params.id, labId);
 	if (!row) throw error(404, 'Run not found');
 	const people = getEntityPersonnel('sequencing_run', params.id!);
 	return json({ ...(row as Record<string, unknown>), people });
 };
 
-export const PUT: RequestHandler = async ({ params, request }) => {
+export const PUT: RequestHandler = async ({ params, request, locals }) => {
+	const { labId } = requireLab(locals);
 	const parsed = parseBody(RunUpdateBody, await request.json().catch(() => null));
 	if (!parsed.ok) return parsed.response;
 	const data = parsed.data;
 
 	try {
 		const db = getDb();
+		assertLabOwnsRow(db, 'sequencing_runs', params.id!, labId, 'Run not found');
+
+		// Any new libraries attached must belong to this lab too.
+		if (data.library_ids !== undefined) {
+			for (const libId of data.library_ids) {
+				assertLabOwnsRow(db, 'library_preps', libId, labId, 'Library prep not found');
+			}
+		}
+
 		db.prepare(
 			`UPDATE sequencing_runs SET
 				run_name = ?, run_date = ?, platform = ?, instrument_model = ?,
@@ -63,9 +78,11 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 };
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
+		const { labId } = requireLab(locals);
 		const db = getDb();
+		assertLabOwnsRow(db, 'sequencing_runs', params.id!, labId, 'Run not found');
 		db.prepare(
 			"UPDATE sequencing_runs SET is_deleted = 1, updated_at = datetime('now') WHERE id = ?"
 		).run(params.id);

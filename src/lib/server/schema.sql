@@ -5,10 +5,30 @@ PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
 -- ============================================================
+-- LABS (tenant boundary)
+--
+-- Every top-level entity carries a lab_id. The API layer rejects cross-lab
+-- reads and writes based on the signed-in user's lab_id. A single install
+-- can host multiple labs; new labs are created via scripts/create-lab.mjs
+-- (no UI for creating labs — too much blast radius to expose).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS labs (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,           -- url-safe identifier, also used for default-lab env var
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ============================================================
 -- USERS & AUTH
 -- ============================================================
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    -- Lab membership. Nullable because new GitHub-OAuth signups land with
+    -- no lab assignment until an admin approves AND picks their lab. Once
+    -- assigned, the user can only see data from this lab.
+    lab_id TEXT REFERENCES labs(id),
     github_id INTEGER UNIQUE,
     username TEXT NOT NULL UNIQUE,
     display_name TEXT,
@@ -35,6 +55,8 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE INDEX IF NOT EXISTS idx_users_lab ON users(lab_id);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -55,6 +77,7 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     project_name TEXT NOT NULL,
     description TEXT,
     pi_name TEXT,
@@ -62,14 +85,18 @@ CREATE TABLE IF NOT EXISTS projects (
     github_repo TEXT,
     created_by TEXT REFERENCES users(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, project_name)
 );
+
+CREATE INDEX IF NOT EXISTS idx_projects_lab ON projects(lab_id);
 
 -- ============================================================
 -- SITES (sampling locations)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS sites (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
     site_name TEXT NOT NULL,
@@ -102,6 +129,7 @@ CREATE TABLE IF NOT EXISTS sites (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sites_project ON sites(project_id);
+CREATE INDEX IF NOT EXISTS idx_sites_lab ON sites(lab_id);
 CREATE INDEX IF NOT EXISTS idx_sites_coords ON sites(latitude, longitude);
 
 -- Site photo gallery. Binaries live under data/site_photos/<id>.<ext>;
@@ -145,6 +173,7 @@ CREATE INDEX IF NOT EXISTS idx_sample_photos_sample ON sample_photos(sample_id) 
 -- ============================================================
 CREATE TABLE IF NOT EXISTS saved_carts (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     is_public INTEGER NOT NULL DEFAULT 0,
@@ -153,6 +182,7 @@ CREATE TABLE IF NOT EXISTS saved_carts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_saved_carts_user ON saved_carts(user_id);
+CREATE INDEX IF NOT EXISTS idx_saved_carts_lab ON saved_carts(lab_id);
 CREATE INDEX IF NOT EXISTS idx_saved_carts_public ON saved_carts(is_public) WHERE is_public = 1;
 
 -- Individual cart items. Entity metadata (label, sublabel) is denormalized
@@ -180,6 +210,7 @@ CREATE INDEX IF NOT EXISTS idx_saved_cart_items_cart ON saved_cart_items(cart_id
 -- ============================================================
 CREATE TABLE IF NOT EXISTS samples (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE RESTRICT,
 
@@ -267,6 +298,7 @@ CREATE TABLE IF NOT EXISTS samples (
 );
 
 CREATE INDEX IF NOT EXISTS idx_samples_project ON samples(project_id);
+CREATE INDEX IF NOT EXISTS idx_samples_lab ON samples(lab_id);
 CREATE INDEX IF NOT EXISTS idx_samples_site ON samples(site_id);
 CREATE INDEX IF NOT EXISTS idx_samples_collection_date ON samples(collection_date);
 CREATE INDEX IF NOT EXISTS idx_samples_checklist ON samples(mixs_checklist, extension);
@@ -293,6 +325,7 @@ CREATE INDEX IF NOT EXISTS idx_sample_values_slot ON sample_values(slot);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS extracts (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     sample_id TEXT NOT NULL REFERENCES samples(id) ON DELETE CASCADE,
 
     extract_name TEXT NOT NULL,
@@ -325,12 +358,14 @@ CREATE TABLE IF NOT EXISTS extracts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_extracts_sample ON extracts(sample_id);
+CREATE INDEX IF NOT EXISTS idx_extracts_lab ON extracts(lab_id);
 
 -- ============================================================
 -- PCR PLATES & AMPLIFICATIONS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS pcr_plates (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     plate_name TEXT NOT NULL,
     pcr_date TEXT,
 
@@ -359,6 +394,7 @@ CREATE TABLE IF NOT EXISTS pcr_plates (
 
 CREATE TABLE IF NOT EXISTS pcr_amplifications (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     plate_id TEXT REFERENCES pcr_plates(id) ON DELETE CASCADE,
     extract_id TEXT NOT NULL REFERENCES extracts(id) ON DELETE CASCADE,
 
@@ -397,12 +433,15 @@ CREATE TABLE IF NOT EXISTS pcr_amplifications (
 
 CREATE INDEX IF NOT EXISTS idx_pcr_extract ON pcr_amplifications(extract_id);
 CREATE INDEX IF NOT EXISTS idx_pcr_plate ON pcr_amplifications(plate_id);
+CREATE INDEX IF NOT EXISTS idx_pcr_plates_lab ON pcr_plates(lab_id);
+CREATE INDEX IF NOT EXISTS idx_pcr_amps_lab ON pcr_amplifications(lab_id);
 
 -- ============================================================
 -- LIBRARY PLATES & PREPS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS library_plates (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     plate_name TEXT NOT NULL,
     library_prep_date TEXT,
 
@@ -430,6 +469,7 @@ CREATE TABLE IF NOT EXISTS library_plates (
 
 CREATE TABLE IF NOT EXISTS library_preps (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     library_plate_id TEXT REFERENCES library_plates(id) ON DELETE CASCADE,
 
     -- Source: either a PCR product or a direct extract
@@ -466,12 +506,15 @@ CREATE TABLE IF NOT EXISTS library_preps (
 
 CREATE INDEX IF NOT EXISTS idx_libprep_pcr ON library_preps(pcr_id);
 CREATE INDEX IF NOT EXISTS idx_libprep_extract ON library_preps(extract_id);
+CREATE INDEX IF NOT EXISTS idx_libplates_lab ON library_plates(lab_id);
+CREATE INDEX IF NOT EXISTS idx_libpreps_lab ON library_preps(lab_id);
 
 -- ============================================================
 -- SEQUENCING RUNS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS sequencing_runs (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
 
     run_name TEXT NOT NULL,
     run_date TEXT,
@@ -508,6 +551,7 @@ CREATE TABLE IF NOT EXISTS run_libraries (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS analyses (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     run_id TEXT NOT NULL REFERENCES sequencing_runs(id) ON DELETE CASCADE,
 
     pipeline TEXT NOT NULL,
@@ -538,27 +582,31 @@ CREATE TABLE IF NOT EXISTS analyses (
 );
 
 CREATE INDEX IF NOT EXISTS idx_analyses_run ON analyses(run_id);
+CREATE INDEX IF NOT EXISTS idx_analyses_lab ON analyses(lab_id);
+CREATE INDEX IF NOT EXISTS idx_runs_lab ON sequencing_runs(lab_id);
 
 -- ============================================================
 -- CONSTRAINED VALUES (user-editable picklists)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS constrained_values (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     category TEXT NOT NULL,
     value TEXT NOT NULL,
     label TEXT,
     sort_order INTEGER NOT NULL DEFAULT 0,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(category, value)
+    UNIQUE(lab_id, category, value)
 );
 
-CREATE INDEX IF NOT EXISTS idx_cv_category ON constrained_values(category);
+CREATE INDEX IF NOT EXISTS idx_cv_category ON constrained_values(lab_id, category);
 
 -- Primer sets (linked: gene + region + primers)
 CREATE TABLE IF NOT EXISTS primer_sets (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-    name TEXT NOT NULL UNIQUE,
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
     target_gene TEXT NOT NULL,
     target_subfragment TEXT,
     forward_primer_name TEXT,
@@ -568,37 +616,48 @@ CREATE TABLE IF NOT EXISTS primer_sets (
     reference TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, name)
 );
+
+CREATE INDEX IF NOT EXISTS idx_primer_sets_lab ON primer_sets(lab_id);
 
 -- PCR protocols (linked: polymerase + cycling conditions)
 CREATE TABLE IF NOT EXISTS pcr_protocols (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-    name TEXT NOT NULL UNIQUE,
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
     polymerase TEXT,
     annealing_temp_c REAL,
     num_cycles INTEGER,
     pcr_cond TEXT,                        -- MIxS pcr_cond: annealing + cycling conditions
     is_active INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, name)
 );
+
+CREATE INDEX IF NOT EXISTS idx_pcr_protocols_lab ON pcr_protocols(lab_id);
 
 -- ============================================================
 -- PERSONNEL
 -- ============================================================
 CREATE TABLE IF NOT EXISTS personnel (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     full_name TEXT NOT NULL,
     email TEXT,
     role TEXT,                              -- e.g., PI, Lab Manager, Field Tech, Student
     institution TEXT,
     orcid TEXT,
-    user_id TEXT UNIQUE REFERENCES users(id),  -- linked GitHub account (optional)
+    user_id TEXT REFERENCES users(id),  -- linked GitHub account (optional); unique per lab
     is_active INTEGER NOT NULL DEFAULT 1,
     sort_order INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, user_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_personnel_lab ON personnel(lab_id);
 
 -- Many-to-many: each entity (sample, extract, plate, run) can have any
 -- number of attributed people, each with a free-text role label. The
@@ -624,6 +683,10 @@ CREATE INDEX IF NOT EXISTS idx_entity_personnel_person
 -- ============================================================
 CREATE TABLE IF NOT EXISTS feedback (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    -- Lab scope. Set from the submitter's lab_id when available; NULL for
+    -- feedback submitted before the multi-lab migration or by anonymous
+    -- users (lab-admins see NULL-lab feedback in their own queue).
+    lab_id TEXT REFERENCES labs(id) ON DELETE CASCADE,
     page_url TEXT NOT NULL,
     message TEXT NOT NULL,
     user_id TEXT REFERENCES users(id),
@@ -631,6 +694,8 @@ CREATE TABLE IF NOT EXISTS feedback (
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved', 'wontfix')),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_feedback_lab ON feedback(lab_id);
 
 -- ============================================================
 -- SYNC & AUDIT
@@ -651,6 +716,7 @@ CREATE INDEX IF NOT EXISTS idx_sync_log_table ON sync_log(table_name, record_id)
 
 CREATE TABLE IF NOT EXISTS db_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     commit_sha TEXT,
     commit_message TEXT,
     snapshot_path TEXT,
@@ -659,3 +725,5 @@ CREATE TABLE IF NOT EXISTS db_snapshots (
     )),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_lab ON db_snapshots(lab_id);
