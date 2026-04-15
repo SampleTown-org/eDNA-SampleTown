@@ -13,8 +13,13 @@ import { validateSession, maybeSweepExpired, isSecureOrigin } from '$lib/server/
  * would block those scripts and break every page.
  *
  *   HSTS: only when ORIGIN is https. 180-day window is a conservative start.
- *   Referrer-Policy: same-origin so third-party services we link out to
- *     (NCBI, GitHub) don't see the exact page path.
+ *   Referrer-Policy: strict-origin-when-cross-origin sends only the bare
+ *     origin (no path) on cross-origin requests, never the full URL —
+ *     same privacy floor as `same-origin` for path leakage, but still
+ *     identifies us as a real origin to OSM tile servers (which block
+ *     reqs that arrive with no Referer at all). Was `same-origin`; that
+ *     stripped the Referer entirely on cross-origin and got the OSM
+ *     "Blocked" tile served on every map view.
  *   X-Frame-Options: prevent clickjacking via iframe embedding.
  *   X-Content-Type-Options: stop MIME sniffing globally; the photo routes
  *     also set this explicitly as defense in depth.
@@ -22,7 +27,7 @@ import { validateSession, maybeSweepExpired, isSecureOrigin } from '$lib/server/
 function applySecurityHeaders(response: Response) {
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('X-Frame-Options', 'DENY');
-	response.headers.set('Referrer-Policy', 'same-origin');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 	response.headers.set('Permissions-Policy', 'geolocation=(self), camera=(self)');
 	if (isSecureOrigin()) {
 		response.headers.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');

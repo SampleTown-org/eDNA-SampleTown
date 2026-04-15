@@ -45,7 +45,11 @@
 	const colLabels = $derived(Array.from({ length: layout.cols }, (_, i) => i + 1));
 
 	function wellLabel(rowIdx: number, colIdx: number): string {
-		return `${ROW_LETTERS[rowIdx]}${colIdx + 1}`;
+		// 0-padded column so labels lex-sort correctly (A01, A02, ..., A12)
+		// instead of A1, A10, A11, A12, A2, ... — matches the convention
+		// SRA / Illumina sample-sheets and most plate-management tools use.
+		const col = String(colIdx + 1).padStart(2, '0');
+		return `${ROW_LETTERS[rowIdx]}${col}`;
 	}
 
 	// --- Item lookup ------------------------------------------------------

@@ -252,6 +252,22 @@ function runMigrations(db: Database.Database) {
 	addColumn('labs', 'last_backup_at TEXT');
 	addColumn('db_snapshots', 'error_message TEXT');
 	addColumn('db_snapshots', 'is_automatic INTEGER NOT NULL DEFAULT 0');
+
+	// 2026-04-15: 0-pad existing well_label values from "A1" → "A01" so
+	// they lex-sort with new wells written via PlateView's padded format.
+	// Idempotent: GLOB filters to length-2 well labels (one letter +
+	// one digit), so already-padded "A01" and 2-digit "A10"/"A11"/"A12"
+	// rows don't get touched on re-runs.
+	try {
+		db.prepare(
+			"UPDATE pcr_amplifications SET well_label = substr(well_label, 1, 1) || '0' || substr(well_label, 2) WHERE length(well_label) = 2 AND well_label GLOB '[A-Z][1-9]'"
+		).run();
+		db.prepare(
+			"UPDATE library_preps SET well_label = substr(well_label, 1, 1) || '0' || substr(well_label, 2) WHERE length(well_label) = 2 AND well_label GLOB '[A-Z][1-9]'"
+		).run();
+	} catch {
+		/* well_label may not exist yet on very-first-run; addColumn above handles it */
+	}
 	addColumn('users', 'avatar_emoji TEXT');
 	addColumn('extracts', 'nucl_acid_type TEXT');
 	addColumn('pcr_amplifications', 'total_volume_ul REAL');
