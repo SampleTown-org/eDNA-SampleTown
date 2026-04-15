@@ -144,15 +144,18 @@ function seedDefaultLab(db: Database.Database) {
 			.get() as { id: string }).id;
 	}
 
-	// Reconciliation + first-run backfill. Runs every startup (cheap with
-	// indexed FK lookups) so a mid-migration labs rebuild can't leave users
-	// or feedback pointing at a dead lab_id. Three cases handled:
+	// Orphan reconciliation: any user/feedback row pointing at a lab_id
+	// that doesn't exist gets repointed at the default lab. Catches the
+	// failure mode where labs got rebuilt mid-migration and dependent
+	// rows were left dangling (hit on the 2026-04-14 prod deploy).
 	//
-	//   NULL lab_id         → backfill to default lab (post-initial-migration)
-	//   non-existent lab_id → reconcile to default lab (stale reference
-	//                         from a botched earlier migration — hit once
-	//                         on the 2026-04-14 prod deploy)
-	//   valid lab_id        → untouched
+	// NB: rows with lab_id IS NULL are intentionally left alone now that
+	// self-serve onboarding exists. NULL means "pending lab setup" for
+	// users (a brand-new GitHub OAuth signup who hasn't yet created or
+	// joined a lab) and "anonymous / pre-multi-lab" for feedback. Don't
+	// auto-backfill — that would silently move a pending user into the
+	// default lab and they'd then fail /api/auth/setup-lab with "you
+	// already belong to a lab".
 	try {
 		const uReconcile = db.prepare(
 			'UPDATE users SET lab_id = ? WHERE lab_id IS NOT NULL AND lab_id NOT IN (SELECT id FROM labs)'
@@ -162,9 +165,6 @@ function seedDefaultLab(db: Database.Database) {
 		).run(defaultLabId);
 		if (uReconcile.changes > 0) console.warn(`[seed] Reconciled ${uReconcile.changes} users with stale lab_id → default lab`);
 		if (fReconcile.changes > 0) console.warn(`[seed] Reconciled ${fReconcile.changes} feedback rows with stale lab_id → default lab`);
-
-		db.prepare('UPDATE users SET lab_id = ? WHERE lab_id IS NULL').run(defaultLabId);
-		db.prepare('UPDATE feedback SET lab_id = ? WHERE lab_id IS NULL').run(defaultLabId);
 	} catch {
 		/* columns may not exist yet on very-first-run; addColumnIfMissing handles it */
 	}
