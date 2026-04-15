@@ -73,6 +73,27 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 );
 
 -- ============================================================
+-- LAB INVITES
+--
+-- Lab admins generate invite tokens to bring teammates into their lab. The
+-- token is the URL-safe random string in the join link (.../auth/join/<token>).
+-- Tokens are single-use (used_at/used_by populated on accept) and time-limited.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS invites (
+    token TEXT PRIMARY KEY,                           -- 32-byte url-safe random, given out in the join URL
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
+    email_hint TEXT,                                  -- displayed on the join page; not enforced
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,                         -- 14 days default
+    used_at TEXT,
+    used_by TEXT REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_invites_lab ON invites(lab_id);
+
+-- ============================================================
 -- PROJECTS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS projects (

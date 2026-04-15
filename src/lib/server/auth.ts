@@ -138,12 +138,14 @@ export function upsertGitHubUser(githubUser: {
 	}
 
 	const id = generateId();
-	// New GitHub-OAuth users land in is_approved=0 — an admin must approve
-	// them before they can sign in. The session will not be created in the
-	// callback handler unless this flag is 1.
+	// New GitHub-OAuth users land in is_approved=1 (self-serve) and
+	// lab_id=NULL. The hooks-server gate redirects them to /auth/setup-lab
+	// where they either start their own lab (becoming its admin) or accept
+	// an invite from an existing lab. They cannot reach any lab data until
+	// lab_id is populated.
 	db.prepare(`
 		INSERT INTO users (id, github_id, username, display_name, email, avatar_url, role, is_local_account, is_approved)
-		VALUES (?, ?, ?, ?, ?, ?, 'user', 0, 0)
+		VALUES (?, ?, ?, ?, ?, ?, 'user', 0, 1)
 	`).run(id, githubUser.id, githubUser.login, githubUser.name, githubUser.email, githubUser.avatar_url);
 	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
 }

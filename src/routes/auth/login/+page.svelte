@@ -16,7 +16,9 @@
 <div class="max-w-sm mx-auto mt-20 space-y-6">
 	<div class="text-center">
 		<h1 class="text-2xl font-bold text-white">Sign in to SampleTown</h1>
-		<p class="text-slate-400 mt-1">Choose your authentication method</p>
+		<p class="text-slate-400 mt-1 text-sm">
+			New here? <span class="text-slate-300">Sign in with GitHub</span> — you'll be prompted to start a new lab or accept an invite.
+		</p>
 	</div>
 
 	{#if errorMsg}
@@ -62,4 +64,8 @@
 			</button>
 		</form>
 	</div>
+
+	<p class="text-xs text-slate-500 text-center pt-4 border-t border-slate-800">
+		Free for academic and nonprofit use. <a href="mailto:hello@sampletown.org" class="text-ocean-400 hover:text-ocean-300">Contact us</a> for enterprise.
+	</p>
 </div>

@@ -73,7 +73,23 @@ export const load: PageServerLoad = async ({ locals }) => {
 				.all(labId)
 		: [];
 
+	// Lab-invite tokens (admin-only). Includes recently-used invites so the
+	// admin sees who joined via which link. Limited to 100 newest rows.
+	const invites = isAdmin
+		? db.prepare(`
+				SELECT i.token, i.role, i.email_hint, i.created_at, i.expires_at, i.used_at,
+					cu.username AS created_by_username,
+					uu.username AS used_by_username
+				FROM invites i
+				LEFT JOIN users cu ON cu.id = i.created_by
+				LEFT JOIN users uu ON uu.id = i.used_by
+				WHERE i.lab_id = ?
+				ORDER BY i.created_at DESC
+				LIMIT 100
+			`).all(labId)
+		: [];
+
 	const sraVocabulary = getSraVocabularySync();
 
-	return { categories, primerSets, pcrProtocols, naming, feedback, personnel, users, isAdmin, sraVocabulary };
+	return { categories, primerSets, pcrProtocols, naming, feedback, personnel, users, invites, isAdmin, sraVocabulary };
 };

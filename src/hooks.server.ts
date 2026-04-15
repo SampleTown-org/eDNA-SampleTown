@@ -38,6 +38,9 @@ function applySecurityHeaders(response: Response) {
  */
 const PUBLIC_API_ROUTES: Record<string, string[]> = {
 	'/api/feedback': ['POST'] // anonymous lab users can submit feedback
+	// /api/auth/setup-lab and /api/auth/join require an authenticated user
+	// (just one without a lab_id) — they're gated by the lab-setup
+	// allowlist below, NOT by being public.
 };
 
 function isPublicApi(pathname: string, method: string): boolean {
@@ -58,7 +61,8 @@ function isPublicApi(pathname: string, method: string): boolean {
 const ADMIN_WRITE_PREFIXES = [
 	'/api/users', // covers /api/users and /api/users/[id]/...
 	'/api/db/',
-	'/api/feedback/' // covers /api/feedback/[id] PUT/DELETE
+	'/api/feedback/', // covers /api/feedback/[id] PUT/DELETE
+	'/api/invites'    // covers /api/invites and /api/invites/[token]
 ];
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -69,6 +73,8 @@ function requiresAdmin(pathname: string, method: string): boolean {
 		if (pathname === '/api/feedback' && method === 'GET') return true;
 		// GET /api/users is admin-only (lists local + GitHub users)
 		if (pathname === '/api/users' && method === 'GET') return true;
+		// GET /api/invites is admin-only (active + used invites for the lab)
+		if (pathname === '/api/invites' && method === 'GET') return true;
 		return false;
 	}
 	return ADMIN_WRITE_PREFIXES.some((p) => pathname.startsWith(p));
@@ -113,6 +119,27 @@ function blockedByPasswordChange(pathname: string, user: { must_change_password:
 	if (PASSWORD_CHANGE_ALLOWLIST.has(pathname)) return false;
 	// Allow SvelteKit's static asset routes through so the change-password
 	// page itself can render its CSS / JS bundles.
+	if (pathname.startsWith('/_app/') || pathname === '/favicon.ico') return false;
+	return true;
+}
+
+/**
+ * Routes a logged-in user with lab_id=NULL is allowed to reach. Everything
+ * else gets bounced to /auth/setup-lab until they either create their own
+ * lab or accept an invite. Mirrors the must_change_password gate above.
+ */
+const LAB_SETUP_ALLOWLIST = new Set([
+	'/auth/setup-lab',
+	'/auth/logout',
+	'/api/auth/setup-lab',
+	'/api/auth/join'
+]);
+
+function blockedByMissingLab(pathname: string, user: { lab_id: string | null } | null): boolean {
+	if (!user || user.lab_id) return false;
+	if (LAB_SETUP_ALLOWLIST.has(pathname)) return false;
+	// Allow the join-via-token routes (path is /auth/join/<token>).
+	if (pathname.startsWith('/auth/join/')) return false;
 	if (pathname.startsWith('/_app/') || pathname === '/favicon.ico') return false;
 	return true;
 }
@@ -181,6 +208,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 			return json({ error: 'Password change required' }, { status: 403 });
 		}
 		throw redirect(302, '/auth/change-password');
+	}
+
+	// Lab-setup gate: a logged-in user with lab_id=NULL (e.g. a brand-new
+	// GitHub-OAuth signup) is forced to /auth/setup-lab where they choose
+	// between starting a new lab and accepting an invite. They can reach
+	// nothing else until lab membership is established.
+	if (blockedByMissingLab(pathname, event.locals.user)) {
+		if (pathname.startsWith('/api/')) {
+			return json({ error: 'Lab setup required' }, { status: 403 });
+		}
+		throw redirect(302, '/auth/setup-lab');
 	}
 
 	const response = await resolve(event);
