@@ -1,5 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	// Bundle Leaflet's stylesheet into the app via Vite. Loading it from a
+	// CDN (unpkg) failed under our CSP — `style-src 'self'` blocks foreign
+	// stylesheets, and unpkg returns "referer is required" when our
+	// Referrer-Policy: same-origin strips the Referer on cross-origin
+	// requests. Self-hosting also makes the map work offline once the
+	// service worker caches it.
+	import 'leaflet/dist/leaflet.css';
 
 	interface Props {
 		latitude: number | null;
@@ -59,12 +66,14 @@
 	onMount(async () => {
 		L = await import('leaflet');
 
-		// Fix default icon paths (Leaflet asset issue with bundlers)
+		// Fix default icon paths (Leaflet asset issue with bundlers).
+		// Self-hosted from /static/leaflet/ so the CSP doesn't have to
+		// allow unpkg.com and the app keeps working offline.
 		delete (L.Icon.Default.prototype as any)._getIconUrl;
 		L.Icon.Default.mergeOptions({
-			iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-			iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-			shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+			iconRetinaUrl: '/leaflet/marker-icon-2x.png',
+			iconUrl: '/leaflet/marker-icon.png',
+			shadowUrl: '/leaflet/marker-shadow.png'
 		});
 
 		const center: [number, number] = [
@@ -236,9 +245,5 @@
 		}
 	});
 </script>
-
-<svelte:head>
-	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-</svelte:head>
 
 <div bind:this={mapEl} class="rounded-lg border border-slate-700 z-0" style="height: {height}; background: #1e293b;"></div>
