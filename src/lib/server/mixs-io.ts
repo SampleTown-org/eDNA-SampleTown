@@ -15,6 +15,10 @@ import { slotTable } from '$lib/mixs/slot-ownership';
 import { SRA_TO_MIXS } from '$lib/mixs/sra-mapping';
 import { sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 import * as XLSX from 'xlsx';
+import type { Permit } from '$lib/types';
+
+/** Default license advertised in the MIxS misc_param attribution block. */
+const DEFAULT_LICENSE = 'CC-BY-4.0 with CARE notice';
 
 /** Fields that live on the sites table, not the samples table. */
 export const SITE_FIELDS = new Set([
@@ -139,6 +143,12 @@ export function exportMixsTsv(options: {
 		}
 	}
 
+	// Attribution block. For every sample we compute covering permits + license
+	// string + IRCC numbers and merge into the sample's misc_param slot at
+	// export time. The plan calls this the "core CARE-compliance win" —
+	// governance metadata rides along when data leaves us for SRA/GenBank.
+	const attributionBySample = buildAttributionMap(db, options.labId, rows);
+
 	const columns = chooseExportColumns(options.checklist, options.extension);
 	const headers = columns.map((c) => c.header);
 	const lines = rows.map((row) => {
@@ -148,6 +158,13 @@ export function exportMixsTsv(options: {
 		// to 0.1° (~10km). This happens before any column is emitted so EAV,
 		// site-join, and row-column paths all pick up the masked values.
 		const masked = maskSensitiveLocation(row);
+		// Merge attribution into misc_param. Preserves any user-set misc_param
+		// entries (semicolon-joined).
+		const attribution = attributionBySample.get(row.id as string);
+		if (attribution) {
+			const existing = values.misc_param ?? '';
+			values.misc_param = existing ? `${existing}; ${attribution}` : attribution;
+		}
 		return columns
 			.map((c) => {
 				if (c.source === '__project_name__') return escTsv(row.proj_project_name);
@@ -165,6 +182,69 @@ export function exportMixsTsv(options: {
 			.join('\t');
 	});
 	return [headers.join('\t'), ...lines].join('\n');
+}
+
+/**
+ * For every sample in `rows`, compute the MIxS `misc_param`-style attribution
+ * string to concatenate at export time. Covers the plan's "attribution
+ * carry-through" item:
+ *   - license:<string>              (always, defaults to CC-BY-4.0 with CARE)
+ *   - permit_id:<identifier>        (per covering permit, if it has one)
+ *   - ircc:<identifier>             (per covering IRCC permit)
+ * Indigenous-involvement fields from the project-level sovereignty work (item
+ * 2 in the governance plan) are wired in later; they land in this map under
+ * the same mechanism.
+ *
+ * Coverage follows the same rule as permit-coverage.ts (lab + project link +
+ * scope site/date). Collected in one batched query so the cost is O(samples)
+ * on export, not O(samples × permits).
+ */
+function buildAttributionMap(
+	db: ReturnType<typeof getDb>,
+	labId: string,
+	rows: Record<string, unknown>[]
+): Map<string, string> {
+	const out = new Map<string, string>();
+	if (rows.length === 0) return out;
+
+	const sampleIds = rows.map((r) => r.id as string);
+	const placeholders = sampleIds.map(() => '?').join(',');
+	const coverage = db
+		.prepare(
+			`
+      SELECT DISTINCT s.id AS sample_id, p.id AS permit_id, p.permit_type, p.identifier
+        FROM samples s
+        JOIN permit_projects pp ON pp.project_id = s.project_id
+        JOIN permits       p    ON p.id = pp.permit_id AND p.lab_id = s.lab_id
+        JOIN permit_scopes ps   ON ps.permit_id = p.id
+       WHERE s.lab_id = ?
+         AND s.id IN (${placeholders})
+         AND (ps.site_id IS NULL OR ps.site_id = s.site_id)
+         AND (ps.valid_from  IS NULL OR ps.valid_from  <= s.collection_date)
+         AND (ps.valid_until IS NULL OR ps.valid_until >= s.collection_date)
+      `
+		)
+		.all(labId, ...sampleIds) as Array<Pick<Permit, 'permit_type' | 'identifier'> & { sample_id: string }>;
+
+	const perSample = new Map<string, Array<{ permit_type: string; identifier: string | null }>>();
+	for (const c of coverage) {
+		const arr = perSample.get(c.sample_id) ?? [];
+		arr.push({ permit_type: c.permit_type, identifier: c.identifier });
+		perSample.set(c.sample_id, arr);
+	}
+
+	for (const row of rows) {
+		const sampleId = row.id as string;
+		const parts: string[] = [`license:${DEFAULT_LICENSE}`];
+		const covers = perSample.get(sampleId) ?? [];
+		for (const p of covers) {
+			if (!p.identifier) continue;
+			if (p.permit_type === 'ircc') parts.push(`ircc:${p.identifier}`);
+			else parts.push(`permit_id:${p.identifier}`);
+		}
+		out.set(sampleId, parts.join('; '));
+	}
+	return out;
 }
 
 /**
