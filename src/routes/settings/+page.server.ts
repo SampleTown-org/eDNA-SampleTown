@@ -91,5 +91,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const sraVocabulary = getSraVocabularySync();
 
-	return { categories, primerSets, pcrProtocols, naming, feedback, personnel, users, invites, isAdmin, sraVocabulary };
+	// Minimal project + site lists used by the Permits tab picker. Kept lean
+	// (name + id only) so the settings payload doesn't balloon.
+	const projectsForPicker = db
+		.prepare('SELECT id, project_name FROM projects WHERE lab_id = ? ORDER BY project_name')
+		.all(labId);
+	const sitesForPicker = db
+		.prepare('SELECT id, project_id, site_name FROM sites WHERE lab_id = ? AND is_deleted = 0 ORDER BY site_name')
+		.all(labId);
+
+	return {
+		categories,
+		primerSets,
+		pcrProtocols,
+		naming,
+		feedback,
+		personnel,
+		users,
+		invites,
+		isAdmin,
+		sraVocabulary,
+		projectsForPicker,
+		sitesForPicker
+	};
 };

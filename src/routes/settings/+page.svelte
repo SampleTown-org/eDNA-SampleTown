@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import LabelGenerator from '$lib/components/LabelGenerator.svelte';
+	import PermitsTab from '$lib/components/PermitsTab.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -83,7 +84,7 @@
 		return 'MIxS';
 	}
 
-	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'feedback' | 'labels' | 'backup' | 'danger';
+	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'permits' | 'feedback' | 'labels' | 'backup' | 'danger';
 
 	// --- Search filter (shared across the list-based tabs, reset on tab switch) ---
 	let searchQuery = $state('');
@@ -819,6 +820,7 @@
 		<button onclick={() => { tabType = 'primers'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'primers' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Primer Sets</button>
 		<button onclick={() => { tabType = 'protocols'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'protocols' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">PCR Protocols</button>
 		<button onclick={() => { tabType = 'people'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'people' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">People</button>
+		<button onclick={() => { tabType = 'permits'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'permits' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Permits</button>
 		<button onclick={() => { tabType = 'labels'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'labels' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Labels</button>
 		{#if data.isAdmin}
 			<button onclick={() => { tabType = 'backup'; resetSearch(); loadBackupData(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'backup' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Backup</button>
@@ -1367,6 +1369,14 @@
 		</div>
 		{/if}
 	</div>
+
+	{:else if tabType === 'permits'}
+	<PermitsTab
+		projects={data.projectsForPicker as any}
+		sites={data.sitesForPicker as any}
+		{searchQuery}
+		{inputCls}
+	/>
 
 	{:else if tabType === 'feedback'}
 	<div class="space-y-3">
