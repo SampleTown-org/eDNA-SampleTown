@@ -32,7 +32,7 @@ export const SAMPLE_CORE_KEYS = new Set<string>([
 	// MIGS/MIMAG context
 	'ref_biomaterial', 'isol_growth_condt', 'tax_ident',
 	// SampleTown-local
-	'filter_type', 'collector_name', 'notes',
+	'filter_type', 'collector_name', 'notes', 'is_location_sensitive',
 	// Not persisted as a sample column but consumed by the API layer
 	'people', 'client_id', 'local_created_at'
 ]);

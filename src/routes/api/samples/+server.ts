@@ -67,7 +67,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				size_frac, source_mat_id,
 				samp_store_sol, samp_store_temp, samp_store_dur, samp_store_loc, store_cond,
 				ref_biomaterial, isol_growth_condt, tax_ident,
-				filter_type, collector_name,
+				filter_type, collector_name, is_location_sensitive,
 				notes, created_by
 			) VALUES (
 				?, ?, ?, ?, ?, ?,
@@ -79,7 +79,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				?, ?,
 				?, ?, ?, ?, ?,
 				?, ?, ?,
-				?, ?,
+				?, ?, ?,
 				?, ?
 			)`
 		).run(
@@ -121,6 +121,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			nn(data.tax_ident),
 			nn(data.filter_type),
 			nn(data.collector_name),
+			data.is_location_sensitive ? 1 : 0,
 			nn(data.notes),
 			user.id
 		);

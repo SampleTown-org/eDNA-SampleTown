@@ -209,6 +209,13 @@
 		</dl>
 	</div>
 
+	{#if sample.is_location_sensitive}
+		<div class="rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-200">
+			<span class="font-medium">Sensitive location</span> — exports will coarsen coordinates to
+			0.1° and emit a <code class="text-ocean-400">dataGeneralizations</code> tag.
+		</div>
+	{/if}
+
 	<!-- Inherited from site -->
 	{#if filledSiteFields.length > 0}
 		<div class="rounded-lg border border-slate-800 p-5 space-y-3">

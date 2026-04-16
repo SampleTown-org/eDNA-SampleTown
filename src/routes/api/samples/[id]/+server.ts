@@ -65,7 +65,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 				size_frac = ?, source_mat_id = ?,
 				samp_store_sol = ?, samp_store_temp = ?, samp_store_dur = ?, samp_store_loc = ?, store_cond = ?,
 				ref_biomaterial = ?, isol_growth_condt = ?, tax_ident = ?,
-				filter_type = ?, collector_name = ?,
+				filter_type = ?, collector_name = ?, is_location_sensitive = ?,
 				notes = ?,
 				sync_version = sync_version + 1, updated_at = datetime('now')
 			 WHERE id = ?`
@@ -105,6 +105,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 			nn(data.tax_ident),
 			nn(data.filter_type),
 			nn(data.collector_name),
+			data.is_location_sensitive ? 1 : 0,
 			nn(data.notes),
 			params.id
 		);

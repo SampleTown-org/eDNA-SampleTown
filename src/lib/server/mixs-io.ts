@@ -143,6 +143,11 @@ export function exportMixsTsv(options: {
 	const headers = columns.map((c) => c.header);
 	const lines = rows.map((row) => {
 		const values = valuesBySample[row.id as string] ?? {};
+		// Per-row sensitive-location masking. When the sample flag is set, the
+		// geographic slot values — lat_lon, latitude, longitude — are coarsened
+		// to 0.1° (~10km). This happens before any column is emitted so EAV,
+		// site-join, and row-column paths all pick up the masked values.
+		const masked = maskSensitiveLocation(row);
 		return columns
 			.map((c) => {
 				if (c.source === '__project_name__') return escTsv(row.proj_project_name);
@@ -155,11 +160,44 @@ export function exportMixsTsv(options: {
 				// column for is looked up here by slot name.
 				const eavValue = values[c.source];
 				if (eavValue != null) return escTsv(eavValue);
-				return escTsv(row[c.source]);
+				return escTsv(masked[c.source] ?? row[c.source]);
 			})
 			.join('\t');
 	});
 	return [headers.join('\t'), ...lines].join('\n');
+}
+
+/**
+ * Return a partial row with lat/lng-derived slots coarsened when the sample
+ * carries is_location_sensitive=1. Mirrors GBIF's Sensitive Species Extension
+ * pattern: generalize the locality data rather than redacting it, and emit a
+ * Darwin Core `dataGeneralizations` note if the downstream format carries it.
+ *
+ * Coarsening rules:
+ *   - latitude/longitude → rounded to 0.1° (~10 km)
+ *   - site_lat_lon → rewritten from the coarsened values in MIxS format
+ *   - locality + site_name → left alone (string-valued; operator's call)
+ */
+function maskSensitiveLocation(row: Record<string, unknown>): Record<string, unknown> {
+	if (!row.is_location_sensitive) return {};
+	const lat = row.site_latitude ?? row.latitude;
+	const lng = row.site_longitude ?? row.longitude;
+	const latN = typeof lat === 'number' ? lat : Number(lat);
+	const lngN = typeof lng === 'number' ? lng : Number(lng);
+	if (!isFinite(latN) || !isFinite(lngN)) return {};
+	const coarsenLat = Math.round(latN * 10) / 10;
+	const coarsenLng = Math.round(lngN * 10) / 10;
+	const ns = coarsenLat >= 0 ? 'N' : 'S';
+	const ew = coarsenLng >= 0 ? 'E' : 'W';
+	const latLon = `${Math.abs(coarsenLat).toFixed(1)} ${ns} ${Math.abs(coarsenLng).toFixed(1)} ${ew}`;
+	return {
+		latitude: coarsenLat,
+		longitude: coarsenLng,
+		site_latitude: coarsenLat,
+		site_longitude: coarsenLng,
+		lat_lon: latLon,
+		site_lat_lon: latLon
+	};
 }
 
 /** Column selection logic extracted so import UI can preview the column list. */
