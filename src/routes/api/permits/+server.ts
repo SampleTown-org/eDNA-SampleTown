@@ -1,11 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb, generateId } from '$lib/server/db';
-import { apiError, badRequest } from '$lib/server/api-errors';
+import { apiError } from '$lib/server/api-errors';
 import { requireLab } from '$lib/server/guards';
 import { parseBody } from '$lib/server/validation';
 import { PermitCreateBody } from '$lib/server/schemas/permits';
 import { setPermitProjects } from '$lib/server/permit-coverage';
+import {
+	assertProjectsInLab,
+	assertScopeSitesInLab,
+	loadPermitWithLinks
+} from '$lib/server/permits-helpers';
 
 /**
  * GET /api/permits
@@ -117,52 +122,3 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 };
 
-// ---------------------------------------------------------------------------
-
-export function loadPermitWithLinks(db: ReturnType<typeof getDb>, permitId: string) {
-	const permit = db.prepare('SELECT * FROM permits WHERE id = ?').get(permitId);
-	if (!permit) return null;
-	const project_ids = (
-		db.prepare('SELECT project_id FROM permit_projects WHERE permit_id = ?').all(permitId) as Array<{
-			project_id: string;
-		}>
-	).map((r) => r.project_id);
-	const scopes = db
-		.prepare('SELECT * FROM permit_scopes WHERE permit_id = ? ORDER BY valid_from')
-		.all(permitId);
-	return { ...permit, project_ids, scopes };
-}
-
-export function assertProjectsInLab(
-	db: ReturnType<typeof getDb>,
-	projectIds: string[],
-	labId: string
-): void {
-	if (projectIds.length === 0) return;
-	const placeholders = projectIds.map(() => '?').join(',');
-	const rows = db
-		.prepare(`SELECT id FROM projects WHERE lab_id = ? AND id IN (${placeholders})`)
-		.all(labId, ...projectIds) as Array<{ id: string }>;
-	if (rows.length !== projectIds.length) {
-		badRequest('One or more projects are not in your lab');
-	}
-}
-
-export function assertScopeSitesInLab(
-	db: ReturnType<typeof getDb>,
-	scopes: Array<{ site_id?: string | null }>,
-	labId: string
-): void {
-	const siteIds = scopes
-		.map((s) => s.site_id)
-		.filter((v): v is string => typeof v === 'string' && v.length > 0);
-	if (siteIds.length === 0) return;
-	const placeholders = siteIds.map(() => '?').join(',');
-	const rows = db
-		.prepare(`SELECT id FROM sites WHERE lab_id = ? AND id IN (${placeholders})`)
-		.all(labId, ...siteIds) as Array<{ id: string }>;
-	const got = new Set(rows.map((r) => r.id));
-	for (const s of siteIds) {
-		if (!got.has(s)) badRequest('One or more scope sites are not in your lab');
-	}
-}

@@ -11,7 +11,7 @@ import {
 	assertProjectsInLab,
 	assertScopeSitesInLab,
 	loadPermitWithLinks
-} from '../+server';
+} from '$lib/server/permits-helpers';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const { labId } = requireLab(locals);
