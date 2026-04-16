@@ -4,6 +4,7 @@ import { requireLab } from '$lib/server/guards';
 import { attachPeopleSummary } from '$lib/server/entity-personnel';
 import { getSlot } from '$lib/mixs/schema-index';
 import { MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
+import { sampleCoverageCounts } from '$lib/server/permit-coverage';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const { labId } = requireLab(locals);
@@ -79,6 +80,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.sort((a, b) => a.title.localeCompare(b.title));
 
 	const samplesWithPeople = attachPeopleSummary('sample', samples as { id: string }[]);
+
+	// Decorate each sample with `permit_count` for the missing-permit badge.
+	// Zero = uncovered; the table highlights these in the UI.
+	const sampleIds = samples.map((s) => s.id as string);
+	const coverageCounts = sampleCoverageCounts(db, labId, sampleIds);
+	for (const s of samplesWithPeople) {
+		(s as Record<string, unknown>).permit_count = coverageCounts.get(s.id as string) ?? 0;
+	}
+
 	const projects = db
 		.prepare('SELECT id, project_name FROM projects WHERE lab_id = ? ORDER BY project_name')
 		.all(labId);

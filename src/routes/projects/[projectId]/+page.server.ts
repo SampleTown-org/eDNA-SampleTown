@@ -145,5 +145,38 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		}))
 		.sort((a, b) => b.total - a.total || a.full_name.localeCompare(b.full_name));
 
-	return { project, sites, samples, roster };
+	// Permits linked to this project. We show all linked permits with their
+	// scope summary so operators can see at a glance what the project is
+	// authorized for.
+	const linkedPermits = db
+		.prepare(
+			`SELECT p.*
+			   FROM permits p
+			   JOIN permit_projects pp ON pp.permit_id = p.id
+			  WHERE pp.project_id = ? AND p.lab_id = ?
+			  ORDER BY p.name`
+		)
+		.all(params.projectId, labId) as Array<{ id: string }>;
+
+	const permitIds = linkedPermits.map((p) => p.id);
+	const permitScopes = permitIds.length
+		? (db
+				.prepare(
+					`SELECT ps.*, st.site_name
+					   FROM permit_scopes ps
+					   LEFT JOIN sites st ON st.id = ps.site_id
+					  WHERE ps.permit_id IN (${permitIds.map(() => '?').join(',')})
+					  ORDER BY ps.valid_from`
+				)
+				.all(...permitIds) as Array<{ permit_id: string }>)
+		: [];
+	const scopesByPermit = new Map<string, unknown[]>();
+	for (const s of permitScopes) {
+		const arr = scopesByPermit.get(s.permit_id) ?? [];
+		arr.push(s);
+		scopesByPermit.set(s.permit_id, arr);
+	}
+	const permits = linkedPermits.map((p) => ({ ...p, scopes: scopesByPermit.get(p.id) ?? [] }));
+
+	return { project, sites, samples, roster, permits };
 };

@@ -4,6 +4,7 @@ import { getDb } from '$lib/server/db';
 import { requireLab } from '$lib/server/guards';
 import { getEntityPersonnel } from '$lib/server/entity-personnel';
 import { loadSampleValues } from '$lib/server/sample-body';
+import { permitsCoveringSample } from '$lib/server/permit-coverage';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const { labId } = requireLab(locals);
@@ -39,5 +40,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		ORDER BY created_at DESC
 	`).all(params.sampleId);
 
-	return { sample, extracts, people, photos };
+	// Permits that cover this sample (by project + site + collection_date window).
+	// Empty array = uncovered, which the detail page flags to prompt operators.
+	const coveringPermits = permitsCoveringSample(db, {
+		labId,
+		projectId: sampleRow.project_id as string,
+		siteId: sampleRow.site_id as string,
+		collectionDate: sampleRow.collection_date as string
+	});
+
+	return { sample, extracts, people, photos, coveringPermits };
 };

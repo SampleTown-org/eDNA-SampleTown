@@ -528,7 +528,7 @@
 
 	// Support ?tab= URL parameter to deep-link to a category
 	const urlTab = $page.url.searchParams.get('tab');
-	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : urlTab === 'backup' ? 'backup' : urlTab === 'danger' ? 'danger' : 'category';
+	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'permits' ? 'permits' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : urlTab === 'backup' ? 'backup' : urlTab === 'danger' ? 'danger' : 'category';
 	const initialCategory = (urlTab && urlTab in CATEGORY_LABELS) ? urlTab : 'geo_loc_name';
 
 	let tabType = $state<TabType>(initialTab);

@@ -251,6 +251,32 @@
 		</div>
 	{/if}
 
+	<!-- Permits that mention this site (either explicitly or via a NULL-site
+	     "all sites" scope on a project this site belongs to). -->
+	<div class="rounded-lg border border-slate-800 p-5 space-y-2">
+		<div class="flex items-center justify-between">
+			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Permits ({(data.permits as unknown[]).length})</h2>
+			<a href="/settings?tab=permits" class="text-xs text-ocean-400 hover:text-ocean-300">Manage →</a>
+		</div>
+		{#if (data.permits as unknown[]).length === 0}
+			<p class="text-sm text-amber-400">No permits cover this site. Samples at this site will not be covered on export.</p>
+		{:else}
+			<ul class="text-sm text-slate-300 space-y-1">
+				{#each data.permits as p}
+					{@const pa = p as any}
+					<li>
+						<span class="text-white font-medium">{pa.name}</span>
+						<span class="ml-1 text-xs text-ocean-400">{pa.permit_type}</span>
+						{#if pa.identifier}<span class="ml-1 text-xs text-slate-500 font-mono">{pa.identifier}</span>{/if}
+						{#if pa.document_url}
+							<a href={pa.document_url} target="_blank" rel="noopener noreferrer" class="ml-1 text-xs text-ocean-400 hover:text-ocean-300">↗</a>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+
 	<!-- Samples at this site -->
 	<div>
 		<div class="flex items-center justify-between mb-3">

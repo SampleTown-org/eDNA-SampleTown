@@ -299,6 +299,34 @@
 		</div>
 	{/if}
 
+	<!-- Permit coverage — computed from permit_projects × permit_scopes × collection_date. -->
+	<div class="rounded-lg border border-slate-800 p-5 space-y-2">
+		<div class="flex items-center justify-between">
+			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Permit coverage</h2>
+			<a href="/settings?tab=permits" class="text-xs text-ocean-400 hover:text-ocean-300">Manage →</a>
+		</div>
+		{#if data.coveringPermits.length === 0}
+			<p class="text-sm text-amber-400">
+				No permit covers this sample. Collection date falls outside any permit scope for this site,
+				or no permit is linked to this project.
+			</p>
+		{:else}
+			<ul class="text-sm text-slate-300 space-y-1">
+				{#each data.coveringPermits as p}
+					<li>
+						<span class="text-white font-medium">{p.name}</span>
+						<span class="ml-1 text-xs text-ocean-400">{p.permit_type}</span>
+						{#if p.identifier}<span class="ml-1 text-xs text-slate-500 font-mono">{p.identifier}</span>{/if}
+						{#if p.jurisdiction}<span class="ml-1 text-xs text-slate-500">({p.jurisdiction})</span>{/if}
+						{#if p.document_url}
+							<a href={p.document_url} target="_blank" rel="noopener noreferrer" class="ml-1 text-xs text-ocean-400 hover:text-ocean-300">↗</a>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+
 	<!-- Photos -->
 	<div>
 		<div class="flex items-center justify-between mb-3">

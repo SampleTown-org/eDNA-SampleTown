@@ -100,6 +100,48 @@
 		</div>
 	{/if}
 
+	<!-- Permits linked to this project. A project with no permits still runs fine
+	     but its samples won't be covered — flag it early. -->
+	<div class="rounded-lg border border-slate-800 p-5 space-y-2">
+		<div class="flex items-center justify-between">
+			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Permits ({data.permits.length})</h2>
+			<a href="/settings?tab=permits" class="text-xs text-ocean-400 hover:text-ocean-300">Manage →</a>
+		</div>
+		{#if data.permits.length === 0}
+			<p class="text-sm text-amber-400">No permits linked to this project. Samples collected under this project will not be covered on export.</p>
+		{:else}
+			<ul class="text-sm text-slate-300 space-y-2">
+				{#each data.permits as p (p.id)}
+					{@const pa = p as any}
+					<li class="p-2 rounded bg-slate-900/40">
+						<div class="flex items-center justify-between">
+							<div>
+								<span class="text-white font-medium">{pa.name}</span>
+								<span class="ml-1 text-xs text-ocean-400">{pa.permit_type}</span>
+								{#if pa.identifier}<span class="ml-1 text-xs text-slate-500 font-mono">{pa.identifier}</span>{/if}
+							</div>
+							{#if pa.document_url}
+								<a href={pa.document_url} target="_blank" rel="noopener noreferrer" class="text-xs text-ocean-400 hover:text-ocean-300">↗ Doc</a>
+							{/if}
+						</div>
+						{#if pa.scopes.length === 0}
+							<div class="text-xs text-amber-400 mt-0.5">No scope rows — permit covers nothing.</div>
+						{:else}
+							<ul class="text-xs text-slate-500 mt-0.5 space-y-0.5">
+								{#each pa.scopes as s}
+									{@const sa = s as any}
+									<li>
+										{sa.site_name ?? 'all sites'} · {sa.valid_from ?? '—'} → {sa.valid_until ?? '—'}
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+
 	<div class="flex items-center justify-between">
 		<h2 class="text-lg font-semibold text-white">Sites ({data.sites.length})</h2>
 		<a

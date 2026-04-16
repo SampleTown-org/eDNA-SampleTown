@@ -30,5 +30,22 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		ORDER BY created_at DESC
 	`).all(params.siteId);
 
-	return { site, samples, photos };
+	// Permits with scope rows that name this site (explicitly) and permits
+	// whose scopes are site-agnostic (site_id IS NULL) but still cover this
+	// project. The unioned result gives the operator a single list to look at.
+	const siteRow = site as { project_id: string };
+	const permits = db
+		.prepare(
+			`SELECT DISTINCT p.*
+			   FROM permits p
+			   JOIN permit_projects pp ON pp.permit_id = p.id
+			   JOIN permit_scopes   ps ON ps.permit_id = p.id
+			  WHERE p.lab_id = ?
+			    AND pp.project_id = ?
+			    AND (ps.site_id = ? OR ps.site_id IS NULL)
+			  ORDER BY p.name`
+		)
+		.all(labId, siteRow.project_id, params.siteId);
+
+	return { site, samples, photos, permits };
 };

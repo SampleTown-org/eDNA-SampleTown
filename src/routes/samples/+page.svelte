@@ -59,7 +59,15 @@
 		...s,
 		env_broad_scale: stripEnvo(s.env_broad_scale),
 		env_local_scale: stripEnvo(s.env_local_scale),
-		env_medium: stripEnvo(s.env_medium)
+		env_medium: stripEnvo(s.env_medium),
+		// Render the permits column: show count when covered, an amber "✗"
+		// marker when uncovered. Using a rendered string here keeps the
+		// DataTable sort-by-column behavior correct (strings sort).
+		permits: typeof s.permit_count === 'number'
+			? s.permit_count > 0
+				? `✓ ${s.permit_count}`
+				: '✗'
+			: ''
 	})));
 
 	const DEFAULT_COLUMNS = [
@@ -72,7 +80,11 @@
 		{ key: 'env_medium', label: 'Medium', sortable: true },
 		{ key: 'collection_date', label: 'Collected', sortable: true },
 		{ key: 'people_summary', label: 'People', sortable: true },
-		{ key: 'photo_count', label: 'Photos', sortable: true }
+		{ key: 'photo_count', label: 'Photos', sortable: true },
+		// `permits` column shows coverage at a glance: a number when the
+		// sample is covered, and an amber "✗" when uncovered. Rendered via
+		// cell formatting in the DataTable below so sorting still works.
+		{ key: 'permits', label: 'Permits', sortable: true }
 	];
 
 	// User-added optional columns, persisted across reloads.
