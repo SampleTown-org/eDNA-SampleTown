@@ -33,12 +33,23 @@ CREATE TABLE IF NOT EXISTS labs (
 
 -- ============================================================
 -- USERS & AUTH
+--
+-- A `users` row is pure identity. Lab access is expressed through
+-- `lab_memberships` rows below; a user can belong to any number of labs with
+-- independent roles in each. `active_lab_id` picks which lab the UI is
+-- currently rendering — the navbar lab-switcher updates this field.
+--
+-- Legacy columns (retained on prod for attribution history; unused by code):
+--   lab_id, role, is_deleted — see docs/dev/multi-lab.md for migration notes.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-    -- Lab membership. Nullable because new GitHub-OAuth signups land with
-    -- no lab assignment until an admin approves AND picks their lab. Once
-    -- assigned, the user can only see data from this lab.
+    -- The lab currently being viewed/edited. NULL for fresh signups with no
+    -- memberships (forced through /auth/setup-lab). Must point at a lab
+    -- where the user has an active membership; hook defends the invariant.
+    active_lab_id TEXT REFERENCES labs(id),
+    -- Legacy: original single-lab field. Kept on prod post-migration so
+    -- `SELECT *` doesn't fail on older rows; no code path reads this.
     lab_id TEXT REFERENCES labs(id),
     github_id INTEGER UNIQUE,
     username TEXT NOT NULL UNIQUE,
@@ -49,6 +60,7 @@ CREATE TABLE IF NOT EXISTS users (
     -- GitHub avatar_url is set. Free-form single-grapheme string.
     avatar_emoji TEXT,
     password_hash TEXT,                  -- for local accounts only
+    -- Legacy: single global role. Roles are now per-lab on lab_memberships.
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
     is_local_account INTEGER NOT NULL DEFAULT 0,
     -- Approval gate: GitHub-OAuth users start with is_approved=0 and must be
@@ -58,15 +70,38 @@ CREATE TABLE IF NOT EXISTS users (
     -- Force password change on next login (used for the seeded admin/admin
     -- account and for admin-created users with a temporary password).
     must_change_password INTEGER NOT NULL DEFAULT 0,
-    -- Soft delete. Deleted users stay in the table so their created_by /
-    -- user_id references elsewhere still resolve for attribution; they just
-    -- can't log in and don't appear in the admin user list.
+    -- Legacy: removals from a lab are now expressed by deleting the
+    -- lab_memberships row; blocks by setting lab_memberships.status='blocked'.
     is_deleted INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_users_lab ON users(lab_id);
+CREATE INDEX IF NOT EXISTS idx_users_active_lab ON users(active_lab_id);
+
+-- ============================================================
+-- LAB MEMBERSHIPS
+--
+-- Join between users and labs. A user can have rows in multiple labs with
+-- independent per-lab `role` values. `status='blocked'` lets a lab-admin
+-- keep the row around so a fresh invite can't silently re-grant access —
+-- an admin has to explicitly flip back to 'active' first.
+--
+-- Removing a user from a lab DELETEs the row outright; they can be
+-- re-added later by a new invite with no UNIQUE collision. Blocking keeps
+-- the row and makes the invite flow reject re-joins.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS lab_memberships (
+    user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    lab_id   TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+    role     TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
+    status   TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'blocked')),
+    added_at TEXT NOT NULL DEFAULT (datetime('now')),
+    added_by TEXT REFERENCES users(id),
+    PRIMARY KEY (user_id, lab_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lab_memberships_lab ON lab_memberships(lab_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
