@@ -7,12 +7,23 @@ import type { User } from '$lib/types';
 // Columns to select when loading a user for session/locals.
 // IMPORTANT: never include `password_hash` here — locals.user flows to every
 // page via +layout.server.ts, so anything in this list ends up in client HTML.
-// All columns are explicitly qualified with `u.` so the same constant works
-// inside JOINs (e.g. validateSession joins sessions s × users u, where both
-// tables have an `id` column).
-const SAFE_USER_COLS = `
-	u.id, u.lab_id, u.github_id, u.username, u.display_name, u.email, u.avatar_url, u.avatar_emoji,
-	u.role, u.is_local_account, u.is_approved, u.must_change_password,
+//
+// Two variants:
+//   USER_COLS         — standalone query, no lab_memberships join needed.
+//                       lab_id defaults to active_lab_id, role defaults to 'user'.
+//                       Used by upsertGitHubUser / createLocalUser where there
+//                       may be no membership row yet.
+//   USER_MEMBERSHIP_COLS — requires a LEFT JOIN on lab_memberships aliased as `m`.
+//                       lab_id and role are sourced from the active membership.
+//                       Used by validateSession / verifyLocalUser.
+const USER_COLS = `
+	u.id, u.active_lab_id AS lab_id, u.github_id, u.username, u.display_name, u.email, u.avatar_url, u.avatar_emoji,
+	'user' AS role, u.is_local_account, u.is_approved, u.must_change_password,
+	u.created_at, u.updated_at
+`;
+const USER_MEMBERSHIP_COLS = `
+	u.id, m.lab_id, u.github_id, u.username, u.display_name, u.email, u.avatar_url, u.avatar_emoji,
+	COALESCE(m.role, 'user') AS role, u.is_local_account, u.is_approved, u.must_change_password,
 	u.created_at, u.updated_at
 `;
 
@@ -66,13 +77,14 @@ export function createSession(userId: string): string {
 export function validateSession(sessionId: string): User | null {
 	const db = getDb();
 	const row = db.prepare(`
-		SELECT ${SAFE_USER_COLS}
+		SELECT ${USER_MEMBERSHIP_COLS}
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
+		LEFT JOIN lab_memberships m
+		  ON m.user_id = u.id AND m.lab_id = u.active_lab_id AND m.status = 'active'
 		WHERE s.id = ?
 		  AND s.expires_at > datetime('now')
 		  AND u.is_approved = 1
-		  AND u.is_deleted = 0
 	`).get(sessionId) as User | undefined;
 	return row ?? null;
 }
@@ -120,34 +132,37 @@ export function upsertGitHubUser(githubUser: {
 	avatar_url: string | null;
 }): User {
 	const db = getDb();
-	// A soft-deleted row blocks GitHub re-link — the admin has to restore
-	// it first (directly in the DB) rather than having the callback
-	// silently un-delete them.
+	// Find by github_id without is_deleted filter. A previously removed user
+	// can re-authenticate; they'll have no lab_memberships row and land at
+	// /auth/setup-lab where they can accept a fresh invite.
 	const existing = db
-		.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.github_id = ? AND u.is_deleted = 0`)
+		.prepare(`SELECT ${USER_COLS} FROM users u WHERE u.github_id = ?`)
 		.get(githubUser.id) as User | undefined;
 
 	if (existing) {
+		// Re-enable the account (clears legacy is_deleted + is_approved flags)
+		// so the user can get a session. Without a membership they can't see
+		// any lab data — the hooks gate handles that.
 		db.prepare(`
-			UPDATE users SET username = ?, display_name = ?, email = ?, avatar_url = ?, updated_at = datetime('now')
+			UPDATE users
+			SET username = ?, display_name = ?, email = ?, avatar_url = ?,
+			    is_approved = 1, is_deleted = 0, updated_at = datetime('now')
 			WHERE github_id = ?
 		`).run(githubUser.login, githubUser.name, githubUser.email, githubUser.avatar_url, githubUser.id);
 		return db
-			.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.github_id = ?`)
+			.prepare(`SELECT ${USER_COLS} FROM users u WHERE u.github_id = ?`)
 			.get(githubUser.id) as User;
 	}
 
 	const id = generateId();
-	// New GitHub-OAuth users land in is_approved=1 (self-serve) and
-	// lab_id=NULL. The hooks-server gate redirects them to /auth/setup-lab
-	// where they either start their own lab (becoming its admin) or accept
-	// an invite from an existing lab. They cannot reach any lab data until
-	// lab_id is populated.
+	// New GitHub-OAuth signups get is_approved=1 (self-serve) and no
+	// active_lab_id. The hooks gate redirects them to /auth/setup-lab
+	// where they either start their own lab or accept an invite.
 	db.prepare(`
 		INSERT INTO users (id, github_id, username, display_name, email, avatar_url, role, is_local_account, is_approved)
 		VALUES (?, ?, ?, ?, ?, ?, 'user', 0, 1)
 	`).run(id, githubUser.id, githubUser.login, githubUser.name, githubUser.email, githubUser.avatar_url);
-	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
+	return db.prepare(`SELECT ${USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
 }
 
 // ============================================================
@@ -162,7 +177,7 @@ export async function createLocalUser(username: string, password: string, role: 
 		INSERT INTO users (id, username, password_hash, role, is_local_account)
 		VALUES (?, ?, ?, ?, 1)
 	`).run(id, username, hash, role);
-	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
+	return db.prepare(`SELECT ${USER_COLS} FROM users u WHERE u.id = ?`).get(id) as User;
 }
 
 // Password length policy. Applied on password SET (registration / change),
@@ -211,6 +226,7 @@ const DUMMY_BCRYPT_HASH = bcrypt.hashSync('does-not-matter', BCRYPT_COST);
 
 export async function verifyLocalUser(username: string, password: string): Promise<User | null> {
 	const db = getDb();
+	// is_deleted kept in this predicate as defense-in-depth for password auth.
 	const row = db
 		.prepare('SELECT id, password_hash FROM users WHERE username = ? AND is_local_account = 1 AND is_deleted = 0')
 		.get(username) as { id: string; password_hash: string } | undefined;
@@ -221,5 +237,11 @@ export async function verifyLocalUser(username: string, password: string): Promi
 	const valid = await bcrypt.compare(password, hash);
 	if (!row || !valid) return null;
 
-	return db.prepare(`SELECT ${SAFE_USER_COLS} FROM users u WHERE u.id = ?`).get(row.id) as User;
+	return db.prepare(`
+		SELECT ${USER_MEMBERSHIP_COLS}
+		FROM users u
+		LEFT JOIN lab_memberships m
+		  ON m.user_id = u.id AND m.lab_id = u.active_lab_id AND m.status = 'active'
+		WHERE u.id = ?
+	`).get(row.id) as User;
 }

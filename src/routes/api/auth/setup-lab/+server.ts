@@ -46,10 +46,14 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	try {
 		const db = getDb();
 		const labId = createLab(db, name, slug);
-		// First user in a new lab becomes its admin. They keep this role
-		// until they (or another admin they later promote) demote them.
-		db.prepare("UPDATE users SET lab_id = ?, role = 'admin', updated_at = datetime('now') WHERE id = ?")
-			.run(labId, user.id);
+		// First user in a new lab becomes its admin via lab_memberships.
+		db.prepare(
+			`INSERT INTO lab_memberships (user_id, lab_id, role, status)
+			 VALUES (?, ?, 'admin', 'active')`
+		).run(user.id, labId);
+		db.prepare(
+			"UPDATE users SET lab_id = ?, active_lab_id = ?, role = 'admin', updated_at = datetime('now') WHERE id = ?"
+		).run(labId, labId, user.id);
 		const lab = db.prepare('SELECT id, name, slug FROM labs WHERE id = ?').get(labId);
 		return json({ lab }, { status: 201 });
 	} catch (err) {

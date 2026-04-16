@@ -14,11 +14,14 @@ interface InviteRow {
 }
 
 /**
- * Accept a lab-invite token. Caller must be authenticated. The endpoint
- * works whether the user already has a lab_id or not — joining a different
- * lab moves them entirely (the user record's lab_id is overwritten). For
- * V1 this is fine; once a user belongs to multiple labs we'll need a
- * lab_memberships join table and a lab-switcher.
+ * Accept a lab-invite token. Caller must be authenticated. Creates (or
+ * reactivates) a lab_memberships row with the invite's role. The user's
+ * active_lab_id is set to the new lab so they immediately see its data.
+ *
+ * If the user already has an active membership in the invite's lab, the
+ * invite is consumed but no second row is created (idempotent). If the
+ * user has a **blocked** membership, the invite is rejected — an admin
+ * must explicitly unblock them first.
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
 	const user = requireUser(locals);
@@ -50,8 +53,17 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			return json({ error: 'Invite has expired' }, { status: 410 });
 		}
 
-		// Atomically consume the invite + assign the user. If two requests
-		// race, the WHERE used_at IS NULL clause makes only the first win.
+		// Check if user is blocked in this lab
+		const existing = db
+			.prepare('SELECT status FROM lab_memberships WHERE user_id = ? AND lab_id = ?')
+			.get(user.id, invite.lab_id) as { status: string } | undefined;
+		if (existing?.status === 'blocked') {
+			return json(
+				{ error: 'Your access to this lab has been blocked. Contact a lab admin to resolve this.' },
+				{ status: 403 }
+			);
+		}
+
 		const tx = db.transaction(() => {
 			const consumed = db
 				.prepare(
@@ -59,9 +71,18 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				)
 				.run(user.id, token).changes;
 			if (consumed === 0) throw new Error('Invite was just used by someone else');
+
+			if (!existing) {
+				db.prepare(
+					`INSERT INTO lab_memberships (user_id, lab_id, role, status, added_by)
+					 VALUES (?, ?, ?, 'active', (SELECT created_by FROM invites WHERE token = ?))`
+				).run(user.id, invite.lab_id, invite.role, token);
+			}
+
+			// Set legacy fields for backward compat + point active lab here
 			db.prepare(
-				"UPDATE users SET lab_id = ?, role = ?, updated_at = datetime('now') WHERE id = ?"
-			).run(invite.lab_id, invite.role, user.id);
+				"UPDATE users SET lab_id = ?, active_lab_id = ?, role = ?, updated_at = datetime('now') WHERE id = ?"
+			).run(invite.lab_id, invite.lab_id, invite.role, user.id);
 		});
 		tx();
 

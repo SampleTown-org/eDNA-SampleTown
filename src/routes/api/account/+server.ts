@@ -37,43 +37,41 @@ export const DELETE: RequestHandler = async ({ request, locals, cookies }) => {
 	try {
 		const db = getDb();
 
-		// Last-admin check. Counts other approved, non-deleted admins in the
-		// same lab. lab_id NULL means the user never joined a lab — they
-		// can self-delete unconditionally.
-		if (user.lab_id && user.role === 'admin') {
-			const otherAdmins = (db
-				.prepare(
-					`SELECT COUNT(*) AS c FROM users
-					 WHERE lab_id = ? AND role = 'admin'
-					   AND id != ? AND is_deleted = 0 AND is_approved = 1`
-				)
-				.get(user.lab_id, user.id) as { c: number }).c;
-			if (otherAdmins === 0) {
-				return json(
-					{
-						error:
-							"You're the only admin of your lab. Promote another member to admin first, or delete the lab from Manage → Danger before deleting your account."
-					},
-					{ status: 409 }
-				);
-			}
+		// Last-admin check via lab_memberships. If the user is admin in any
+		// lab and that lab has no other admin, block self-delete.
+		const soloAdminLab = db
+			.prepare(
+				`SELECT m.lab_id FROM lab_memberships m
+				 WHERE m.user_id = ? AND m.role = 'admin' AND m.status = 'active'
+				   AND (SELECT COUNT(*) FROM lab_memberships m2
+				        WHERE m2.lab_id = m.lab_id AND m2.role = 'admin'
+				          AND m2.status = 'active' AND m2.user_id != ?) = 0`
+			)
+			.get(user.id, user.id) as { lab_id: string } | undefined;
+		if (soloAdminLab) {
+			return json(
+				{
+					error:
+						"You're the only admin of a lab. Promote another member to admin first, or delete the lab from Manage → Danger before deleting your account."
+				},
+				{ status: 409 }
+			);
 		}
 
-		const deleted = db.transaction(() => {
+		db.transaction(() => {
 			db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
-			return db
-				.prepare(
-					`UPDATE users
-					   SET is_deleted = 1,
-					       password_hash = NULL,
-					       is_approved = 0,
-					       must_change_password = 0,
-					       updated_at = datetime('now')
-					 WHERE id = ? AND is_deleted = 0`
-				)
-				.run(user.id).changes;
+			db.prepare('DELETE FROM lab_memberships WHERE user_id = ?').run(user.id);
+			db.prepare(
+				`UPDATE users
+				   SET active_lab_id = NULL,
+				       is_deleted = 1,
+				       password_hash = NULL,
+				       is_approved = 0,
+				       must_change_password = 0,
+				       updated_at = datetime('now')
+				 WHERE id = ?`
+			).run(user.id);
 		})();
-		if (deleted === 0) return json({ error: 'Account not found' }, { status: 404 });
 
 		// Wipe the caller's session cookie so the very response they get
 		// back from this DELETE doesn't still look "logged in".

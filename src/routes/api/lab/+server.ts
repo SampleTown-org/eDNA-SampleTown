@@ -74,17 +74,19 @@ export const DELETE: RequestHandler = async ({ request, locals, cookies }) => {
 			if (callerSessionId) {
 				db.prepare(
 					`DELETE FROM sessions
-					 WHERE user_id IN (SELECT id FROM users WHERE lab_id = ?)
+					 WHERE user_id IN (SELECT user_id FROM lab_memberships WHERE lab_id = ?)
 					   AND id != ?`
 				).run(labId, callerSessionId);
 			} else {
 				db.prepare(
-					'DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE lab_id = ?)'
+					'DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM lab_memberships WHERE lab_id = ?)'
 				).run(labId);
 			}
+			// Clear active_lab_id for any user pointing at this lab
 			db.prepare(
-				"UPDATE users SET lab_id = NULL, role = 'user', updated_at = datetime('now') WHERE lab_id = ?"
+				"UPDATE users SET active_lab_id = NULL, lab_id = NULL, updated_at = datetime('now') WHERE active_lab_id = ?"
 			).run(labId);
+			// lab_memberships rows cascade-delete from labs FK
 			db.prepare('DELETE FROM labs WHERE id = ?').run(labId);
 		})();
 
