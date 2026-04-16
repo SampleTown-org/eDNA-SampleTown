@@ -43,7 +43,8 @@ export const LAB_SCOPED_TABLES = new Set<string>([
 	'pcr_protocols',
 	'saved_carts',
 	'feedback',
-	'db_snapshots'
+	'db_snapshots',
+	'permits'
 ]);
 
 /**

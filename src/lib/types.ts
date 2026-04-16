@@ -31,6 +31,7 @@ export interface User {
 	is_local_account: number;
 	is_approved: number;
 	must_change_password: number;
+	principles_ack_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -138,6 +139,8 @@ export interface Sample {
 	// SampleTown-local extras
 	filter_type: string | null;
 	collector_name: string | null;
+
+	is_location_sensitive: number;
 
 	notes: string | null;
 	custom_fields: string | null;
@@ -314,6 +317,56 @@ export interface RunLibrary {
 	fastq_r2: string | null;
 	fastq_single: string | null;
 	read_count: number | null;
+}
+
+/**
+ * Permit types — aligned with the GGBN Darwin Core permit extension vocabulary.
+ * The list is the permit-extension terms we expect operators to encounter in
+ * practice; `other` is the escape hatch for anything that doesn't fit.
+ * Not CHECK-constrained at the DB level because GGBN may add terms; enforced
+ * here via zod on the API boundary.
+ */
+export type PermitType =
+	| 'collecting'
+	| 'export'
+	| 'import'
+	| 'ircc'
+	| 'pic'
+	| 'mat'
+	| 'mta'
+	| 'ethics'
+	| 'community_agreement'
+	| 'dua'
+	| 'other';
+
+export interface Permit {
+	id: string;
+	lab_id: string;
+	permit_type: PermitType;
+	name: string;
+	identifier: string | null;
+	issuer: string | null;
+	jurisdiction: string | null;
+	document_url: string | null;
+	notes: string | null;
+	created_by: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface PermitScope {
+	id: string;
+	permit_id: string;
+	site_id: string | null;
+	valid_from: string | null;
+	valid_until: string | null;
+	notes: string | null;
+	created_at: string;
+}
+
+export interface PermitProjectLink {
+	permit_id: string;
+	project_id: string;
 }
 
 export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';

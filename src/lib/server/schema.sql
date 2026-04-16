@@ -62,6 +62,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- user_id references elsewhere still resolve for attribution; they just
     -- can't log in and don't appear in the admin user list.
     is_deleted INTEGER NOT NULL DEFAULT 0,
+    -- Timestamp when this user acknowledged SampleTown's data-governance
+    -- principles page (/principles). NULL = not yet acknowledged. One-time
+    -- nudge shown on /account until set; not a legal contract.
+    principles_ack_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -318,6 +322,13 @@ CREATE TABLE IF NOT EXISTS samples (
     -- SampleTown-local extras (no MIxS slot)
     filter_type TEXT,                     -- filter pore/type; MIxS has filter_type slot
     collector_name TEXT,                  -- free-text; primary attribution lives in entity_personnel
+
+    -- CARE-principle data-sensitivity flag. When 1, exports coarsen
+    -- lat/lng to 0.1 degree (~10 km) and emit a Darwin Core
+    -- dataGeneralizations tag. Viewers see the coarse value; lab members
+    -- still see precise coords on detail pages. Mirrors GBIF's Sensitive
+    -- Species Extension pattern (per-record flag rather than a global rule).
+    is_location_sensitive INTEGER NOT NULL DEFAULT 0,
 
     -- Notes — plain-text scratch; every other "extra" MIxS slot or custom
     -- misc_param:<tag> is stored in the sample_values EAV table so each slot
@@ -714,6 +725,80 @@ CREATE INDEX IF NOT EXISTS idx_entity_personnel_lookup
     ON entity_personnel(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_entity_personnel_person
     ON entity_personnel(personnel_id);
+
+-- ============================================================
+-- PERMITS, LICENSES, AGREEMENTS (GGBN-aligned)
+--
+-- Supports the "MOU / License / Permit / Agreement" ask: every physical sample
+-- should be traceable to the authority under which it was collected.
+-- Vocabulary for `permit_type` mirrors the GGBN Darwin Core permit extension
+-- (registered with GBIF; mandatory for GGBN member institutions for specimens
+-- collected on/after 2014-10-12). Keeping the terms identical means our DwC
+-- export round-trips cleanly.
+--
+-- Three-table shape:
+--   permits           — the authoritative document (permit / MOU / MTA / DUA …)
+--   permit_projects   — many-to-many: one permit can cover several projects
+--   permit_scopes     — site + date-range windows in which a permit is valid;
+--                       a permit may have multiple scope rows (e.g. Site A in
+--                       summer, Site B in fall). NULL site_id = covers every
+--                       site in the linked projects.
+--
+-- A sample is "covered" by a permit iff (1) the permit is linked to the
+-- sample's project, (2) there is a scope row matching the sample's site (or
+-- scope.site_id IS NULL), and (3) collection_date falls within the scope's
+-- [valid_from, valid_until] window (NULLs = open-ended). See
+-- src/lib/server/permit-coverage.ts for the coverage helper.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS permits (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+    -- GGBN-aligned permit_type vocab. Not CHECK-constrained because the
+    -- vocab is extension-governed and evolves; app code enforces. Common
+    -- values: collecting, export, import, ircc (Internationally Recognized
+    -- Certificate of Compliance), pic (Prior Informed Consent), mat
+    -- (Mutually Agreed Terms), mta (Material Transfer Agreement), ethics,
+    -- community_agreement, dua (Data Use Agreement), other.
+    permit_type TEXT NOT NULL,
+    name TEXT NOT NULL,                   -- human label shown in lists
+    identifier TEXT,                      -- permit number / IRCC URI / DOI
+    issuer TEXT,                          -- issuing authority
+    jurisdiction TEXT,                    -- ISO 3166-1 alpha-2 (+ optional subdivision)
+    document_url TEXT,                    -- link to scanned PDF or registry entry
+    notes TEXT,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_permits_lab ON permits(lab_id);
+
+-- Many-to-many between permits and projects. A permit may blanket several
+-- projects under the same umbrella (e.g. one multi-year collecting permit
+-- that covers both the SE Alaska and Bering Sea projects).
+CREATE TABLE IF NOT EXISTS permit_projects (
+    permit_id TEXT NOT NULL REFERENCES permits(id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    PRIMARY KEY (permit_id, project_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_permit_projects_project ON permit_projects(project_id);
+
+-- Site + date-range validity windows. Multiple rows per permit allowed; rows
+-- are OR'd when testing coverage. NULL site_id = "every site in the linked
+-- projects" (shorthand so operators don't have to list every site).
+CREATE TABLE IF NOT EXISTS permit_scopes (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    permit_id TEXT NOT NULL REFERENCES permits(id) ON DELETE CASCADE,
+    site_id TEXT REFERENCES sites(id) ON DELETE CASCADE,  -- NULL = all sites
+    valid_from TEXT,                      -- ISO date; NULL = open start
+    valid_until TEXT,                     -- ISO date; NULL = open end
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_permit_scopes_permit ON permit_scopes(permit_id);
+CREATE INDEX IF NOT EXISTS idx_permit_scopes_site ON permit_scopes(site_id);
 
 -- ============================================================
 -- FEEDBACK
