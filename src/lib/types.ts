@@ -357,16 +357,11 @@ export interface Permit {
 export interface PermitScope {
 	id: string;
 	permit_id: string;
-	site_id: string | null;
+	site_id: string;
 	valid_from: string | null;
 	valid_until: string | null;
 	notes: string | null;
 	created_at: string;
-}
-
-export interface PermitProjectLink {
-	permit_id: string;
-	project_id: string;
 }
 
 export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';

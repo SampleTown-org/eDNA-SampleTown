@@ -729,26 +729,25 @@ CREATE INDEX IF NOT EXISTS idx_entity_personnel_person
 -- ============================================================
 -- PERMITS, LICENSES, AGREEMENTS (GGBN-aligned)
 --
--- Supports the "MOU / License / Permit / Agreement" ask: every physical sample
--- should be traceable to the authority under which it was collected.
+-- Supports the "MOU / License / Permit / Agreement" ask: every physical
+-- sample should be traceable to the authority under which it was collected.
 -- Vocabulary for `permit_type` mirrors the GGBN Darwin Core permit extension
--- (registered with GBIF; mandatory for GGBN member institutions for specimens
--- collected on/after 2014-10-12). Keeping the terms identical means our DwC
--- export round-trips cleanly.
+-- (registered with GBIF; mandatory for GGBN member institutions for
+-- specimens collected on/after 2014-10-12). Keeping the terms identical
+-- means our DwC export round-trips cleanly.
 --
--- Three-table shape:
---   permits           — the authoritative document (permit / MOU / MTA / DUA …)
---   permit_projects   — many-to-many: one permit can cover several projects
---   permit_scopes     — site + date-range windows in which a permit is valid;
---                       a permit may have multiple scope rows (e.g. Site A in
---                       summer, Site B in fall). NULL site_id = covers every
---                       site in the linked projects.
+-- Two-table shape:
+--   permits        — the authoritative document (permit / MOU / MTA / DUA …)
+--   permit_scopes  — (permit × site × date-range) validity windows. Every
+--                    scope names one specific site; there is no "covers all
+--                    sites in project" shortcut. Project linkage is derived
+--                    at query time via sites.project_id — no direct
+--                    permit↔project junction.
 --
--- A sample is "covered" by a permit iff (1) the permit is linked to the
--- sample's project, (2) there is a scope row matching the sample's site (or
--- scope.site_id IS NULL), and (3) collection_date falls within the scope's
--- [valid_from, valid_until] window (NULLs = open-ended). See
--- src/lib/server/permit-coverage.ts for the coverage helper.
+-- A sample is "covered" by a permit iff there is a `permit_scopes` row with
+-- scope.site_id = sample.site_id AND sample.collection_date ∈
+-- [valid_from, valid_until] (NULL endpoints = open-ended). See
+-- src/lib/server/permit-coverage.ts for the helper.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS permits (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -773,28 +772,22 @@ CREATE TABLE IF NOT EXISTS permits (
 
 CREATE INDEX IF NOT EXISTS idx_permits_lab ON permits(lab_id);
 
--- Many-to-many between permits and projects. A permit may blanket several
--- projects under the same umbrella (e.g. one multi-year collecting permit
--- that covers both the SE Alaska and Bering Sea projects).
-CREATE TABLE IF NOT EXISTS permit_projects (
-    permit_id TEXT NOT NULL REFERENCES permits(id) ON DELETE CASCADE,
-    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    PRIMARY KEY (permit_id, project_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_permit_projects_project ON permit_projects(project_id);
-
--- Site + date-range validity windows. Multiple rows per permit allowed; rows
--- are OR'd when testing coverage. NULL site_id = "every site in the linked
--- projects" (shorthand so operators don't have to list every site).
+-- (permit × site) coverage row with a date-range validity window. Every
+-- scope names a specific site; samples at other sites are not covered. A
+-- permit with zero scope rows covers nothing (inert). Multiple scope rows
+-- per permit are OR'd when testing coverage, so a permit valid at Site A in
+-- summer and Site B in fall gets two rows.
 CREATE TABLE IF NOT EXISTS permit_scopes (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     permit_id TEXT NOT NULL REFERENCES permits(id) ON DELETE CASCADE,
-    site_id TEXT REFERENCES sites(id) ON DELETE CASCADE,  -- NULL = all sites
+    site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
     valid_from TEXT,                      -- ISO date; NULL = open start
     valid_until TEXT,                     -- ISO date; NULL = open end
     notes TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- A given (permit, site) pair uses one row; changing the window
+    -- overwrites rather than stacks. Keeps "add cart to permit" idempotent.
+    UNIQUE (permit_id, site_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_permit_scopes_permit ON permit_scopes(permit_id);

@@ -40,11 +40,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		ORDER BY created_at DESC
 	`).all(params.sampleId);
 
-	// Permits that cover this sample (by project + site + collection_date window).
+	// Permits that cover this sample (by site + collection_date window).
 	// Empty array = uncovered, which the detail page flags to prompt operators.
 	const coveringPermits = permitsCoveringSample(db, {
 		labId,
-		projectId: sampleRow.project_id as string,
 		siteId: sampleRow.site_id as string,
 		collectionDate: sampleRow.collection_date as string
 	});

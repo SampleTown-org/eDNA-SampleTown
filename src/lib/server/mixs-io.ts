@@ -214,12 +214,10 @@ function buildAttributionMap(
 			`
       SELECT DISTINCT s.id AS sample_id, p.id AS permit_id, p.permit_type, p.identifier
         FROM samples s
-        JOIN permit_projects pp ON pp.project_id = s.project_id
-        JOIN permits       p    ON p.id = pp.permit_id AND p.lab_id = s.lab_id
-        JOIN permit_scopes ps   ON ps.permit_id = p.id
+        JOIN permit_scopes ps ON ps.site_id = s.site_id
+        JOIN permits       p  ON p.id = ps.permit_id AND p.lab_id = s.lab_id
        WHERE s.lab_id = ?
          AND s.id IN (${placeholders})
-         AND (ps.site_id IS NULL OR ps.site_id = s.site_id)
          AND (ps.valid_from  IS NULL OR ps.valid_from  <= s.collection_date)
          AND (ps.valid_until IS NULL OR ps.valid_until >= s.collection_date)
       `

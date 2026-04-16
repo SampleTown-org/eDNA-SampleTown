@@ -30,22 +30,24 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		ORDER BY created_at DESC
 	`).all(params.siteId);
 
-	// Permits with scope rows that name this site (explicitly) and permits
-	// whose scopes are site-agnostic (site_id IS NULL) but still cover this
-	// project. The unioned result gives the operator a single list to look at.
-	const siteRow = site as { project_id: string };
+	// Permits covering this site (scope rows matching this site_id). The
+	// scope row itself — its date window — travels with the permit so the UI
+	// can show (+ edit) the validity period inline.
 	const permits = db
 		.prepare(
-			`SELECT DISTINCT p.*
+			`SELECT p.*, ps.id AS scope_id, ps.valid_from, ps.valid_until, ps.notes AS scope_notes
 			   FROM permits p
-			   JOIN permit_projects pp ON pp.permit_id = p.id
-			   JOIN permit_scopes   ps ON ps.permit_id = p.id
-			  WHERE p.lab_id = ?
-			    AND pp.project_id = ?
-			    AND (ps.site_id = ? OR ps.site_id IS NULL)
+			   JOIN permit_scopes ps ON ps.permit_id = p.id
+			  WHERE p.lab_id = ? AND ps.site_id = ?
 			  ORDER BY p.name`
 		)
-		.all(labId, siteRow.project_id, params.siteId);
+		.all(labId, params.siteId);
 
-	return { site, samples, photos, permits };
+	// Lightweight list of every permit in the lab — used by the
+	// "add existing permit to this site" picker on the site detail page.
+	const labPermits = db
+		.prepare('SELECT id, name, permit_type, identifier FROM permits WHERE lab_id = ? ORDER BY name')
+		.all(labId);
+
+	return { site, samples, photos, permits, labPermits };
 };

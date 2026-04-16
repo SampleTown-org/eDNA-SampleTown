@@ -1371,12 +1371,7 @@
 	</div>
 
 	{:else if tabType === 'permits'}
-	<PermitsTab
-		projects={data.projectsForPicker as any}
-		sites={data.sitesForPicker as any}
-		{searchQuery}
-		{inputCls}
-	/>
+	<PermitsTab {searchQuery} {inputCls} />
 
 	{:else if tabType === 'feedback'}
 	<div class="space-y-3">

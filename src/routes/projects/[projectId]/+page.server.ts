@@ -145,18 +145,20 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		}))
 		.sort((a, b) => b.total - a.total || a.full_name.localeCompare(b.full_name));
 
-	// Permits linked to this project. We show all linked permits with their
-	// scope summary so operators can see at a glance what the project is
-	// authorized for.
+	// Permits touching this project — derived via sites.project_id. Any
+	// permit with at least one scope row pointing at a site in this project
+	// is listed; only those scope rows (i.e. scopes for sites in THIS
+	// project) are shown in the rollup.
 	const linkedPermits = db
 		.prepare(
-			`SELECT p.*
+			`SELECT DISTINCT p.*
 			   FROM permits p
-			   JOIN permit_projects pp ON pp.permit_id = p.id
-			  WHERE pp.project_id = ? AND p.lab_id = ?
+			   JOIN permit_scopes ps ON ps.permit_id = p.id
+			   JOIN sites         s  ON s.id = ps.site_id
+			  WHERE p.lab_id = ? AND s.project_id = ?
 			  ORDER BY p.name`
 		)
-		.all(params.projectId, labId) as Array<{ id: string }>;
+		.all(labId, params.projectId) as Array<{ id: string }>;
 
 	const permitIds = linkedPermits.map((p) => p.id);
 	const permitScopes = permitIds.length
@@ -164,11 +166,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				.prepare(
 					`SELECT ps.*, st.site_name
 					   FROM permit_scopes ps
-					   LEFT JOIN sites st ON st.id = ps.site_id
+					   JOIN sites st ON st.id = ps.site_id
 					  WHERE ps.permit_id IN (${permitIds.map(() => '?').join(',')})
+					    AND st.project_id = ?
 					  ORDER BY ps.valid_from`
 				)
-				.all(...permitIds) as Array<{ permit_id: string }>)
+				.all(...permitIds, params.projectId) as Array<{ permit_id: string }>)
 		: [];
 	const scopesByPermit = new Map<string, unknown[]>();
 	for (const s of permitScopes) {

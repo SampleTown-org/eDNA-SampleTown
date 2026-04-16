@@ -5,61 +5,68 @@ import { apiError } from '$lib/server/api-errors';
 import { requireLab } from '$lib/server/guards';
 import { parseBody } from '$lib/server/validation';
 import { PermitCreateBody } from '$lib/server/schemas/permits';
-import { setPermitProjects } from '$lib/server/permit-coverage';
-import {
-	assertProjectsInLab,
-	assertScopeSitesInLab,
-	loadPermitWithLinks
-} from '$lib/server/permits-helpers';
+import { replacePermitScopes } from '$lib/server/permit-coverage';
+import { assertSitesInLab, loadPermitWithScopes } from '$lib/server/permits-helpers';
 
 /**
  * GET /api/permits
- * List permits for the caller's lab. Each permit is returned with its linked
- * project_ids and scope rows so the list view has everything it needs without
- * per-row follow-up fetches.
+ *
+ * Cross-cutting list for the Settings "Permits" tab. Each permit is returned
+ * with its scope rows (joined with site_name + project_id so the UI can
+ * render a rollup of covered sites/projects without a second fetch).
+ *
+ * Query params:
+ *   ?site_id=<id>    — only return permits with a scope row for this site.
+ *                      Used by the site detail page to show "permits covering
+ *                      this site" without bulk-loading every permit.
  */
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	const { labId } = requireLab(locals);
 	const db = getDb();
-	const permits = db
-		.prepare('SELECT * FROM permits WHERE lab_id = ? ORDER BY created_at DESC')
-		.all(labId) as Array<{ id: string }>;
+	const siteFilter = url.searchParams.get('site_id');
+
+	let permits: Array<{ id: string }>;
+	if (siteFilter) {
+		permits = db
+			.prepare(
+				`SELECT DISTINCT p.*
+				   FROM permits p
+				   JOIN permit_scopes ps ON ps.permit_id = p.id
+				  WHERE p.lab_id = ? AND ps.site_id = ?
+				  ORDER BY p.created_at DESC`
+			)
+			.all(labId, siteFilter) as Array<{ id: string }>;
+	} else {
+		permits = db
+			.prepare('SELECT * FROM permits WHERE lab_id = ? ORDER BY created_at DESC')
+			.all(labId) as Array<{ id: string }>;
+	}
 
 	if (permits.length === 0) return json([]);
 
 	const ids = permits.map((p) => p.id);
 	const placeholders = ids.map(() => '?').join(',');
 
-	const projectLinks = db
-		.prepare(`SELECT permit_id, project_id FROM permit_projects WHERE permit_id IN (${placeholders})`)
-		.all(...ids) as Array<{ permit_id: string; project_id: string }>;
-
+	// Single batched query for every scope row with site + project metadata.
 	const scopes = db
 		.prepare(
-			`SELECT * FROM permit_scopes WHERE permit_id IN (${placeholders}) ORDER BY valid_from`
+			`SELECT ps.*, s.site_name, s.project_id, pr.project_name
+			   FROM permit_scopes ps
+			   JOIN sites    s  ON s.id  = ps.site_id
+			   JOIN projects pr ON pr.id = s.project_id
+			  WHERE ps.permit_id IN (${placeholders})
+			  ORDER BY s.site_name`
 		)
 		.all(...ids) as Array<{ permit_id: string }>;
 
-	const byPermitProjects = new Map<string, string[]>();
-	for (const link of projectLinks) {
-		const arr = byPermitProjects.get(link.permit_id) ?? [];
-		arr.push(link.project_id);
-		byPermitProjects.set(link.permit_id, arr);
-	}
-	const byPermitScopes = new Map<string, unknown[]>();
+	const byPermit = new Map<string, unknown[]>();
 	for (const s of scopes) {
-		const arr = byPermitScopes.get(s.permit_id) ?? [];
+		const arr = byPermit.get(s.permit_id) ?? [];
 		arr.push(s);
-		byPermitScopes.set(s.permit_id, arr);
+		byPermit.set(s.permit_id, arr);
 	}
 
-	return json(
-		permits.map((p) => ({
-			...p,
-			project_ids: byPermitProjects.get(p.id) ?? [],
-			scopes: byPermitScopes.get(p.id) ?? []
-		}))
-	);
+	return json(permits.map((p) => ({ ...p, scopes: byPermit.get(p.id) ?? [] })));
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -90,35 +97,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				user.id
 			);
 
-			if (data.project_ids?.length) {
-				// Validate every project belongs to this lab before linking.
-				assertProjectsInLab(db, data.project_ids, labId);
-				setPermitProjects(db, id, data.project_ids);
-			}
-
 			if (data.scopes?.length) {
-				assertScopeSitesInLab(db, data.scopes, labId);
-				const insert = db.prepare(
-					`INSERT INTO permit_scopes (id, permit_id, site_id, valid_from, valid_until, notes)
-					 VALUES (?, ?, ?, ?, ?, ?)`
+				assertSitesInLab(db, data.scopes.map((s) => s.site_id), labId);
+				replacePermitScopes(
+					db,
+					id,
+					data.scopes.map((s) => ({
+						site_id: s.site_id,
+						valid_from: s.valid_from ?? null,
+						valid_until: s.valid_until ?? null,
+						notes: s.notes ?? null
+					}))
 				);
-				for (const s of data.scopes) {
-					insert.run(
-						generateId(),
-						id,
-						s.site_id ?? null,
-						s.valid_from ?? null,
-						s.valid_until ?? null,
-						s.notes ?? null
-					);
-				}
 			}
 		});
 		txn();
 
-		return json(loadPermitWithLinks(db, id), { status: 201 });
+		return json(loadPermitWithScopes(db, id), { status: 201 });
 	} catch (err) {
 		return apiError(err);
 	}
 };
-

@@ -4,26 +4,24 @@ import type { Permit } from '$lib/types';
 /**
  * Permit-coverage helpers.
  *
- * Coverage rule (see schema.sql permits comment for the full definition):
- *   A sample is covered by permit P iff
- *     1. P is linked to the sample's project via permit_projects, AND
- *     2. P has a permit_scopes row matching the sample's site
- *        (or scope.site_id IS NULL, meaning "all sites"), AND
- *     3. sample.collection_date is within [valid_from, valid_until]
- *        (inclusive; NULLs treated as open-ended).
+ * A sample is covered by permit P iff P has a `permit_scopes` row with
+ * site_id = sample.site_id AND sample.collection_date ∈
+ * [valid_from, valid_until] (NULL endpoints = open-ended).
  *
- * The lab_id filter is enforced everywhere so a stray join can't leak permits
- * across labs even if called from a mis-scoped handler.
+ * Project linkage is derived at query time via sites.project_id — there is
+ * no direct permit↔project junction. A permit "touches" a project when one
+ * of its scope rows points at a site belonging to that project.
+ *
+ * The lab_id filter is enforced everywhere so a stray join can't leak
+ * permits across labs even if called from a mis-scoped handler.
  */
 
 const COVERAGE_SQL = `
   SELECT DISTINCT p.*
     FROM permits p
-    JOIN permit_projects pp ON pp.permit_id = p.id
-    JOIN permit_scopes  ps ON ps.permit_id = p.id
+    JOIN permit_scopes ps ON ps.permit_id = p.id
    WHERE p.lab_id = @lab_id
-     AND pp.project_id = @project_id
-     AND (ps.site_id IS NULL OR ps.site_id = @site_id)
+     AND ps.site_id = @site_id
      AND (ps.valid_from  IS NULL OR ps.valid_from  <= @collection_date)
      AND (ps.valid_until IS NULL OR ps.valid_until >= @collection_date)
 `;
@@ -31,13 +29,12 @@ const COVERAGE_SQL = `
 /** Permits that cover this sample (empty = uncovered). */
 export function permitsCoveringSample(
 	db: Database,
-	args: { labId: string; projectId: string; siteId: string; collectionDate: string }
+	args: { labId: string; siteId: string; collectionDate: string }
 ): Permit[] {
 	return db
 		.prepare(COVERAGE_SQL)
 		.all({
 			lab_id: args.labId,
-			project_id: args.projectId,
 			site_id: args.siteId,
 			collection_date: args.collectionDate
 		}) as Permit[];
@@ -45,8 +42,7 @@ export function permitsCoveringSample(
 
 /**
  * Batch form for list views: returns a Map<sampleId, permitCount>. Zero-count
- * samples are NOT included; callers should default missing keys to 0. Used by
- * the missing-permit badge.
+ * samples are NOT included; callers should default missing keys to 0.
  */
 export function sampleCoverageCounts(
 	db: Database,
@@ -61,12 +57,10 @@ export function sampleCoverageCounts(
 			`
       SELECT s.id AS sample_id, COUNT(DISTINCT p.id) AS permit_count
         FROM samples s
-        JOIN permit_projects pp ON pp.project_id = s.project_id
-        JOIN permits       p    ON p.id = pp.permit_id AND p.lab_id = s.lab_id
-        JOIN permit_scopes ps   ON ps.permit_id = p.id
+        JOIN permit_scopes ps ON ps.site_id = s.site_id
+        JOIN permits       p  ON p.id = ps.permit_id AND p.lab_id = s.lab_id
        WHERE s.lab_id = ?
          AND s.id IN (${placeholders})
-         AND (ps.site_id IS NULL OR ps.site_id = s.site_id)
          AND (ps.valid_from  IS NULL OR ps.valid_from  <= s.collection_date)
          AND (ps.valid_until IS NULL OR ps.valid_until >= s.collection_date)
        GROUP BY s.id
@@ -79,26 +73,74 @@ export function sampleCoverageCounts(
 	return out;
 }
 
-/** Projects linked to a permit. */
-export function permitProjects(db: Database, permitId: string): string[] {
-	return (
-		db
-			.prepare('SELECT project_id FROM permit_projects WHERE permit_id = ?')
-			.all(permitId) as Array<{ project_id: string }>
-	).map((r) => r.project_id);
+/**
+ * Replace (permit_id, site_id) scope rows for a permit with the given set.
+ * Any site currently linked that isn't in `scopes` is dropped; each entry in
+ * `scopes` is upserted with the provided date window.
+ */
+export function replacePermitScopes(
+	db: Database,
+	permitId: string,
+	scopes: Array<{
+		site_id: string;
+		valid_from?: string | null;
+		valid_until?: string | null;
+		notes?: string | null;
+	}>
+): void {
+	const keepSiteIds = scopes.map((s) => s.site_id);
+
+	const txn = db.transaction(() => {
+		if (keepSiteIds.length === 0) {
+			db.prepare('DELETE FROM permit_scopes WHERE permit_id = ?').run(permitId);
+		} else {
+			const placeholders = keepSiteIds.map(() => '?').join(',');
+			db.prepare(
+				`DELETE FROM permit_scopes WHERE permit_id = ? AND site_id NOT IN (${placeholders})`
+			).run(permitId, ...keepSiteIds);
+		}
+		const upsert = db.prepare(
+			`INSERT INTO permit_scopes (id, permit_id, site_id, valid_from, valid_until, notes)
+			 VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)
+			 ON CONFLICT (permit_id, site_id) DO UPDATE SET
+			   valid_from = excluded.valid_from,
+			   valid_until = excluded.valid_until,
+			   notes = excluded.notes`
+		);
+		for (const s of scopes) {
+			upsert.run(permitId, s.site_id, s.valid_from ?? null, s.valid_until ?? null, s.notes ?? null);
+		}
+	});
+	txn();
 }
 
 /**
- * Replace the full set of project links for a permit. Caller is responsible
- * for validating that all project_ids belong to the permit's lab.
+ * Add/update a single (permit, site) scope row. Idempotent — re-running with
+ * a changed date window updates in place. Used by the site-detail CRUD UI
+ * and by the "add cart to permit" action.
  */
-export function setPermitProjects(db: Database, permitId: string, projectIds: string[]): void {
-	const txn = db.transaction((ids: string[]) => {
-		db.prepare('DELETE FROM permit_projects WHERE permit_id = ?').run(permitId);
-		const insert = db.prepare(
-			'INSERT INTO permit_projects (permit_id, project_id) VALUES (?, ?)'
-		);
-		for (const pid of ids) insert.run(permitId, pid);
-	});
-	txn(projectIds);
+export function upsertPermitScope(
+	db: Database,
+	args: {
+		permit_id: string;
+		site_id: string;
+		valid_from?: string | null;
+		valid_until?: string | null;
+		notes?: string | null;
+	}
+): void {
+	db.prepare(
+		`INSERT INTO permit_scopes (id, permit_id, site_id, valid_from, valid_until, notes)
+		 VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)
+		 ON CONFLICT (permit_id, site_id) DO UPDATE SET
+		   valid_from = excluded.valid_from,
+		   valid_until = excluded.valid_until,
+		   notes = excluded.notes`
+	).run(
+		args.permit_id,
+		args.site_id,
+		args.valid_from ?? null,
+		args.valid_until ?? null,
+		args.notes ?? null
+	);
 }

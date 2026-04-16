@@ -1,23 +1,19 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDb, generateId } from '$lib/server/db';
+import { getDb } from '$lib/server/db';
 import { apiError } from '$lib/server/api-errors';
 import { requireLab } from '$lib/server/guards';
 import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { parseBody } from '$lib/server/validation';
 import { PermitUpdateBody } from '$lib/server/schemas/permits';
-import { setPermitProjects } from '$lib/server/permit-coverage';
-import {
-	assertProjectsInLab,
-	assertScopeSitesInLab,
-	loadPermitWithLinks
-} from '$lib/server/permits-helpers';
+import { replacePermitScopes } from '$lib/server/permit-coverage';
+import { assertSitesInLab, loadPermitWithScopes } from '$lib/server/permits-helpers';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const { labId } = requireLab(locals);
 	const db = getDb();
 	assertLabOwnsRow(db, 'permits', params.id!, labId, 'Permit not found');
-	return json(loadPermitWithLinks(db, params.id!));
+	return json(loadPermitWithScopes(db, params.id!));
 };
 
 export const PUT: RequestHandler = async ({ params, request, locals }) => {
@@ -48,37 +44,24 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 				params.id
 			);
 
-			// Replace-on-update for project links. Simpler than diffing and the
-			// list is tiny (single-digit entries typical).
-			if (data.project_ids !== undefined) {
-				assertProjectsInLab(db, data.project_ids, labId);
-				setPermitProjects(db, params.id!, data.project_ids);
-			}
-
-			// Same approach for scopes — delete then re-insert. OK because scopes
-			// don't have outbound references; losing scope ids on edit is fine.
+			// Replace-on-update for scopes (caller sends the full desired set).
 			if (data.scopes !== undefined) {
-				assertScopeSitesInLab(db, data.scopes, labId);
-				db.prepare('DELETE FROM permit_scopes WHERE permit_id = ?').run(params.id);
-				const insert = db.prepare(
-					`INSERT INTO permit_scopes (id, permit_id, site_id, valid_from, valid_until, notes)
-					 VALUES (?, ?, ?, ?, ?, ?)`
+				assertSitesInLab(db, data.scopes.map((s) => s.site_id), labId);
+				replacePermitScopes(
+					db,
+					params.id!,
+					data.scopes.map((s) => ({
+						site_id: s.site_id,
+						valid_from: s.valid_from ?? null,
+						valid_until: s.valid_until ?? null,
+						notes: s.notes ?? null
+					}))
 				);
-				for (const s of data.scopes) {
-					insert.run(
-						generateId(),
-						params.id,
-						s.site_id ?? null,
-						s.valid_from ?? null,
-						s.valid_until ?? null,
-						s.notes ?? null
-					);
-				}
 			}
 		});
 		txn();
 
-		return json(loadPermitWithLinks(db, params.id!));
+		return json(loadPermitWithScopes(db, params.id!));
 	} catch (err) {
 		return apiError(err);
 	}
@@ -88,7 +71,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const { labId } = requireLab(locals);
 	const db = getDb();
 	assertLabOwnsRow(db, 'permits', params.id!, labId, 'Permit not found');
-	// ON DELETE CASCADE on permit_projects / permit_scopes takes care of children.
+	// ON DELETE CASCADE on permit_scopes takes care of child rows.
 	db.prepare('DELETE FROM permits WHERE id = ?').run(params.id);
 	return json({ ok: true });
 };

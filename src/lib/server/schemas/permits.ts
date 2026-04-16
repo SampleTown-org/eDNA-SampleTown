@@ -5,14 +5,11 @@ import { z } from 'zod';
  *
  * Vocabulary for `permit_type` is GGBN Darwin Core permit-extension aligned.
  * Enforcement lives here rather than in a CHECK constraint because the GGBN
- * term list evolves between schema releases and we want to update one file
- * when that happens, not `schema.sql` too.
+ * term list evolves between schema releases.
  *
- * Conventions copied from schemas/lab.ts:
- *  - SHORT_TEXT / LONG_TEXT length caps
- *  - Empty strings coerced to null
- *  - 32-char hex id validation
- *  - Unknown fields silently stripped
+ * Project linkage is derived (via sites.project_id), so requests never carry
+ * project_ids directly — they only list the sites a permit should cover,
+ * each with an optional validity window.
  */
 
 const SHORT_TEXT = z.string().max(200);
@@ -30,11 +27,6 @@ const optionalLongText = z.preprocess(
 
 const ID_REGEX = /^[0-9a-f]{32}$/;
 const idString = z.string().regex(ID_REGEX, 'must be a 32-char hex id');
-
-const optionalId = z.preprocess(
-	(v) => (typeof v === 'string' && v.trim() === '' ? null : v),
-	idString.nullable().optional()
-);
 
 const optionalDate = z.preprocess(
 	(v) => (typeof v === 'string' && v.trim() === '' ? null : v),
@@ -70,11 +62,11 @@ const permitFields = {
 	notes: optionalLongText
 };
 
+// Scope row: a (site, date-window) tuple. site_id is required — there is no
+// "all sites" shortcut at the data-model level. The API upserts on
+// (permit_id, site_id) so the same site listed twice is deduplicated.
 const scopeShape = {
-	// Null site_id means "every site in the linked projects" — the shorthand
-	// that lets operators attach a permit to a project without enumerating
-	// every site.
-	site_id: optionalId,
+	site_id: idString,
 	valid_from: optionalDate,
 	valid_until: optionalDate,
 	notes: optionalLongText
@@ -82,17 +74,25 @@ const scopeShape = {
 
 export const PermitCreateBody = z.object({
 	...permitFields,
-	// Optional on create so the form can attach projects/scopes in the same
-	// call. Empty array = draft permit that doesn't cover anything yet.
-	project_ids: z.array(idString).max(1000).optional(),
+	// Scopes are optional on create so the UI can choose to create an inert
+	// permit first and add site rows afterwards from the site detail page.
 	scopes: z.array(z.object(scopeShape)).max(1000).optional()
 });
 
 export const PermitUpdateBody = z.object({
 	...permitFields,
-	project_ids: z.array(idString).max(1000).optional(),
 	scopes: z.array(z.object(scopeShape)).max(1000).optional()
 });
 
-export const PermitScopeCreateBody = z.object(scopeShape);
-export const PermitScopeUpdateBody = z.object(scopeShape);
+/**
+ * Body for adding a saved cart's site references to an existing permit.
+ * Extracted every sample/site in the cart is flattened server-side to a set
+ * of unique site_ids; the caller's valid_from/valid_until apply to every
+ * new/updated scope row.
+ */
+export const AddCartToPermitBody = z.object({
+	permit_id: idString,
+	cart_id: idString,
+	valid_from: optionalDate,
+	valid_until: optionalDate
+});
