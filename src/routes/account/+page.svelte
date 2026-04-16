@@ -96,6 +96,23 @@
 	const inputCls =
 		'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500';
 
+	// --- Principles acknowledgement ---
+	// One-time nudge: if the user hasn't yet acknowledged /principles, show a
+	// banner until they click it. The backing column (users.principles_ack_at)
+	// is set by POST /api/account/principles-ack.
+	let principlesAckAt = $state<string | null>(data.user?.principles_ack_at ?? null);
+	let principlesBusy = $state(false);
+
+	async function ackPrinciples() {
+		principlesBusy = true;
+		const res = await fetch('/api/account/principles-ack', { method: 'POST' });
+		if (res.ok) {
+			const body = await res.json();
+			principlesAckAt = body.principles_ack_at ?? null;
+		}
+		principlesBusy = false;
+	}
+
 	// --- Danger zone: self-delete account ---
 	let deleteOpen = $state(false);
 	let deleteConfirm = $state('');
@@ -126,6 +143,24 @@
 		<h1 class="text-2xl font-bold text-white">Account</h1>
 		<p class="text-slate-400 mt-1 text-sm">Your sign-in details and password.</p>
 	</div>
+
+	{#if !principlesAckAt}
+		<div class="p-4 rounded-lg border border-ocean-800/60 bg-ocean-950/30 space-y-2">
+			<h2 class="text-sm font-semibold text-white">Data governance principles</h2>
+			<p class="text-sm text-slate-300">
+				SampleTown aligns with FAIR, CARE, and OCAP®. Please read our
+				<a class="text-ocean-400 hover:text-ocean-300" href="/principles">data governance principles</a>
+				before collecting samples under regulated or Indigenous-involving projects.
+			</p>
+			<button
+				onclick={ackPrinciples}
+				disabled={principlesBusy}
+				class="mt-1 px-3 py-1.5 bg-ocean-600 text-white text-sm font-medium rounded-lg hover:bg-ocean-500 disabled:opacity-50"
+			>
+				{principlesBusy ? 'Saving…' : 'I have read the principles'}
+			</button>
+		</div>
+	{/if}
 
 	<!-- Identity card -->
 	<div class="p-4 rounded-lg bg-slate-800/50 border border-slate-800 space-y-3">

@@ -13,6 +13,7 @@ import type { User } from '$lib/types';
 const SAFE_USER_COLS = `
 	u.id, u.lab_id, u.github_id, u.username, u.display_name, u.email, u.avatar_url, u.avatar_emoji,
 	u.role, u.is_local_account, u.is_approved, u.must_change_password,
+	u.principles_ack_at,
 	u.created_at, u.updated_at
 `;
 
