@@ -200,24 +200,7 @@
 </script>
 
 <div class="space-y-4">
-	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}Samples</h1>
-		<div class="flex items-center gap-2">
-			{#if selectedIds.size > 0}
-				<button
-					onclick={() => (selectedIds = new Set())}
-					class="hidden sm:inline-flex write-only px-3 py-2 border border-slate-700 text-slate-400 rounded-lg hover:bg-slate-800 hover:text-white transition-colors text-sm"
-					title="Clear the current selection"
-				>Clear ({selectedIds.size})</button>
-			{/if}
-			{#if selectionChanged}
-				<button onclick={updateCart} class="hidden sm:inline-flex write-only px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
-					Update Cart ({selectedIds.size})
-				</button>
-			{/if}
-			<a href="/samples/new" class="hidden sm:inline-flex write-only px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Sample</a>
-		</div>
-	</div>
+	<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}Samples</h1>
 
 	{#if markers.length > 0}
 		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={replaceFromBox} />
@@ -281,5 +264,19 @@
 		onbulkdelete={bulkDeleteSamples}
 		onbulkduplicate={bulkDuplicateSamples}
 		bind:colorByKey
-	/>
+	>
+		{#snippet filterActions()}
+			{#if selectedIds.size > 0}
+				<button
+					onclick={() => (selectedIds = new Set())}
+					class="hidden sm:inline-flex write-only px-3 py-1.5 border border-slate-700 text-slate-400 rounded-lg hover:bg-slate-800 hover:text-white transition-colors text-sm"
+					title="Clear the current selection"
+				>Clear ({selectedIds.size})</button>
+			{/if}
+			{#if selectionChanged}
+				<button onclick={updateCart} class="hidden sm:inline-flex write-only px-3 py-1.5 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">Update Cart ({selectedIds.size})</button>
+			{/if}
+			<a href="/samples/new" class="hidden sm:inline-flex write-only px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New Sample</a>
+		{/snippet}
+	</DataTable>
 </div>

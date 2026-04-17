@@ -45,6 +45,7 @@
 		 *  filter icon toggles this. Parents should use this to gate their
 		 *  row-filtering logic. */
 		cartFilterActive?: boolean;
+		filterActions?: Snippet;
 	}
 
 	let {
@@ -64,7 +65,8 @@
 		selectable = false,
 		selectedIds = $bindable(new Set<string>()),
 		cartFilterLabel = '',
-		cartFilterActive = $bindable(true)
+		cartFilterActive = $bindable(true),
+		filterActions
 	}: Props = $props();
 
 	let sortKey = $state('');
@@ -260,6 +262,11 @@
 			<span class="text-[10px] text-slate-600 hidden sm:inline">
 				Shift+↑↓ navigate · Space select · Shift+click header to color
 			</span>
+		{/if}
+		{#if filterActions}
+			<div class="ml-auto flex items-center gap-2">
+				{@render filterActions()}
+			</div>
 		{/if}
 	</div>
 {/if}
