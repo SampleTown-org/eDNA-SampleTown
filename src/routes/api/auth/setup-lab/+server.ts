@@ -9,20 +9,15 @@ import { createLab } from '$lib/server/lab-setup';
 const MAX_LAB_NAME = 80;
 
 /**
- * Self-serve lab creation. Caller must be authenticated AND have
- * lab_id=NULL (i.e. a brand-new GitHub-OAuth signup who hasn't joined or
- * created a lab yet). On success: lab is created with picklists seeded,
- * the caller becomes its admin, and they can immediately access the app.
+ * Self-serve lab creation. Caller must be authenticated. On success: lab
+ * is created with picklists seeded, the caller becomes its admin, and
+ * their active_lab_id is switched to the new lab. Works for both first-
+ * time signups (no lab yet) and existing users creating an additional lab.
  *
- * Rate-limited per IP at 3 lab creations per day to keep spam manageable
- * without billing in place. The hooks-server lab-setup gate also blocks
- * any user who already has a lab from re-running this.
+ * Rate-limited per IP at 3 lab creations per day.
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
 	const user = requireUser(locals);
-	if (user.lab_id) {
-		return json({ error: 'You already belong to a lab' }, { status: 400 });
-	}
 
 	const ip = getClientAddress();
 	if (!checkRate(`lab-create:${ip}`, 3, 24 * 60 * 60_000)) {
