@@ -100,18 +100,20 @@
 											<span class="text-xs text-slate-500">{l.role}</span>
 										</button>
 									{/each}
-									<div class="border-t border-slate-700 mt-1 pt-1">
-										<a
-											href="/auth/setup-lab"
-											onclick={() => (labSwitcherOpen = false)}
-											class="block w-full text-left px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-										>
-											<span class="inline-flex items-center gap-1.5">
-												<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
-												New lab
-											</span>
-										</a>
-									</div>
+									{#if !user?.is_demo}
+										<div class="border-t border-slate-700 mt-1 pt-1">
+											<a
+												href="/auth/setup-lab"
+												onclick={() => (labSwitcherOpen = false)}
+												class="block w-full text-left px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+											>
+												<span class="inline-flex items-center gap-1.5">
+													<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
+													New lab
+												</span>
+											</a>
+										</div>
+									{/if}
 								</div>
 							{/if}
 						</div>

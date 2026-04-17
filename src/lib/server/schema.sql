@@ -63,6 +63,10 @@ CREATE TABLE IF NOT EXISTS users (
     -- Legacy: single global role. Roles are now per-lab on lab_memberships.
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
     is_local_account INTEGER NOT NULL DEFAULT 0,
+    -- Demo accounts can browse and mutate lab data normally but cannot
+    -- change their own password or create new labs. Used for the
+    -- pre-filled guest/guest account on the login page.
+    is_demo INTEGER NOT NULL DEFAULT 0,
     -- Approval gate: GitHub-OAuth users start with is_approved=0 and must be
     -- approved by an admin before they can sign in. Local users created by
     -- an admin start with is_approved=1.

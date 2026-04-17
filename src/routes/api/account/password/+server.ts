@@ -19,9 +19,10 @@ import { ChangeOwnPasswordBody } from '$lib/server/schemas/auth';
  */
 export const POST: RequestHandler = async ({ request, locals, cookies, getClientAddress }) => {
 	const user = requireUser(locals);
+	if (user.is_demo) {
+		return json({ error: 'Demo accounts cannot change passwords' }, { status: 403 });
+	}
 
-	// Rate limit per user: 5 / minute. Stops a stolen-cookie attacker from
-	// brute-forcing the old password.
 	if (!checkRate(`password-change:${user.id}:${getClientAddress()}`, 5, 60_000)) {
 		return json({ error: 'Too many attempts, try again in a moment' }, { status: 429 });
 	}

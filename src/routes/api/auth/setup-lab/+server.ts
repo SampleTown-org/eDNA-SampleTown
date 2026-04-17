@@ -18,6 +18,9 @@ const MAX_LAB_NAME = 80;
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
 	const user = requireUser(locals);
+	if (user.is_demo) {
+		return json({ error: 'Demo accounts cannot create labs' }, { status: 403 });
+	}
 
 	const ip = getClientAddress();
 	if (!checkRate(`lab-create:${ip}`, 3, 24 * 60 * 60_000)) {

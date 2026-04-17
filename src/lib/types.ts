@@ -29,6 +29,7 @@ export interface User {
 	avatar_emoji: string | null;
 	role: 'admin' | 'user' | 'viewer';
 	is_local_account: number;
+	is_demo: number;
 	is_approved: number;
 	must_change_password: number;
 	created_at: string;
