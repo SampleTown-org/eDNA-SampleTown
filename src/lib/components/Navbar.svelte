@@ -2,6 +2,7 @@
 	import type { User } from '$lib/types';
 	import { cart } from '$lib/stores/cart.svelte';
 	import Scanner from './Scanner.svelte';
+	import { invalidateAll } from '$app/navigation';
 
 	let scanOpen = $state(false);
 	let labSwitcherOpen = $state(false);
@@ -22,7 +23,10 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ lab_id: labId })
 		});
-		if (res.ok) window.location.href = '/';
+		if (res.ok) {
+			cart.clearAll();
+			window.location.href = '/';
+		}
 	}
 
 	const ROLE_ICON: Record<string, string> = {
