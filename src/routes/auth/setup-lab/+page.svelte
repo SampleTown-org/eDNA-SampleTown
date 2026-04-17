@@ -99,12 +99,12 @@
 			<div>
 				<label for="lab-name" class="block text-sm text-slate-300 mb-1">Lab name</label>
 				<input id="lab-name" type="text" bind:value={labName} class={inputCls}
-					placeholder="e.g. Cryomics Lab — UBC" />
+					placeholder="e.g. Historical Genetics Lab" />
 			</div>
 			<div>
 				<label for="lab-slug" class="block text-sm text-slate-300 mb-1">URL slug <span class="text-slate-500 text-xs">(optional, derived from the name otherwise)</span></label>
 				<input id="lab-slug" type="text" bind:value={labSlug} class={inputCls}
-					placeholder="e.g. cryomics-ubc" />
+					placeholder="e.g. historical-genetics" />
 			</div>
 			<div class="flex gap-3 pt-2">
 				<button type="submit" disabled={busy}
