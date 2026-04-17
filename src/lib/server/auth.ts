@@ -84,7 +84,6 @@ export function validateSession(sessionId: string): User | null {
 		  ON m.user_id = u.id AND m.lab_id = u.active_lab_id AND m.status = 'active'
 		WHERE s.id = ?
 		  AND s.expires_at > datetime('now')
-		  AND u.is_approved = 1
 	`).get(sessionId) as User | undefined;
 	return row ?? null;
 }

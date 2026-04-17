@@ -47,15 +47,6 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		avatar_url: githubUser.avatar_url
 	});
 
-	// Approval gate: a lab admin can suspend a member by setting
-	// is_approved=0; that user can no longer sign in. Brand-new GitHub
-	// signups are auto-approved (see upsertGitHubUser) so they reach the
-	// session creation below; the lab-setup gate in hooks.server.ts then
-	// routes them to /auth/setup-lab if they have no lab_id yet.
-	if (!user.is_approved) {
-		throw redirect(302, '/auth/pending');
-	}
-
 	const sessionId = createSession(user.id);
 	cookies.set('session', sessionId, sessionCookieOptions());
 
