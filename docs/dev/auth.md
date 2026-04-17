@@ -17,14 +17,16 @@ Implemented via [`arctic`](https://arctic.js.org/). Flow:
    against the cookie (cross-browser fixation defense).
 3. `arctic` validates the auth code → access token → we GET
    `https://api.github.com/user` for the profile.
-4. `upsertGitHubUser()` creates or updates the local users row keyed on
-   `github_id`. New users land `is_approved=1` (auto-approve, see
-   below) and `lab_id=NULL`.
+4. `upsertGitHubUser()` creates or updates the local users row keyed
+   on `github_id`. Previously soft-deleted users are re-enabled
+   (`is_approved=1, is_deleted=0`) so they can re-auth and accept a
+   fresh invite. New users start with no `lab_memberships` row.
 5. Session row created, cookie set, redirect to `/`.
 
 Brand-new GitHub signups land at `/auth/setup-lab` because
-`blockedByMissingLab` redirects any signed-in user with `lab_id=NULL`
-to that page (everything except `/account`, `/auth/setup-lab`,
+`blockedByMissingLab` redirects any signed-in user with no active
+membership (i.e. `user.lab_id=NULL` from the session query) to that
+page (everything except `/account`, `/auth/setup-lab`,
 `/auth/join/<token>`, and `/auth/logout` is gated until they pick a
 lab).
 
@@ -59,15 +61,16 @@ before the must-change-password gate forces a real password).
 - Periodic sweep in `maybeSweepExpired()` (rate-limited to once per 5
   minutes per process) deletes expired sessions + expired oauth_states
 
-`validateSession()` joins `sessions × users` and only returns a user
-if `expires_at > NOW AND users.is_approved = 1 AND users.is_deleted =
-0`. So suspending a user (`is_approved=0`) or deleting them
-(`is_deleted=1`) immediately invalidates their open sessions on the
-next request.
+`validateSession()` joins `sessions × users × lab_memberships` (LEFT
+JOIN on active membership). `user.lab_id` and `user.role` are sourced
+from the membership row (`m.lab_id`, `COALESCE(m.role, 'user')`). If
+the user has no active membership, both come back null/default and the
+hooks gate redirects to `/auth/setup-lab`.
 
 ## RBAC
 
-Three roles: `admin`, `user`, `viewer`.
+Three roles: `admin`, `user`, `viewer` — **per-lab** via
+`lab_memberships.role`.
 
 - **`admin`** — full lab access; can manage users, picklists, primer
   sets, PCR protocols, personnel, invites, backup config, snapshots;
@@ -77,9 +80,8 @@ Three roles: `admin`, `user`, `viewer`.
 - **`viewer`** — read-only on every lab resource; can change own
   password and submit feedback only.
 
-Roles are scoped per-lab: a user is `admin` *of their lab*, not a
-super-admin across all labs. There's no super-admin role; cross-lab
-operations require direct DB access.
+A user can be `admin` of one lab and `viewer` of another. There's no
+super-admin role; cross-lab operations require direct DB access.
 
 ## hooks.server.ts gates
 
@@ -119,22 +121,32 @@ fingerprint its own inline SSR scripts.
 
 The signup story:
 
-1. New user signs in via GitHub → user row created with `lab_id=NULL`
+1. New user signs in via GitHub → user row created, no memberships
 2. Lab-setup gate redirects to `/auth/setup-lab`
 3. Two paths:
    - **Start a new lab** → POST `/api/auth/setup-lab` with `{ name,
      slug? }` → creates a labs row, seeds picklists / primer sets /
-     pcr protocols for it, sets the caller's `lab_id` and `role =
-     admin`. Rate-limited 3/day/IP.
+     pcr protocols for it, creates an `admin` membership, sets
+     `active_lab_id`. Rate-limited 3/day/IP. Works for both
+     first-time signups and existing users adding a lab.
    - **Join an existing lab** → admin generates a 24-byte URL-safe
      invite token at `Manage → People → Lab Invites`. The recipient
      visits `/auth/join/<token>` (signs in if not already), POSTs to
-     `/api/auth/join`. Atomic `UPDATE invites SET used_at = NOW WHERE
-     token = ? AND used_at IS NULL` so concurrent accepts can't
-     double-spend.
+     `/api/auth/join`. Creates a membership row. If the user has a
+     **blocked** membership in that lab, the invite is rejected.
+     Atomic `UPDATE invites SET used_at = NOW WHERE token = ? AND
+     used_at IS NULL` so concurrent accepts can't double-spend.
 
 Invite role + email_hint are set at creation; default TTL 14 days
 (max 90).
+
+## Lab switching
+
+Users with memberships in multiple labs see a dropdown in the navbar
+(next to "SampleTown.org / Lab Name"). Selecting a lab POSTs to
+`/api/account/active-lab` which updates `users.active_lab_id` and
+reloads the page. The dropdown also includes a "+ New lab" entry
+linking to `/auth/setup-lab`.
 
 ## Password change
 

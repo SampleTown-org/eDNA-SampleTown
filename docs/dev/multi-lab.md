@@ -1,6 +1,35 @@
 # Multi-lab tenancy
 
-One install, many labs, hard isolation between them.
+One install, many labs, hard isolation between them. A user can belong
+to multiple labs with independent roles in each.
+
+## Data model
+
+Lab access is expressed through the `lab_memberships` join table:
+
+```
+lab_memberships(user_id, lab_id, role, status, added_at, added_by)
+  PK: (user_id, lab_id)
+  role  IN ('admin', 'user', 'viewer')
+  status IN ('active', 'blocked')
+```
+
+`users.active_lab_id` points at whichever lab the UI is currently
+rendering. The navbar lab-switcher updates this via
+`POST /api/account/active-lab`.
+
+### Legacy columns on `users` (retained on prod, not read by code)
+
+- `lab_id` — original single-lab FK. Kept so `SELECT *` doesn't fail
+  on older rows. No code path reads this.
+- `role` — original global role. Roles are now per-lab on memberships.
+- `is_deleted` — replaced by "no memberships" + `is_approved=0`.
+
+### Migration
+
+`scripts/migrate-to-lab-memberships.mjs` backfills one membership per
+existing non-soft-deleted user and copies their `lab_id` into
+`active_lab_id`. Idempotent. Run once on prod after deploy.
 
 ## The boundary
 
@@ -12,7 +41,7 @@ a 403 would tell the attacker the row exists.
 Tables that carry `lab_id`:
 
 - `labs` (the parent)
-- `users` (nullable — unset until a user picks a lab)
+- `lab_memberships` (the join)
 - `projects`, `sites`, `samples`
 - `extracts`, `pcr_plates`, `pcr_amplifications`
 - `library_plates`, `library_preps`
@@ -42,6 +71,11 @@ requireLab(locals)          // requireUser + 403 if user.lab_id is null
 requireLabAdmin(locals)     // requireLab + 403 if user.role !== 'admin'
 ```
 
+`user.lab_id` and `user.role` are sourced from the active membership
+via a LEFT JOIN in `validateSession()`. If the user has no active
+membership for their `active_lab_id`, both come back null/default and
+the hooks gate redirects to `/auth/setup-lab`.
+
 Plus one helper in `src/lib/server/lab-scope.ts`:
 
 ```ts
@@ -60,21 +94,6 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 };
 ```
 
-For list endpoints, the filter goes straight in the WHERE clause:
-
-```ts
-db.prepare('SELECT * FROM samples WHERE lab_id = ? AND is_deleted = 0').all(labId);
-```
-
-For POST handlers that reference parent rows, validate the parent's
-lab too:
-
-```ts
-assertLabOwnsRow(db, 'projects', data.project_id, labId, 'Project not found');
-assertLabOwnsRow(db, 'sites', data.site_id, labId, 'Site not found');
-// then INSERT INTO samples (..., lab_id, ...) VALUES (..., labId, ...)
-```
-
 ## Why 404 not 403
 
 Returning 403 ("forbidden") on a row that exists in another lab leaks
@@ -83,47 +102,35 @@ real-but-foreign rows vs. a 404 on truly nonexistent ones. We don't
 distinguish: every cross-lab read or write looks identical to "row
 doesn't exist".
 
-`assertLabOwnsRow` enforces this:
-
-```ts
-const row = db.prepare(`SELECT lab_id FROM ${table} WHERE id = ?`).get(id);
-if (!row || row.lab_id !== labId) {
-  throw error(404, notFoundMessage ?? 'Not found');
-}
-```
-
-The `LAB_SCOPED_TABLES` allowlist in `lab-scope.ts` ensures the table
-name passed in is one we know carries `lab_id`. Throws a hard error
-otherwise (development-time check).
-
 ## Lab membership lifecycle
 
-- **Brand-new GitHub OAuth signup** — `lab_id = NULL`, hit the
-  lab-setup gate → `/auth/setup-lab` → either creates a new lab
-  (becomes its admin) or accepts an invite token.
-- **Pre-existing user (e.g. seeded admin)** — `lab_id` set to the
-  default lab on first boot.
-- **Accepting an invite** — sets `lab_id` to the inviting lab, role
-  to whatever the invite token specified. Overwrites any prior
-  membership (no multi-lab membership in v2).
-- **Lab deletion** — cascades all lab-scoped data. Members' `lab_id`
-  is null'd and `role` reset to `user`; their sessions are wiped
-  (except the deleting admin's, so they get a graceful redirect).
-- **User self-delete** — soft-delete (`is_deleted=1`), sessions
-  wiped, password hash cleared. Last-admin guard refuses if you're
-  the only admin of your lab.
+- **New GitHub OAuth signup** — no memberships. Hooks gate redirects
+  to `/auth/setup-lab` → either creates a new lab (becoming its admin)
+  or accepts an invite token.
+- **Accepting an invite** — creates a `lab_memberships` row with the
+  invite's role. Sets `active_lab_id` to the new lab. If the user is
+  **blocked** in that lab, the invite is rejected.
+- **Creating an additional lab** — via the navbar lab-switcher
+  "+ New lab" or `/auth/setup-lab`. No limit on how many labs a user
+  can belong to (rate-limited per IP at 3 creations/day).
+- **Removing a user from a lab** — admin deletes the membership row.
+  Sessions are revoked. If the user's `active_lab_id` pointed here,
+  it's cleared (they fall through to setup-lab or their next lab).
+- **Blocking a user** — admin sets `status='blocked'` on the
+  membership. Blocked users can't re-join via invite; admin must
+  explicitly unblock first.
+- **Lab deletion** — cascades all lab-scoped data + membership rows.
+  Users with remaining memberships in other labs auto-fall-back to
+  their next lab. Users with no remaining memberships see setup-lab.
+- **User self-delete** — all memberships deleted, sessions wiped,
+  password hash cleared. Last-admin guard refuses if you're the sole
+  admin of any lab.
 
-## Cross-lab user views
+## Admin user views
 
-The Manage → People tab is special-cased: the admin sees their own
-lab's users PLUS users with `lab_id IS NULL` (pending OAuth signups).
-Same for feedback (own-lab + NULL-lab anonymous). Same for invites
-(own-lab only).
-
-Updating another user's `lab_id` via `PUT /api/users/[id]` is
-restricted to "your own lab or null" — a lab-admin can claim a
-pending OAuth signup into their own lab, but cannot move them into
-another lab.
+The Manage → People tab shows only users with a membership in the
+admin's lab (via `lab_memberships JOIN users`). No cross-lab leak of
+unassigned signups.
 
 ## What's NOT lab-scoped
 
