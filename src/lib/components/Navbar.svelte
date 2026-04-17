@@ -13,7 +13,7 @@
 	}
 
 	let { user, lab, labs }: Props = $props();
-	const hasMultipleLabs = $derived(labs.length > 1);
+	const showLabSwitcher = $derived(labs.length > 0);
 
 	async function switchLab(labId: string) {
 		labSwitcherOpen = false;
@@ -72,7 +72,7 @@
 				</a>
 				{#if lab}
 					<span class="text-slate-600 hidden sm:inline">/</span>
-					{#if hasMultipleLabs}
+					{#if showLabSwitcher}
 						<div class="relative hidden sm:block">
 							<button
 								onclick={() => (labSwitcherOpen = !labSwitcherOpen)}
@@ -111,8 +111,6 @@
 								</div>
 							{/if}
 						</div>
-					{:else}
-						<span class="text-sm text-slate-400 hidden sm:inline">{lab.name}</span>
 					{/if}
 				{/if}
 			</div>
