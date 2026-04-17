@@ -90,6 +90,18 @@ export const DELETE: RequestHandler = async ({ request, locals, cookies }) => {
 			).run(labId, labId);
 			// lab_memberships rows cascade-delete from labs FK
 			db.prepare('DELETE FROM labs WHERE id = ?').run(labId);
+			// Fall back: if a user still has memberships in other labs,
+			// point active_lab_id at their first remaining one so they
+			// don't get stranded at /auth/setup-lab.
+			db.prepare(
+				`UPDATE users SET active_lab_id = (
+				   SELECT m.lab_id FROM lab_memberships m
+				   WHERE m.user_id = users.id AND m.status = 'active'
+				   LIMIT 1
+				 ) WHERE active_lab_id IS NULL
+				   AND EXISTS (SELECT 1 FROM lab_memberships m2
+				               WHERE m2.user_id = users.id AND m2.status = 'active')`
+			).run();
 		})();
 
 		return json({ ok: true, name: lab.name });
