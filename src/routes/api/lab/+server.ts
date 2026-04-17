@@ -82,10 +82,12 @@ export const DELETE: RequestHandler = async ({ request, locals, cookies }) => {
 					'DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM lab_memberships WHERE lab_id = ?)'
 				).run(labId);
 			}
-			// Clear active_lab_id for any user pointing at this lab
+			// Clear both active_lab_id and legacy lab_id for any user
+			// pointing at this lab. The legacy lab_id FK has no CASCADE,
+			// so it must be nulled before the labs row is deleted.
 			db.prepare(
-				"UPDATE users SET active_lab_id = NULL, lab_id = NULL, updated_at = datetime('now') WHERE active_lab_id = ?"
-			).run(labId);
+				"UPDATE users SET active_lab_id = NULL, lab_id = NULL, role = 'user', updated_at = datetime('now') WHERE active_lab_id = ? OR lab_id = ?"
+			).run(labId, labId);
 			// lab_memberships rows cascade-delete from labs FK
 			db.prepare('DELETE FROM labs WHERE id = ?').run(labId);
 		})();
