@@ -390,21 +390,6 @@
 		}
 	}
 
-	async function approveUser(u: any) {
-		clearMsg();
-		const res = await fetch(`/api/users/${u.id}`, {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ is_approved: 1 })
-		});
-		if (res.ok) {
-			const updated = await res.json();
-			userList = userList.map((x) => (x.id === u.id ? updated : x));
-		} else {
-			errorMsg = (await res.json().catch(() => ({}))).error || 'Failed';
-		}
-	}
-
 	async function changeUserRole(u: any, role: string) {
 		clearMsg();
 		const res = await fetch(`/api/users/${u.id}`, {
@@ -1110,14 +1095,13 @@
 			<div>
 				<h2 class="text-base font-semibold text-white">User Accounts</h2>
 				<p class="text-sm text-slate-400 mt-0.5">
-					Who can sign in. New GitHub sign-ins land in <span class="text-amber-400">Pending</span>
-					and need approval before they can access the database.
+					Members of this lab. New users join via invite links.
 				</p>
 			</div>
 
 			<div class="space-y-2">
 				{#each filteredUsers as u (u.id)}
-					<div class="p-3 rounded-lg bg-slate-800/50 border {u.is_approved ? 'border-slate-800' : 'border-amber-700'}">
+					<div class="p-3 rounded-lg bg-slate-800/50 border border-slate-800">
 						<div class="flex items-start justify-between gap-3">
 							<div class="flex items-center gap-3 flex-1">
 								{#if u.avatar_emoji}
@@ -1132,9 +1116,6 @@
 								<div class="flex-1">
 									<div class="flex items-center gap-2">
 										<span class="text-white font-medium text-sm">{u.username}</span>
-										{#if !u.is_approved}
-											<span class="text-xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-400">Pending</span>
-										{/if}
 										{#if u.must_change_password}
 											<span class="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">Temp password</span>
 										{/if}
@@ -1159,9 +1140,6 @@
 								>
 									{#each USER_ROLES as r}<option value={r}>{r}</option>{/each}
 								</select>
-								{#if !u.is_approved}
-									<button onclick={() => approveUser(u)} class="text-xs text-green-400 hover:text-green-300">Approve</button>
-								{/if}
 								<button onclick={() => startResetPwd(u)} class="text-xs text-slate-500 hover:text-ocean-400">Reset pwd</button>
 								<button onclick={() => deleteUser(u)} class="text-xs text-slate-600 hover:text-red-400">Del</button>
 							</div>
@@ -1358,6 +1336,10 @@
 										<button type="button" onclick={() => revokeInvite(inv.token)}
 											class="text-xs text-slate-600 hover:text-red-400">Revoke</button>
 									{/if}
+									<button type="button" onclick={() => { inviteList = inviteList.filter((i) => i.token !== inv.token); fetch(`/api/invites/${encodeURIComponent(inv.token)}`, { method: 'DELETE' }); }}
+										class="text-slate-600 hover:text-red-400 p-0.5" title="Remove">
+										<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M6 18L18 6M6 6l12 12" /></svg>
+									</button>
 								</div>
 							</div>
 						</div>
