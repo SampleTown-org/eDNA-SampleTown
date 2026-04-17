@@ -74,18 +74,34 @@ export const DELETE: RequestHandler = async ({ request, locals, cookies }) => {
 			if (callerSessionId) {
 				db.prepare(
 					`DELETE FROM sessions
-					 WHERE user_id IN (SELECT id FROM users WHERE lab_id = ?)
+					 WHERE user_id IN (SELECT user_id FROM lab_memberships WHERE lab_id = ?)
 					   AND id != ?`
 				).run(labId, callerSessionId);
 			} else {
 				db.prepare(
-					'DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE lab_id = ?)'
+					'DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM lab_memberships WHERE lab_id = ?)'
 				).run(labId);
 			}
+			// Clear both active_lab_id and legacy lab_id for any user
+			// pointing at this lab. The legacy lab_id FK has no CASCADE,
+			// so it must be nulled before the labs row is deleted.
 			db.prepare(
-				"UPDATE users SET lab_id = NULL, role = 'user', updated_at = datetime('now') WHERE lab_id = ?"
-			).run(labId);
+				"UPDATE users SET active_lab_id = NULL, lab_id = NULL, role = 'user', updated_at = datetime('now') WHERE active_lab_id = ? OR lab_id = ?"
+			).run(labId, labId);
+			// lab_memberships rows cascade-delete from labs FK
 			db.prepare('DELETE FROM labs WHERE id = ?').run(labId);
+			// Fall back: if a user still has memberships in other labs,
+			// point active_lab_id at their first remaining one so they
+			// don't get stranded at /auth/setup-lab.
+			db.prepare(
+				`UPDATE users SET active_lab_id = (
+				   SELECT m.lab_id FROM lab_memberships m
+				   WHERE m.user_id = users.id AND m.status = 'active'
+				   LIMIT 1
+				 ) WHERE active_lab_id IS NULL
+				   AND EXISTS (SELECT 1 FROM lab_memberships m2
+				               WHERE m2.user_id = users.id AND m2.status = 'active')`
+			).run();
 		})();
 
 		return json({ ok: true, name: lab.name });

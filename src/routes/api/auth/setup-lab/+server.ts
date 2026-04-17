@@ -9,19 +9,17 @@ import { createLab } from '$lib/server/lab-setup';
 const MAX_LAB_NAME = 80;
 
 /**
- * Self-serve lab creation. Caller must be authenticated AND have
- * lab_id=NULL (i.e. a brand-new GitHub-OAuth signup who hasn't joined or
- * created a lab yet). On success: lab is created with picklists seeded,
- * the caller becomes its admin, and they can immediately access the app.
+ * Self-serve lab creation. Caller must be authenticated. On success: lab
+ * is created with picklists seeded, the caller becomes its admin, and
+ * their active_lab_id is switched to the new lab. Works for both first-
+ * time signups (no lab yet) and existing users creating an additional lab.
  *
- * Rate-limited per IP at 3 lab creations per day to keep spam manageable
- * without billing in place. The hooks-server lab-setup gate also blocks
- * any user who already has a lab from re-running this.
+ * Rate-limited per IP at 3 lab creations per day.
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
 	const user = requireUser(locals);
-	if (user.lab_id) {
-		return json({ error: 'You already belong to a lab' }, { status: 400 });
+	if (user.is_demo) {
+		return json({ error: 'Demo accounts cannot create labs' }, { status: 403 });
 	}
 
 	const ip = getClientAddress();
@@ -46,10 +44,14 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	try {
 		const db = getDb();
 		const labId = createLab(db, name, slug);
-		// First user in a new lab becomes its admin. They keep this role
-		// until they (or another admin they later promote) demote them.
-		db.prepare("UPDATE users SET lab_id = ?, role = 'admin', updated_at = datetime('now') WHERE id = ?")
-			.run(labId, user.id);
+		// First user in a new lab becomes its admin via lab_memberships.
+		db.prepare(
+			`INSERT INTO lab_memberships (user_id, lab_id, role, status)
+			 VALUES (?, ?, 'admin', 'active')`
+		).run(user.id, labId);
+		db.prepare(
+			"UPDATE users SET lab_id = ?, active_lab_id = ?, role = 'admin', updated_at = datetime('now') WHERE id = ?"
+		).run(labId, labId, user.id);
 		const lab = db.prepare('SELECT id, name, slug FROM labs WHERE id = ?').get(labId);
 		return json({ lab }, { status: 201 });
 	} catch (err) {

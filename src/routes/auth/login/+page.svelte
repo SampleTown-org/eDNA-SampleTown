@@ -47,6 +47,7 @@
 				type="text"
 				required
 				placeholder="Username"
+				value="guest"
 				class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
 			/>
 			<input
@@ -54,6 +55,7 @@
 				type="password"
 				required
 				placeholder="Password"
+				value="guest"
 				class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-ocean-500"
 			/>
 			<button
@@ -63,6 +65,15 @@
 				Sign In
 			</button>
 		</form>
+
+		<div class="p-3 rounded-lg bg-slate-800/50 border border-slate-700 text-sm">
+			<p class="text-slate-300 font-medium">Try it out</p>
+			<p class="text-slate-400 mt-1">
+				The demo account (<span class="text-white">guest / guest</span>) is pre-filled above.
+				It has read/write access to the McGurk Institute lab, which is loaded with
+				sample data inspired by Sinclair Lewis's <em>Arrowsmith</em>.
+			</p>
+		</div>
 	</div>
 
 	<p class="text-xs text-slate-500 text-center pt-4 border-t border-slate-800">

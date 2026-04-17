@@ -24,9 +24,9 @@ import type Database from 'better-sqlite3';
  * would silently return "not found" for every row).
  */
 
-/** Every table that carries a `lab_id` column directly. Keep in sync with schema.sql. */
+/** Every table that carries a `lab_id` column directly. Keep in sync with schema.sql.
+ *  Note: `users` is NOT here — lab access is via `lab_memberships`, not `users.lab_id`. */
 export const LAB_SCOPED_TABLES = new Set<string>([
-	'users',
 	'projects',
 	'sites',
 	'samples',

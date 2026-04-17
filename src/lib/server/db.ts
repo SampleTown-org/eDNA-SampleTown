@@ -104,8 +104,12 @@ function seedDefaultAdmin(db: Database.Database, defaultLabId: string) {
 	const id = generateId();
 	const hash = bcrypt.hashSync('admin', 12);
 	db.prepare(
-		`INSERT INTO users (id, lab_id, username, password_hash, role, is_local_account, is_approved, must_change_password)
-		 VALUES (?, ?, 'admin', ?, 'admin', 1, 1, 1)`
-	).run(id, defaultLabId, hash);
+		`INSERT INTO users (id, lab_id, active_lab_id, username, password_hash, role, is_local_account, is_approved, must_change_password)
+		 VALUES (?, ?, ?, 'admin', ?, 'admin', 1, 1, 1)`
+	).run(id, defaultLabId, defaultLabId, hash);
+	db.prepare(
+		`INSERT INTO lab_memberships (user_id, lab_id, role, status)
+		 VALUES (?, ?, 'admin', 'active')`
+	).run(id, defaultLabId);
 	console.log('[seed] Created default admin user (admin/admin) — change the password on first login');
 }

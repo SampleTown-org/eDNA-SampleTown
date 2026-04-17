@@ -98,17 +98,7 @@
 </script>
 
 <div class="space-y-6">
-	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}PCR</h1>
-		<div class="flex items-center gap-2">
-			{#if selectionChanged}
-				<button onclick={updateCart} class="hidden sm:inline-flex write-only px-3 py-2 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">
-					Update Cart ({selectedIds.size})
-				</button>
-			{/if}
-			<a href="/pcr/new" class="hidden sm:inline-flex write-only px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New PCR</a>
-		</div>
-	</div>
+	<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}PCR</h1>
 
 	<DataTable
 		columns={plateColumns}
@@ -125,7 +115,14 @@
 		ondelete={deletePlate}
 		onduplicate={duplicatePlate}
 		onbulkdelete={bulkDeletePlates}
-	/>
+	>
+		{#snippet filterActions()}
+			{#if selectionChanged}
+				<button onclick={updateCart} class="hidden sm:inline-flex write-only px-3 py-1.5 border border-ocean-700 text-ocean-400 rounded-lg hover:bg-ocean-900/30 transition-colors text-sm font-medium">Update Cart ({selectedIds.size})</button>
+			{/if}
+			<a href="/pcr/new" class="hidden sm:inline-flex write-only px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 transition-colors text-sm font-medium">New PCR</a>
+		{/snippet}
+	</DataTable>
 
 	{#if orphanReactions.length > 0}
 		<div class="pt-4">

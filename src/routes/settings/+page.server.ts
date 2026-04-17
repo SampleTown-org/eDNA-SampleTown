@@ -62,13 +62,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const users = isAdmin
 		? db
 				.prepare(
-					`SELECT id, lab_id, github_id, username, display_name, email, avatar_url, avatar_emoji,
-					        role, is_local_account, is_approved, must_change_password,
-					        (password_hash IS NOT NULL) AS has_password,
-					        created_at, updated_at
-					   FROM users
-					   WHERE is_deleted = 0 AND (lab_id = ? OR lab_id IS NULL)
-					   ORDER BY is_approved ASC, username`
+					`SELECT u.id, m.lab_id, u.github_id, u.username, u.display_name, u.email, u.avatar_url, u.avatar_emoji,
+					        m.role, m.status AS membership_status, u.is_local_account, u.is_approved, u.must_change_password,
+					        (u.password_hash IS NOT NULL) AS has_password,
+					        u.created_at, u.updated_at
+					   FROM lab_memberships m
+					   JOIN users u ON u.id = m.user_id
+					   WHERE m.lab_id = ?
+					   ORDER BY u.username`
 				)
 				.all(labId)
 		: [];

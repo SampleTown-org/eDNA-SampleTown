@@ -18,9 +18,23 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			.get(locals.user.lab_id) as { id: string; name: string; slug: string } | null;
 	}
 
+	// All labs the user belongs to (for the navbar lab-switcher).
+	const labs: { id: string; name: string; slug: string; role: string }[] = locals.user
+		? (db
+				.prepare(
+					`SELECT l.id, l.name, l.slug, m.role
+					 FROM lab_memberships m
+					 JOIN labs l ON l.id = m.lab_id
+					 WHERE m.user_id = ? AND m.status = 'active'
+					 ORDER BY l.name`
+				)
+				.all(locals.user.id) as { id: string; name: string; slug: string; role: string }[])
+		: [];
+
 	return {
 		user: locals.user,
 		namingTemplates,
-		lab
+		lab,
+		labs
 	};
 };

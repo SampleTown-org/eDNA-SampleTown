@@ -42,9 +42,6 @@ export const POST: RequestHandler = async ({ request, url, cookies, getClientAdd
 	if (!user) {
 		throw redirect(302, '/auth/login?error=invalid_credentials');
 	}
-	if (!user.is_approved) {
-		throw redirect(302, '/auth/pending');
-	}
 
 	const sessionId = createSession(user.id);
 	cookies.set('session', sessionId, sessionCookieOptions());

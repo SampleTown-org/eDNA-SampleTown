@@ -25,14 +25,11 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	try {
 		const db = getDb();
-		const target = db
-			.prepare('SELECT id, lab_id FROM users WHERE id = ?')
-			.get(params.id) as { id: string; lab_id: string | null } | undefined;
-		if (!target) return json({ error: 'User not found' }, { status: 404 });
-		// 404 (not 403) on cross-lab — don't confirm existence.
-		if (target.lab_id !== null && target.lab_id !== labId) {
-			return json({ error: 'User not found' }, { status: 404 });
-		}
+		// Membership-scoped: only reset passwords for users in this lab.
+		const membership = db
+			.prepare('SELECT user_id FROM lab_memberships WHERE user_id = ? AND lab_id = ?')
+			.get(params.id, labId);
+		if (!membership) return json({ error: 'User not found' }, { status: 404 });
 
 		// setUserPassword clears must_change_password — re-set it after.
 		await setUserPassword(params.id!, parsed.data.password);
