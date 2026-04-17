@@ -970,6 +970,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#data-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#legacy-columns-on-users-retained-on-prod-not-read-by-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy columns on users (retained on prod, not read by code)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1014,10 +1053,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cross-lab-user-views" class="md-nav__link">
+  <a href="#admin-user-views" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cross-lab user views
+        Admin user views
       
     </span>
   </a>
@@ -1336,6 +1375,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#data-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#legacy-columns-on-users-retained-on-prod-not-read-by-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy columns on users (retained on prod, not read by code)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1380,10 +1458,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cross-lab-user-views" class="md-nav__link">
+  <a href="#admin-user-views" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cross-lab user views
+        Admin user views
       
     </span>
   </a>
@@ -1427,7 +1505,29 @@
 
 
 <h1 id="multi-lab-tenancy">Multi-lab tenancy<a class="headerlink" href="#multi-lab-tenancy" title="Permanent link">&para;</a></h1>
-<p>One install, many labs, hard isolation between them.</p>
+<p>One install, many labs, hard isolation between them. A user can belong
+to multiple labs with independent roles in each.</p>
+<h2 id="data-model">Data model<a class="headerlink" href="#data-model" title="Permanent link">&para;</a></h2>
+<p>Lab access is expressed through the <code>lab_memberships</code> join table:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>lab_memberships(user_id, lab_id, role, status, added_at, added_by)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  PK: (user_id, lab_id)
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  role  IN (&#39;admin&#39;, &#39;user&#39;, &#39;viewer&#39;)
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  status IN (&#39;active&#39;, &#39;blocked&#39;)
+</span></code></pre></div>
+<p><code>users.active_lab_id</code> points at whichever lab the UI is currently
+rendering. The navbar lab-switcher updates this via
+<code>POST /api/account/active-lab</code>.</p>
+<h3 id="legacy-columns-on-users-retained-on-prod-not-read-by-code">Legacy columns on <code>users</code> (retained on prod, not read by code)<a class="headerlink" href="#legacy-columns-on-users-retained-on-prod-not-read-by-code" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>lab_id</code> — original single-lab FK. Kept so <code>SELECT *</code> doesn't fail
+  on older rows. No code path reads this.</li>
+<li><code>role</code> — original global role. Roles are now per-lab on memberships.</li>
+<li><code>is_deleted</code> — replaced by "no memberships" + <code>is_approved=0</code>.</li>
+</ul>
+<h3 id="migration">Migration<a class="headerlink" href="#migration" title="Permanent link">&para;</a></h3>
+<p><code>scripts/migrate-to-lab-memberships.mjs</code> backfills one membership per
+existing non-soft-deleted user and copies their <code>lab_id</code> into
+<code>active_lab_id</code>. Idempotent. Run once on prod after deploy.</p>
 <h2 id="the-boundary">The boundary<a class="headerlink" href="#the-boundary" title="Permanent link">&para;</a></h2>
 <p>Every top-level entity table carries a <code>lab_id</code> column. Cross-lab
 access — a user signed into Lab A trying to read or write a row that
@@ -1436,7 +1536,7 @@ a 403 would tell the attacker the row exists.</p>
 <p>Tables that carry <code>lab_id</code>:</p>
 <ul>
 <li><code>labs</code> (the parent)</li>
-<li><code>users</code> (nullable — unset until a user picks a lab)</li>
+<li><code>lab_memberships</code> (the join)</li>
 <li><code>projects</code>, <code>sites</code>, <code>samples</code></li>
 <li><code>extracts</code>, <code>pcr_plates</code>, <code>pcr_amplifications</code></li>
 <li><code>library_plates</code>, <code>library_preps</code></li>
@@ -1457,31 +1557,26 @@ a 403 would tell the attacker the row exists.</p>
 </ul>
 <h2 id="where-the-guard-lives">Where the guard lives<a class="headerlink" href="#where-the-guard-lives" title="Permanent link">&para;</a></h2>
 <p>Three helpers in <code>src/lib/server/guards.ts</code>:</p>
-<div class="language-ts highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nx">requireUser</span><span class="p">(</span><span class="nx">locals</span><span class="p">)</span><span class="w">         </span><span class="c1">// 401 if no session</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nx">requireLab</span><span class="p">(</span><span class="nx">locals</span><span class="p">)</span><span class="w">          </span><span class="c1">// requireUser + 403 if user.lab_id is null</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">                            </span><span class="c1">// returns { user, labId }</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nx">requireLabAdmin</span><span class="p">(</span><span class="nx">locals</span><span class="p">)</span><span class="w">     </span><span class="c1">// requireLab + 403 if user.role !== &#39;admin&#39;</span>
+<div class="language-ts highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">requireUser</span><span class="p">(</span><span class="nx">locals</span><span class="p">)</span><span class="w">         </span><span class="c1">// 401 if no session</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nx">requireLab</span><span class="p">(</span><span class="nx">locals</span><span class="p">)</span><span class="w">          </span><span class="c1">// requireUser + 403 if user.lab_id is null</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">                            </span><span class="c1">// returns { user, labId }</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nx">requireLabAdmin</span><span class="p">(</span><span class="nx">locals</span><span class="p">)</span><span class="w">     </span><span class="c1">// requireLab + 403 if user.role !== &#39;admin&#39;</span>
 </span></code></pre></div>
+<p><code>user.lab_id</code> and <code>user.role</code> are sourced from the active membership
+via a LEFT JOIN in <code>validateSession()</code>. If the user has no active
+membership for their <code>active_lab_id</code>, both come back null/default and
+the hooks gate redirects to <code>/auth/setup-lab</code>.</p>
 <p>Plus one helper in <code>src/lib/server/lab-scope.ts</code>:</p>
-<div class="language-ts highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">assertLabOwnsRow</span><span class="p">(</span><span class="nx">db</span><span class="p">,</span><span class="w"> </span><span class="nx">table</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">labId</span><span class="p">,</span><span class="w"> </span><span class="nx">notFoundMessage</span><span class="o">?</span><span class="p">)</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1">// 404 if the row doesn&#39;t exist OR belongs to a different lab</span>
+<div class="language-ts highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nx">assertLabOwnsRow</span><span class="p">(</span><span class="nx">db</span><span class="p">,</span><span class="w"> </span><span class="nx">table</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">labId</span><span class="p">,</span><span class="w"> </span><span class="nx">notFoundMessage</span><span class="o">?</span><span class="p">)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1">// 404 if the row doesn&#39;t exist OR belongs to a different lab</span>
 </span></code></pre></div>
 <p>Pattern in every API handler:</p>
-<div class="language-ts highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">PUT</span><span class="o">:</span><span class="w"> </span><span class="kt">RequestHandler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">({</span><span class="w"> </span><span class="nx">params</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="p">,</span><span class="w"> </span><span class="nx">locals</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">labId</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">requireLab</span><span class="p">(</span><span class="nx">locals</span><span class="p">);</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">getDb</span><span class="p">();</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nx">assertLabOwnsRow</span><span class="p">(</span><span class="nx">db</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;samples&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="o">!</span><span class="p">,</span><span class="w"> </span><span class="nx">labId</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Sample not found&#39;</span><span class="p">);</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="c1">// ... safe to UPDATE / DELETE samples WHERE id = ? now</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">};</span>
-</span></code></pre></div>
-<p>For list endpoints, the filter goes straight in the WHERE clause:</p>
-<div class="language-ts highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">db</span><span class="p">.</span><span class="nx">prepare</span><span class="p">(</span><span class="s1">&#39;SELECT * FROM samples WHERE lab_id = ? AND is_deleted = 0&#39;</span><span class="p">).</span><span class="nx">all</span><span class="p">(</span><span class="nx">labId</span><span class="p">);</span>
-</span></code></pre></div>
-<p>For POST handlers that reference parent rows, validate the parent's
-lab too:</p>
-<div class="language-ts highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">assertLabOwnsRow</span><span class="p">(</span><span class="nx">db</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;projects&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">project_id</span><span class="p">,</span><span class="w"> </span><span class="nx">labId</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Project not found&#39;</span><span class="p">);</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nx">assertLabOwnsRow</span><span class="p">(</span><span class="nx">db</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;sites&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">site_id</span><span class="p">,</span><span class="w"> </span><span class="nx">labId</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Site not found&#39;</span><span class="p">);</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1">// then INSERT INTO samples (..., lab_id, ...) VALUES (..., labId, ...)</span>
+<div class="language-ts highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">PUT</span><span class="o">:</span><span class="w"> </span><span class="kt">RequestHandler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">({</span><span class="w"> </span><span class="nx">params</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="p">,</span><span class="w"> </span><span class="nx">locals</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">labId</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">requireLab</span><span class="p">(</span><span class="nx">locals</span><span class="p">);</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">getDb</span><span class="p">();</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nx">assertLabOwnsRow</span><span class="p">(</span><span class="nx">db</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;samples&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">params</span><span class="p">.</span><span class="nx">id</span><span class="o">!</span><span class="p">,</span><span class="w"> </span><span class="nx">labId</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Sample not found&#39;</span><span class="p">);</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="c1">// ... safe to UPDATE / DELETE samples WHERE id = ? now</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">};</span>
 </span></code></pre></div>
 <h2 id="why-404-not-403">Why 404 not 403<a class="headerlink" href="#why-404-not-403" title="Permanent link">&para;</a></h2>
 <p>Returning 403 ("forbidden") on a row that exists in another lab leaks
@@ -1489,41 +1584,34 @@ existence — an attacker iterating UUIDs would see a 403 spike on
 real-but-foreign rows vs. a 404 on truly nonexistent ones. We don't
 distinguish: every cross-lab read or write looks identical to "row
 doesn't exist".</p>
-<p><code>assertLabOwnsRow</code> enforces this:</p>
-<div class="language-ts highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">row</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">db</span><span class="p">.</span><span class="nx">prepare</span><span class="p">(</span><span class="sb">`SELECT lab_id FROM </span><span class="si">${</span><span class="nx">table</span><span class="si">}</span><span class="sb"> WHERE id = ?`</span><span class="p">).</span><span class="nx">get</span><span class="p">(</span><span class="nx">id</span><span class="p">);</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">row</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">row</span><span class="p">.</span><span class="nx">lab_id</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="nx">labId</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="k">throw</span><span class="w"> </span><span class="nx">error</span><span class="p">(</span><span class="mf">404</span><span class="p">,</span><span class="w"> </span><span class="nx">notFoundMessage</span><span class="w"> </span><span class="o">??</span><span class="w"> </span><span class="s1">&#39;Not found&#39;</span><span class="p">);</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>The <code>LAB_SCOPED_TABLES</code> allowlist in <code>lab-scope.ts</code> ensures the table
-name passed in is one we know carries <code>lab_id</code>. Throws a hard error
-otherwise (development-time check).</p>
 <h2 id="lab-membership-lifecycle">Lab membership lifecycle<a class="headerlink" href="#lab-membership-lifecycle" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Brand-new GitHub OAuth signup</strong> — <code>lab_id = NULL</code>, hit the
-  lab-setup gate → <code>/auth/setup-lab</code> → either creates a new lab
-  (becomes its admin) or accepts an invite token.</li>
-<li><strong>Pre-existing user (e.g. seeded admin)</strong> — <code>lab_id</code> set to the
-  default lab on first boot.</li>
-<li><strong>Accepting an invite</strong> — sets <code>lab_id</code> to the inviting lab, role
-  to whatever the invite token specified. Overwrites any prior
-  membership (no multi-lab membership in v2).</li>
-<li><strong>Lab deletion</strong> — cascades all lab-scoped data. Members' <code>lab_id</code>
-  is null'd and <code>role</code> reset to <code>user</code>; their sessions are wiped
-  (except the deleting admin's, so they get a graceful redirect).</li>
-<li><strong>User self-delete</strong> — soft-delete (<code>is_deleted=1</code>), sessions
-  wiped, password hash cleared. Last-admin guard refuses if you're
-  the only admin of your lab.</li>
+<li><strong>New GitHub OAuth signup</strong> — no memberships. Hooks gate redirects
+  to <code>/auth/setup-lab</code> → either creates a new lab (becoming its admin)
+  or accepts an invite token.</li>
+<li><strong>Accepting an invite</strong> — creates a <code>lab_memberships</code> row with the
+  invite's role. Sets <code>active_lab_id</code> to the new lab. If the user is
+  <strong>blocked</strong> in that lab, the invite is rejected.</li>
+<li><strong>Creating an additional lab</strong> — via the navbar lab-switcher
+  "+ New lab" or <code>/auth/setup-lab</code>. No limit on how many labs a user
+  can belong to (rate-limited per IP at 3 creations/day).</li>
+<li><strong>Removing a user from a lab</strong> — admin deletes the membership row.
+  Sessions are revoked. If the user's <code>active_lab_id</code> pointed here,
+  it's cleared (they fall through to setup-lab or their next lab).</li>
+<li><strong>Blocking a user</strong> — admin sets <code>status='blocked'</code> on the
+  membership. Blocked users can't re-join via invite; admin must
+  explicitly unblock first.</li>
+<li><strong>Lab deletion</strong> — cascades all lab-scoped data + membership rows.
+  Users with remaining memberships in other labs auto-fall-back to
+  their next lab. Users with no remaining memberships see setup-lab.</li>
+<li><strong>User self-delete</strong> — all memberships deleted, sessions wiped,
+  password hash cleared. Last-admin guard refuses if you're the sole
+  admin of any lab.</li>
 </ul>
-<h2 id="cross-lab-user-views">Cross-lab user views<a class="headerlink" href="#cross-lab-user-views" title="Permanent link">&para;</a></h2>
-<p>The Manage → People tab is special-cased: the admin sees their own
-lab's users PLUS users with <code>lab_id IS NULL</code> (pending OAuth signups).
-Same for feedback (own-lab + NULL-lab anonymous). Same for invites
-(own-lab only).</p>
-<p>Updating another user's <code>lab_id</code> via <code>PUT /api/users/[id]</code> is
-restricted to "your own lab or null" — a lab-admin can claim a
-pending OAuth signup into their own lab, but cannot move them into
-another lab.</p>
+<h2 id="admin-user-views">Admin user views<a class="headerlink" href="#admin-user-views" title="Permanent link">&para;</a></h2>
+<p>The Manage → People tab shows only users with a membership in the
+admin's lab (via <code>lab_memberships JOIN users</code>). No cross-lab leak of
+unassigned signups.</p>
 <h2 id="whats-not-lab-scoped">What's NOT lab-scoped<a class="headerlink" href="#whats-not-lab-scoped" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Sessions</strong> — keyed on user; user is keyed on lab. Cascades

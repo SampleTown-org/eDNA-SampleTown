@@ -1025,6 +1025,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lab-switching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lab switching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#password-change" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1447,6 +1458,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lab-switching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lab switching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#password-change" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1497,14 +1519,16 @@ flows for "you must do X before doing anything else" states.</p>
    against the cookie (cross-browser fixation defense).</li>
 <li><code>arctic</code> validates the auth code → access token → we GET
    <code>https://api.github.com/user</code> for the profile.</li>
-<li><code>upsertGitHubUser()</code> creates or updates the local users row keyed on
-   <code>github_id</code>. New users land <code>is_approved=1</code> (auto-approve, see
-   below) and <code>lab_id=NULL</code>.</li>
+<li><code>upsertGitHubUser()</code> creates or updates the local users row keyed
+   on <code>github_id</code>. Previously soft-deleted users are re-enabled
+   (<code>is_approved=1, is_deleted=0</code>) so they can re-auth and accept a
+   fresh invite. New users start with no <code>lab_memberships</code> row.</li>
 <li>Session row created, cookie set, redirect to <code>/</code>.</li>
 </ol>
 <p>Brand-new GitHub signups land at <code>/auth/setup-lab</code> because
-<code>blockedByMissingLab</code> redirects any signed-in user with <code>lab_id=NULL</code>
-to that page (everything except <code>/account</code>, <code>/auth/setup-lab</code>,
+<code>blockedByMissingLab</code> redirects any signed-in user with no active
+membership (i.e. <code>user.lab_id=NULL</code> from the session query) to that
+page (everything except <code>/account</code>, <code>/auth/setup-lab</code>,
 <code>/auth/join/&lt;token&gt;</code>, and <code>/auth/logout</code> is gated until they pick a
 lab).</p>
 <h3 id="local-accounts">Local accounts<a class="headerlink" href="#local-accounts" title="Permanent link">&para;</a></h3>
@@ -1534,13 +1558,14 @@ before the must-change-password gate forces a real password).</p>
 <li>Periodic sweep in <code>maybeSweepExpired()</code> (rate-limited to once per 5
   minutes per process) deletes expired sessions + expired oauth_states</li>
 </ul>
-<p><code>validateSession()</code> joins <code>sessions × users</code> and only returns a user
-if <code>expires_at &gt; NOW AND users.is_approved = 1 AND users.is_deleted =
-0</code>. So suspending a user (<code>is_approved=0</code>) or deleting them
-(<code>is_deleted=1</code>) immediately invalidates their open sessions on the
-next request.</p>
+<p><code>validateSession()</code> joins <code>sessions × users × lab_memberships</code> (LEFT
+JOIN on active membership). <code>user.lab_id</code> and <code>user.role</code> are sourced
+from the membership row (<code>m.lab_id</code>, <code>COALESCE(m.role, 'user')</code>). If
+the user has no active membership, both come back null/default and the
+hooks gate redirects to <code>/auth/setup-lab</code>.</p>
 <h2 id="rbac">RBAC<a class="headerlink" href="#rbac" title="Permanent link">&para;</a></h2>
-<p>Three roles: <code>admin</code>, <code>user</code>, <code>viewer</code>.</p>
+<p>Three roles: <code>admin</code>, <code>user</code>, <code>viewer</code> — <strong>per-lab</strong> via
+<code>lab_memberships.role</code>.</p>
 <ul>
 <li><strong><code>admin</code></strong> — full lab access; can manage users, picklists, primer
   sets, PCR protocols, personnel, invites, backup config, snapshots;
@@ -1550,9 +1575,8 @@ next request.</p>
 <li><strong><code>viewer</code></strong> — read-only on every lab resource; can change own
   password and submit feedback only.</li>
 </ul>
-<p>Roles are scoped per-lab: a user is <code>admin</code> <em>of their lab</em>, not a
-super-admin across all labs. There's no super-admin role; cross-lab
-operations require direct DB access.</p>
+<p>A user can be <code>admin</code> of one lab and <code>viewer</code> of another. There's no
+super-admin role; cross-lab operations require direct DB access.</p>
 <h2 id="hooksserverts-gates">hooks.server.ts gates<a class="headerlink" href="#hooksserverts-gates" title="Permanent link">&para;</a></h2>
 <p>In order:</p>
 <ol>
@@ -1588,22 +1612,30 @@ fingerprint its own inline SSR scripts.</p>
 <h2 id="self-serve-onboarding">Self-serve onboarding<a class="headerlink" href="#self-serve-onboarding" title="Permanent link">&para;</a></h2>
 <p>The signup story:</p>
 <ol>
-<li>New user signs in via GitHub → user row created with <code>lab_id=NULL</code></li>
+<li>New user signs in via GitHub → user row created, no memberships</li>
 <li>Lab-setup gate redirects to <code>/auth/setup-lab</code></li>
 <li>Two paths:</li>
 <li><strong>Start a new lab</strong> → POST <code>/api/auth/setup-lab</code> with <code>{ name,
      slug? }</code> → creates a labs row, seeds picklists / primer sets /
-     pcr protocols for it, sets the caller's <code>lab_id</code> and <code>role =
-     admin</code>. Rate-limited 3/day/IP.</li>
+     pcr protocols for it, creates an <code>admin</code> membership, sets
+     <code>active_lab_id</code>. Rate-limited 3/day/IP. Works for both
+     first-time signups and existing users adding a lab.</li>
 <li><strong>Join an existing lab</strong> → admin generates a 24-byte URL-safe
      invite token at <code>Manage → People → Lab Invites</code>. The recipient
      visits <code>/auth/join/&lt;token&gt;</code> (signs in if not already), POSTs to
-     <code>/api/auth/join</code>. Atomic <code>UPDATE invites SET used_at = NOW WHERE
-     token = ? AND used_at IS NULL</code> so concurrent accepts can't
-     double-spend.</li>
+     <code>/api/auth/join</code>. Creates a membership row. If the user has a
+     <strong>blocked</strong> membership in that lab, the invite is rejected.
+     Atomic <code>UPDATE invites SET used_at = NOW WHERE token = ? AND
+     used_at IS NULL</code> so concurrent accepts can't double-spend.</li>
 </ol>
 <p>Invite role + email_hint are set at creation; default TTL 14 days
 (max 90).</p>
+<h2 id="lab-switching">Lab switching<a class="headerlink" href="#lab-switching" title="Permanent link">&para;</a></h2>
+<p>Users with memberships in multiple labs see a dropdown in the navbar
+(next to "SampleTown.org / Lab Name"). Selecting a lab POSTs to
+<code>/api/account/active-lab</code> which updates <code>users.active_lab_id</code> and
+reloads the page. The dropdown also includes a "+ New lab" entry
+linking to <code>/auth/setup-lab</code>.</p>
 <h2 id="password-change">Password change<a class="headerlink" href="#password-change" title="Permanent link">&para;</a></h2>
 <p><code>POST /api/account/password</code> requires the OLD password (even when
 <code>must_change_password=1</code>, so a stolen-cookie attacker can't lock out
