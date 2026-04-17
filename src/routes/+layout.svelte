@@ -8,7 +8,11 @@
 	import type { Snippet } from 'svelte';
 
 	interface Props {
-		data: { user: import('$lib/types').User | null };
+		data: {
+			user: import('$lib/types').User | null;
+			lab: { id: string; name: string; slug: string } | null;
+			labs: { id: string; name: string; slug: string; role: string }[];
+		};
 		children: Snippet;
 	}
 
@@ -26,7 +30,7 @@
 </script>
 
 <div class="min-h-screen flex flex-col" class:role-viewer={data.user?.role === 'viewer'}>
-	<Navbar user={data.user} />
+	<Navbar user={data.user} lab={data.lab} labs={data.labs} />
 	<div class="flex flex-1">
 		<main class="flex-1 min-w-0 max-w-7xl mx-auto w-full px-4 py-6">
 			{@render children()}

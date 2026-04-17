@@ -4,12 +4,26 @@
 	import Scanner from './Scanner.svelte';
 
 	let scanOpen = $state(false);
+	let labSwitcherOpen = $state(false);
 
 	interface Props {
 		user: User | null;
+		lab: { id: string; name: string; slug: string } | null;
+		labs: { id: string; name: string; slug: string; role: string }[];
 	}
 
-	let { user }: Props = $props();
+	let { user, lab, labs }: Props = $props();
+	const hasMultipleLabs = $derived(labs.length > 1);
+
+	async function switchLab(labId: string) {
+		labSwitcherOpen = false;
+		const res = await fetch('/api/account/active-lab', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ lab_id: labId })
+		});
+		if (res.ok) window.location.href = '/';
+	}
 
 	const ROLE_ICON: Record<string, string> = {
 		admin: '🐙',
@@ -47,17 +61,49 @@
 <nav class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-50">
 	<div class="px-4">
 		<div class="flex items-center justify-between h-14">
-			<a href="/" class="flex items-center gap-2 text-ocean-400 font-bold text-lg tracking-tight">
-				<!-- DNA double-helix icon: two intertwining sine-like strands +
-				     four base-pair rungs. Drawn in viewBox 24×24, currentColor
-				     so it picks up the ocean-400 from the parent <a>. -->
-				<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-					<path d="M7 3c0 4 10 5 10 9s-10 5-10 9" />
-					<path d="M17 3c0 4-10 5-10 9s10 5 10 9" />
-					<path d="M9 5h6 M8 9h8 M8 15h8 M9 19h6" />
-				</svg>
-				SampleTown.org
-			</a>
+			<div class="flex items-center gap-2">
+				<a href="/" class="flex items-center gap-2 text-ocean-400 font-bold text-lg tracking-tight">
+					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+						<path d="M7 3c0 4 10 5 10 9s-10 5-10 9" />
+						<path d="M17 3c0 4-10 5-10 9s10 5 10 9" />
+						<path d="M9 5h6 M8 9h8 M8 15h8 M9 19h6" />
+					</svg>
+					SampleTown.org
+				</a>
+				{#if lab}
+					<span class="text-slate-600 hidden sm:inline">/</span>
+					{#if hasMultipleLabs}
+						<div class="relative hidden sm:block">
+							<button
+								onclick={() => (labSwitcherOpen = !labSwitcherOpen)}
+								class="text-sm text-slate-300 hover:text-white flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
+							>
+								{lab.name}
+								<svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+									<path d="M6 9l6 6 6-6" />
+								</svg>
+							</button>
+							{#if labSwitcherOpen}
+								<button class="fixed inset-0 z-40" onclick={() => (labSwitcherOpen = false)} aria-label="Close"></button>
+								<div class="absolute left-0 top-full mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 py-1">
+									{#each labs as l}
+										<button
+											onclick={() => switchLab(l.id)}
+											class="w-full text-left px-3 py-2 text-sm hover:bg-slate-700 transition-colors flex items-center justify-between
+												{l.id === lab.id ? 'text-ocean-400' : 'text-slate-300'}"
+										>
+											<span>{l.name}</span>
+											<span class="text-xs text-slate-500">{l.role}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{:else}
+						<span class="text-sm text-slate-400 hidden sm:inline">{lab.name}</span>
+					{/if}
+				{/if}
+			</div>
 
 			<!-- Desktop nav (only for signed-in users) -->
 			{#if user}
