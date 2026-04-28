@@ -178,7 +178,8 @@ CREATE TABLE IF NOT EXISTS sites (
     lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
-    site_name TEXT NOT NULL,
+    site_name TEXT NOT NULL,                 -- display name; spaces + punctuation allowed
+    site_code TEXT,                          -- short machine-friendly ID (e.g., CHDR). Nullable.
     description TEXT,
 
     -- Location
@@ -210,6 +211,11 @@ CREATE TABLE IF NOT EXISTS sites (
 CREATE INDEX IF NOT EXISTS idx_sites_project ON sites(project_id);
 CREATE INDEX IF NOT EXISTS idx_sites_lab ON sites(lab_id);
 CREATE INDEX IF NOT EXISTS idx_sites_coords ON sites(latitude, longitude);
+-- Partial unique index: site_code is unique within a project WHEN SET; multiple
+-- sites per project may have NULL site_code (e.g., lab experiments without a
+-- lab-wide shorthand).
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_sites_project_code
+    ON sites(project_id, site_code) WHERE site_code IS NOT NULL;
 
 -- Site photo gallery. Binaries live under data/site_photos/<id>.<ext>;
 -- this table stores the metadata and owns the lifecycle (soft delete).

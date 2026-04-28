@@ -44,7 +44,12 @@
 	];
 
 	async function deleteProject(row: Record<string, unknown>) {
-		if (!confirm(`Delete project "${row.project_name}"? This will delete all associated data.`)) return;
+		const n = (row.sample_count as number | undefined) ?? 0;
+		const msg = `Delete project "${row.project_name}"?\n\n`
+			+ `This will also permanently delete all associated sites, samples, DNA extracts, `
+			+ `PCR records, libraries, sequencing runs, and analyses${n > 0 ? ` (${n} samples)` : ''}. `
+			+ `This cannot be undone.`;
+		if (!confirm(msg)) return;
 		await fetch(`/api/projects/${row.id}`, { method: 'DELETE' });
 		allProjects = allProjects.filter(p => p.id !== row.id);
 	}
@@ -59,7 +64,12 @@
 	}
 
 	async function bulkDeleteProjects(rs: Record<string, unknown>[]) {
-		if (!confirm(`Delete ${rs.length} projects? This will delete all associated data.`)) return;
+		const totalSamples = rs.reduce((acc, r) => acc + ((r.sample_count as number | undefined) ?? 0), 0);
+		const msg = `Delete ${rs.length} projects?\n\n`
+			+ `This will also permanently delete all associated sites, samples, DNA extracts, `
+			+ `PCR records, libraries, sequencing runs, and analyses${totalSamples > 0 ? ` (${totalSamples} samples across these projects)` : ''}. `
+			+ `This cannot be undone.`;
+		if (!confirm(msg)) return;
 		const ids = rs.map((r) => r.id as string);
 		await Promise.all(ids.map((id) => fetch(`/api/projects/${id}`, { method: 'DELETE' })));
 		const removed = new Set(ids);

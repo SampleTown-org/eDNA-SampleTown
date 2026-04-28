@@ -62,6 +62,30 @@
 	let importExtension = $state('Water');
 	type SiteMatch = { samp_name: string; new_site: boolean; site: { id: string; site_name: string; distance_km: number } | null };
 	type NewSite = { id: string; site_name: string; lat_lon: string; geo_loc_name: string | null };
+	type NewProject = { id: string; project_name: string };
+	type ExtractPreview = {
+		samp_name: string;
+		extract_name: string;
+		extraction_date: string | null;
+		concentration_ng_ul: number | null;
+		storage_box: string | null;
+		storage_location: string | null;
+	};
+	type LibraryPreview = {
+		samp_name: string;
+		library_name: string;
+		library_barcode: string | null;
+		library_platform: string | null;
+		library_concentration_ng_ul: number | null;
+		run_name: string | null;
+	};
+	type NewRun = {
+		id: string;
+		run_name: string;
+		run_date: string | null;
+		run_platform: string | null;
+		run_flow_cell_id: string | null;
+	};
 	type MixsRowValidation = {
 		samp_name: string;
 		checklist: string;
@@ -75,6 +99,10 @@
 		count: number;
 		site_matches?: SiteMatch[];
 		new_sites?: NewSite[];
+		new_projects?: NewProject[];
+		extracts?: ExtractPreview[];
+		libraries?: LibraryPreview[];
+		new_runs?: NewRun[];
 		column_map?: Record<string, string>;
 		available_fields?: { value: string; table: string; title?: string }[];
 		site_fields?: string[];
@@ -96,7 +124,7 @@
 		return targetTable.get(target) ?? 'sample (unknown — will spill)';
 	}
 	let importing = $state(false);
-	let importResult: { imported: number; errors: string[]; site_matches?: number; new_sites?: number } | null = $state(null);
+	let importResult: { imported: number; errors: string[]; site_matches?: number; new_sites?: number; new_projects?: number; extracts_created?: number; libraries_created?: number; runs_created?: number; run_libraries_created?: number } | null = $state(null);
 
 	// Column mapper state — populated from the dry-run response and editable by the user.
 	let columnMap = $state<Record<string, string>>({});
@@ -148,7 +176,10 @@
 	}
 
 	async function sendImport(dryRun: boolean, useMapping: boolean = false) {
-		if (!importProject || !importFile) return;
+		// importProject is optional: sheets with a project_name column auto-resolve
+		// per row (and can create new projects). The server 400s if neither source
+		// is present.
+		if (!importFile) return;
 		importing = true;
 
 		const colMapJson = useMapping && Object.keys(columnMap).length > 0 ? JSON.stringify(columnMap) : null;
@@ -157,7 +188,7 @@
 		if (importFile.name.endsWith('.xlsx') || importFile.name.endsWith('.xls')) {
 			const fd = new FormData();
 			fd.append('file', importFile);
-			fd.append('projectId', importProject);
+			if (importProject) fd.append('projectId', importProject);
 			fd.append('dryRun', String(dryRun));
 			fd.append('siteMatchKm', String(siteMatchKm));
 			fd.append('defaultChecklist', importChecklist);
@@ -171,7 +202,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					tsv: importTsv,
-					projectId: importProject,
+					projectId: importProject || undefined,
 					dryRun,
 					siteMatchKm,
 					defaultChecklist: importChecklist,
@@ -293,11 +324,12 @@
 
 		<div class="flex gap-4 items-end flex-wrap">
 			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1">Target Project</label>
+				<label class="block text-xs font-medium text-slate-400 mb-1">Fallback Project</label>
 				<select bind:value={importProject} class={selectCls}>
 					<option value="">Select project...</option>
 					{#each data.projects as p}<option value={p.id}>{p.project_name}</option>{/each}
 				</select>
+				<p class="text-[10px] text-slate-500 mt-1">Optional if the sheet has a <code>project_name</code> column.</p>
 			</div>
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">File (.xlsx, .tsv, .csv)</label>
@@ -346,7 +378,7 @@
 			label="Apply people to all imported samples"
 		/>
 
-		{#if importFile && importProject}
+		{#if importFile}
 		<div class="flex gap-3 items-start flex-wrap">
 			<button onclick={previewImport} disabled={importing} class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
 				{importing ? 'Parsing...' : 'Validate'}
@@ -362,8 +394,12 @@
 				<div class="flex-1 min-w-64 px-3 py-2 rounded-lg text-sm {importResult.imported > 0 ? 'bg-green-900/20 border border-green-800 text-green-300' : 'bg-red-900/20 border border-red-800 text-red-300'}">
 					{#if importResult.imported > 0}
 						<span class="font-medium">{importResult.imported} imported</span>
+						{#if importResult.new_projects}· {importResult.new_projects} new projects{/if}
 						{#if importResult.site_matches}· {importResult.site_matches} matched{/if}
 						{#if importResult.new_sites}· {importResult.new_sites} new sites{/if}
+						{#if importResult.extracts_created}· {importResult.extracts_created} extracts{/if}
+						{#if importResult.libraries_created}· {importResult.libraries_created} libraries{/if}
+						{#if importResult.runs_created}· {importResult.runs_created} runs{/if}
 						{#if importResult.errors.length > 0}· <span class="text-yellow-300">{importResult.errors.length} warnings</span>{/if}
 						<a href="/samples" class="ml-2 text-ocean-400 hover:text-ocean-300">View samples →</a>
 					{:else}
@@ -521,6 +557,99 @@
 					All {importPreview.mixs_validation.length} samples pass MIxS validation against their checklist+extension.
 				</div>
 				{/if}
+			{/if}
+
+			{#if importPreview.new_projects && importPreview.new_projects.length > 0}
+				<div class="p-3 rounded-lg bg-violet-900/20 border border-violet-800 text-violet-200 text-sm space-y-2">
+					<p class="font-medium text-violet-200">
+						{importPreview.new_projects.length} new project{importPreview.new_projects.length === 1 ? '' : 's'} will be created
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-violet-300 hover:text-violet-200">
+							Show new projects
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each importPreview.new_projects as p}
+								<div>{p.project_name}</div>
+							{/each}
+						</div>
+					</details>
+				</div>
+			{/if}
+
+			{#if importPreview.extracts && importPreview.extracts.length > 0}
+				<div class="p-3 rounded-lg bg-amber-900/20 border border-amber-800 text-amber-200 text-sm space-y-2">
+					<p class="font-medium text-amber-200">
+						{importPreview.extracts.length} DNA extract{importPreview.extracts.length === 1 ? '' : 's'} will be created alongside samples
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-amber-300 hover:text-amber-200">
+							Show extracts
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each importPreview.extracts as ex}
+								<div>
+									{ex.extract_name}
+									<span class="text-slate-500">·</span>
+									{ex.samp_name}
+									{#if ex.extraction_date}<span class="text-slate-500"> · {ex.extraction_date}</span>{/if}
+									{#if ex.concentration_ng_ul != null}<span class="text-slate-500"> · {ex.concentration_ng_ul} ng/µL</span>{/if}
+									{#if ex.storage_box}<span class="text-slate-500"> · box {ex.storage_box}</span>{/if}
+									{#if ex.storage_location}<span class="text-slate-500"> / {ex.storage_location}</span>{/if}
+								</div>
+							{/each}
+						</div>
+					</details>
+				</div>
+			{/if}
+
+			{#if importPreview.libraries && importPreview.libraries.length > 0}
+				<div class="p-3 rounded-lg bg-cyan-900/20 border border-cyan-800 text-cyan-200 text-sm space-y-2">
+					<p class="font-medium text-cyan-200">
+						{importPreview.libraries.length} sequencing librar{importPreview.libraries.length === 1 ? 'y' : 'ies'} will be created
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-cyan-300 hover:text-cyan-200">
+							Show libraries
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each importPreview.libraries as lib}
+								<div>
+									{lib.library_name}
+									<span class="text-slate-500">·</span>
+									{lib.samp_name}
+									{#if lib.library_barcode}<span class="text-slate-500"> · {lib.library_barcode}</span>{/if}
+									{#if lib.library_platform}<span class="text-slate-500"> · {lib.library_platform}</span>{/if}
+									{#if lib.library_concentration_ng_ul != null}<span class="text-slate-500"> · {lib.library_concentration_ng_ul} ng/µL</span>{/if}
+									{#if lib.run_name}<span class="text-slate-500"> → run {lib.run_name}</span>{/if}
+								</div>
+							{/each}
+						</div>
+					</details>
+				</div>
+			{/if}
+
+			{#if importPreview.new_runs && importPreview.new_runs.length > 0}
+				<div class="p-3 rounded-lg bg-sky-900/20 border border-sky-800 text-sky-200 text-sm space-y-2">
+					<p class="font-medium text-sky-200">
+						{importPreview.new_runs.length} sequencing run{importPreview.new_runs.length === 1 ? '' : 's'} will be created
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-sky-300 hover:text-sky-200">
+							Show runs
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each importPreview.new_runs as r}
+								<div>
+									{r.run_name}
+									{#if r.run_date}<span class="text-slate-500"> · {r.run_date}</span>{/if}
+									{#if r.run_platform}<span class="text-slate-500"> · {r.run_platform}</span>{/if}
+									{#if r.run_flow_cell_id}<span class="text-slate-500"> · {r.run_flow_cell_id}</span>{/if}
+								</div>
+							{/each}
+						</div>
+					</details>
+				</div>
 			{/if}
 
 			{#if importPreview.site_matches && importPreview.site_matches.length > 0}

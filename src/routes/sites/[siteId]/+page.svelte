@@ -99,6 +99,9 @@
 		<div class="flex items-start justify-between gap-4">
 			<div>
 				<h1 class="text-2xl font-bold text-white">{data.site.site_name}</h1>
+				{#if data.site.site_code}
+					<p class="mt-0.5"><code class="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-ocean-300 font-mono">{data.site.site_code}</code></p>
+				{/if}
 				<Breadcrumb items={crumbs} />
 			</div>
 			<div class="flex items-center gap-3 shrink-0">

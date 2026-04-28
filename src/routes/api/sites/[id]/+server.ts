@@ -9,6 +9,17 @@ import { assertLabOwnsRow } from '$lib/server/lab-scope';
 /** Coerce empty strings to null (CHECK constraints on enum cols reject ''). */
 const nn = (v: unknown): unknown => (typeof v === 'string' && v.trim() === '' ? null : v);
 
+const SITE_CODE_RE = /^[a-zA-Z0-9_.\-]+$/;
+function sanitizeSiteCode(raw: unknown): string | null {
+	if (raw == null) return null;
+	const s = String(raw).trim();
+	if (s === '') return null;
+	if (!SITE_CODE_RE.test(s)) {
+		throw new Error(`site_code "${s}" has invalid characters — use letters, digits, and _.- only`);
+	}
+	return s;
+}
+
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const { labId } = requireLab(locals);
 	const db = getDb();
@@ -32,7 +43,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 
 		db.prepare(
 			`UPDATE sites SET
-				site_name = ?, description = ?,
+				site_name = ?, site_code = ?, description = ?,
 				lat_lon = ?, latitude = ?, longitude = ?,
 				geo_loc_name = ?, locality = ?,
 				env_broad_scale = ?, env_local_scale = ?,
@@ -41,6 +52,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 			 WHERE id = ?`
 		).run(
 			data.site_name.trim(),
+			sanitizeSiteCode(data.site_code),
 			nn(data.description),
 			nn(data.lat_lon),
 			coords?.latitude ?? data.latitude ?? null,

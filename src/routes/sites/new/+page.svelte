@@ -13,6 +13,7 @@
 	let form = $state<Record<string, unknown>>({
 		project_id: data.preselectedProjectId as string,
 		site_name: '',
+		site_code: '',
 		description: '',
 		geo_loc_name: '',
 		locality: '',
@@ -119,9 +120,13 @@
 					</select>
 				</div>
 				<div>
-					<FieldLabel slot="samp_name" for="site_name" label="Site Name" description="Human-readable name for this sampling site. Unique within the project." />
-					<input id="site_name" type="text" bind:value={form.site_name} class={inputCls} placeholder={data.namingTemplates?.site_name || 'e.g., Station A, Dock 3'} />
+					<FieldLabel slot="site_name" for="site_name" label="Site Name" description="Human-readable name for this sampling site. Unique within the project. Spaces + punctuation allowed." />
+					<input id="site_name" type="text" bind:value={form.site_name} class={inputCls} placeholder={data.namingTemplates?.site_name || 'e.g., Churchill Drive / Manitoba Canoe & Kayak Center'} />
 				</div>
+			</div>
+			<div>
+				<FieldLabel slot="site_code" for="site_code" label="Site Code (optional)" description="Short machine-friendly identifier — letters, digits, and _.- only (e.g., CHDR, WRLB). Unique per project when set." />
+				<input id="site_code" type="text" bind:value={form.site_code} class={inputCls} placeholder="e.g., CHDR" pattern="[a-zA-Z0-9_.\-]+" />
 			</div>
 			<div>
 				<FieldLabel slot="description" label="Description" description="Brief description of this sampling site (free text)." />

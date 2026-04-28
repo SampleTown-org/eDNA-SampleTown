@@ -18,8 +18,44 @@ import * as XLSX from 'xlsx';
 
 /** Fields that live on the sites table, not the samples table. */
 export const SITE_FIELDS = new Set([
-	'site_name', 'lat_lon', 'latitude', 'longitude', 'geo_loc_name',
+	'site_name', 'site_code', 'lat_lon', 'latitude', 'longitude', 'geo_loc_name',
 	'env_broad_scale', 'env_local_scale'
+]);
+
+/** Fields that select/create the project a sample belongs to. Resolved to
+ *  project_id in the import endpoint. Kept to the bare minimum: the lookup key.
+ *  Other project metadata (pi_name, institution, funding) is filled in through
+ *  the normal project edit UI after import. */
+export const PROJECT_FIELDS = new Set(['project_name']);
+
+/** Fields that get split off into an extracts row when present. Mirrors the
+ *  site auto-create pattern: if any of these are filled for a given sample,
+ *  an extract record is created after the sample insert in the same txn. */
+export const EXTRACT_FIELDS = new Set([
+	'extract_name', 'extraction_date', 'concentration_ng_ul',
+	'storage_box', 'storage_location', 'extract_notes'
+]);
+
+/** Fields that get split off into a library_preps row when present. The
+ *  importer creates one library per row (linked to the row's just-created
+ *  extract). When run_* fields are also present, a run_libraries link is
+ *  added connecting the library to the resolved run. */
+export const LIBRARY_FIELDS = new Set([
+	'library_name', 'library_barcode', 'library_prep_kit', 'library_prep_date',
+	'library_platform', 'library_instrument_model', 'library_concentration_ng_ul',
+	'library_notes'
+]);
+
+/** Fields that get split off into a sequencing_runs row when present. Runs
+ *  are deduped within a batch by run_name — multiple samples on the same
+ *  flow cell share one run record. The link table run_libraries carries
+ *  per-(run, library) details (fastq directory, read count). */
+export const RUN_FIELDS = new Set([
+	'run_name', 'run_date', 'run_platform', 'run_instrument_model',
+	'run_flow_cell_id', 'run_directory', 'run_total_bases_gb',
+	// Per-(run, library) link fields — written to run_libraries, not
+	// sequencing_runs. Side-car bag is shared with the run for parsing.
+	'run_fastq_dir', 'run_read_count'
 ]);
 
 /** Sample columns that exist as real columns in the samples table and are
@@ -288,11 +324,44 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 	// SampleTown-local aliases not covered by the SRA mapping.
 	const local: Record<string, string> = {
 		site_name: 'site_name',
-		station: 'site_name',
+		station: 'site_code',  // raw station codes (CHDR, WRLB) go to site_code, not site_name
 		station_name: 'site_name',
+		station_code: 'site_code',
+		site_code: 'site_code',
+		site_slug: 'site_code',
+		code: 'site_code',
 		latitude: 'latitude',
 		longitude: 'longitude',
-		description: 'notes'
+		notes: 'notes',        // plain `notes` header → sample.notes (was unmapped before)
+		description: 'notes',
+		// Project auto-create (lookup key; other project metadata is edited post-import)
+		project_name: 'project_name',
+		// Extract auto-create columns
+		extract_name: 'extract_name',
+		extraction_date: 'extraction_date',
+		concentration_ng_ul: 'concentration_ng_ul',
+		storage_box: 'storage_box',
+		storage_location: 'storage_location',
+		extract_notes: 'extract_notes',
+		// Library auto-create columns
+		library_name: 'library_name',
+		library_barcode: 'library_barcode',
+		library_prep_kit: 'library_prep_kit',
+		library_prep_date: 'library_prep_date',
+		library_platform: 'library_platform',
+		library_instrument_model: 'library_instrument_model',
+		library_concentration_ng_ul: 'library_concentration_ng_ul',
+		library_notes: 'library_notes',
+		// Run auto-create columns (deduped by run_name across the batch)
+		run_name: 'run_name',
+		run_date: 'run_date',
+		run_platform: 'run_platform',
+		run_instrument_model: 'run_instrument_model',
+		run_flow_cell_id: 'run_flow_cell_id',
+		run_directory: 'run_directory',
+		run_total_bases_gb: 'run_total_bases_gb',
+		run_fastq_dir: 'run_fastq_dir',
+		run_read_count: 'run_read_count'
 	};
 	for (const [k, v] of Object.entries(local)) map[k] = v;
 
@@ -319,12 +388,42 @@ export function getImportableFields(): { value: string; table: string; title?: s
 
 	// SampleTown-local fields without a MIxS slot.
 	push('site_name', 'site');
+	push('site_code', 'site');
 	push('latitude', 'site');
 	push('longitude', 'site');
 	push('notes', 'sample');
 	push('collector_name', 'sample');
 	push('mixs_checklist', 'sample');
 	push('extension', 'sample');
+	// Project lookup (auto-create if no match)
+	push('project_name', 'project');
+	// Extract auto-create columns — if any are filled, an extract record is
+	// created alongside the sample in the same transaction.
+	push('extract_name', 'extract');
+	push('extraction_date', 'extract');
+	push('concentration_ng_ul', 'extract');
+	push('storage_box', 'extract');
+	push('storage_location', 'extract');
+	push('extract_notes', 'extract');
+	// Library auto-create columns
+	push('library_name', 'library');
+	push('library_barcode', 'library');
+	push('library_prep_kit', 'library');
+	push('library_prep_date', 'library');
+	push('library_platform', 'library');
+	push('library_instrument_model', 'library');
+	push('library_concentration_ng_ul', 'library');
+	push('library_notes', 'library');
+	// Run auto-create columns (deduped by run_name across the batch)
+	push('run_name', 'run');
+	push('run_date', 'run');
+	push('run_platform', 'run');
+	push('run_instrument_model', 'run');
+	push('run_flow_cell_id', 'run');
+	push('run_directory', 'run');
+	push('run_total_bases_gb', 'run');
+	push('run_fastq_dir', 'run');
+	push('run_read_count', 'run');
 
 	// Every MIxS slot, mapped to its owning table via slot-ownership.
 	// Imports against keys not in SAMPLE_CORE_KEYS get routed to sample_values.
@@ -361,7 +460,11 @@ export function parseMixsTsv(
 	headers: string[];
 	column_map: Record<string, string>;
 } {
-	const rawLines = tsv.trim().split('\n');
+	// Strip leading UTF-8 BOM (﻿) — Excel-for-Mac friendly TSVs include it
+	// so the app auto-detects UTF-8; without this strip the first header cell
+	// would silently gain an invisible prefix and no headers would match.
+	const normalized = tsv.replace(/^﻿/, '');
+	const rawLines = normalized.trim().split('\n');
 	const dataLines = rawLines.filter((l) => !l.startsWith('#'));
 	if (dataLines.length < 2) {
 		return { samples: [], errors: ['File must have a header row and at least one data row'], headers: [], column_map: {} };
@@ -377,7 +480,14 @@ export function parseMixsTsv(
 	const unmapped: string[] = [];
 	headers.forEach((h, i) => {
 		const override = overrideMap?.[h];
-		const field = override !== undefined ? override : autoMap[h];
+		let field = override !== undefined ? override : autoMap[h];
+		// `misc_param:<tag>` headers in the TSV are user-defined custom tags —
+		// pass them through verbatim when no explicit map exists so CLI/
+		// programmatic uploads (without the column-mapper UI) don't lose them.
+		if (!field && h.startsWith(MISC_PARAM_PREFIX)) {
+			const name = sanitizeMiscParamName(h.slice(MISC_PARAM_PREFIX.length));
+			if (name) field = `${MISC_PARAM_PREFIX}${name}`;
+		}
 		if (field && field !== '_skip_') {
 			colMap.push({ index: i, field });
 			column_map[h] = field;
@@ -434,6 +544,57 @@ export function parseMixsTsv(
 				if (name) customFields[`${MISC_PARAM_PREFIX}${name}`] = val;
 				continue;
 			}
+			// Project lookup field — resolved to project_id in the import endpoint
+			// (either matches an existing project in the lab or queues a new one).
+			if (PROJECT_FIELDS.has(field)) {
+				sample[field] = val;
+				continue;
+			}
+			// Extract-side field — stashed into sample._extract for the endpoint
+			// to create an extract row after its sample in the same transaction.
+			if (EXTRACT_FIELDS.has(field)) {
+				let ev: unknown = val;
+				if (field === 'concentration_ng_ul') {
+					const n = Number(val);
+					ev = isNaN(n) ? null : n;
+				}
+				if (ev != null && ev !== '') {
+					const ex = (sample._extract as Record<string, unknown>) ?? {};
+					ex[field] = ev;
+					sample._extract = ex;
+				}
+				continue;
+			}
+			// Library-side field — endpoint creates a library_preps row linked
+			// to this sample's extract.
+			if (LIBRARY_FIELDS.has(field)) {
+				let lv: unknown = val;
+				if (field === 'library_concentration_ng_ul') {
+					const n = Number(val);
+					lv = isNaN(n) ? null : n;
+				}
+				if (lv != null && lv !== '') {
+					const lib = (sample._library as Record<string, unknown>) ?? {};
+					lib[field] = lv;
+					sample._library = lib;
+				}
+				continue;
+			}
+			// Run-side field — endpoint dedupes runs by run_name across the
+			// batch and creates run_libraries links per row.
+			if (RUN_FIELDS.has(field)) {
+				let rv: unknown = val;
+				if (field === 'run_total_bases_gb' || field === 'run_read_count') {
+					const n = Number(val);
+					rv = isNaN(n) ? null : n;
+				}
+				if (rv != null && rv !== '') {
+					const run = (sample._run as Record<string, unknown>) ?? {};
+					run[field] = rv;
+					sample._run = run;
+				}
+				continue;
+			}
 			// Real sample/site column → route to the sample row; the samples
 			// POST/PUT will bind it to a named column.
 			if ((SAMPLE_SLOT_COLUMNS as readonly string[]).includes(field) ||
@@ -463,14 +624,26 @@ export function parseMixsTsv(
 			continue;
 		}
 
-		// Sanitize names: only a-zA-Z0-9_-. allowed; replace others with .
-		const NAME_RE = /[^a-zA-Z0-9_.\-]/g;
-		for (const nameField of ['samp_name', 'site_name']) {
+		// Sanitize identifier-style names: samp_name and site_code become URL/
+		// filesystem-safe. site_name is a display field, so we only strip
+		// control chars (tabs/newlines would break the TSV round-trip) but
+		// leave spaces, punctuation, and unicode letters intact.
+		const STRICT_NAME_RE = /[^a-zA-Z0-9_.\-]/g;
+		const DISPLAY_NAME_RE = /[\x00-\x1f]/g;
+		for (const nameField of ['samp_name', 'site_code']) {
 			const raw = sample[nameField] as string | null;
-			if (raw && NAME_RE.test(raw)) {
-				const cleaned = raw.replace(NAME_RE, '.');
+			if (raw && STRICT_NAME_RE.test(raw)) {
+				const cleaned = raw.replace(STRICT_NAME_RE, '.');
 				errors.push(`Row ${i + 1}: ${nameField} "${raw}" contains invalid characters, sanitized to "${cleaned}"`);
 				sample[nameField] = cleaned;
+			}
+		}
+		{
+			const raw = sample.site_name as string | null;
+			if (raw && DISPLAY_NAME_RE.test(raw)) {
+				const cleaned = raw.replace(DISPLAY_NAME_RE, '').trim();
+				errors.push(`Row ${i + 1}: site_name had control characters, stripped`);
+				sample.site_name = cleaned;
 			}
 		}
 

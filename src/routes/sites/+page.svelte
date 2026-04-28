@@ -61,6 +61,7 @@
 	})));
 
 	const columns = [
+		{ key: 'site_code', label: 'Code', sortable: true },
 		{ key: 'site_name', label: 'Site', sortable: true },
 		{ key: 'project_name', label: 'Project', sortable: true },
 		{ key: 'latitude', label: 'Lat', sortable: true },
