@@ -1,16 +1,11 @@
 <!--
   Offline field-capture wizard — one question per page (docs/dev/offline-pwa.md).
 
-  State machine (#4):
-    phase 'main'   → walk the queue once. Skip pushes the key onto `skipped`.
-    phase 'skips'  → re-present skipped questions as a second pass. Skipping
-                     here leaves the field blank and advances WITHOUT requeuing
-                     (loop terminator).
-    phase 'review' → summary of all answers; Complete finalizes.
-
-  The action button reads "Skip" while the current answer is empty/invalid and
-  flips to "Next" once it's valid. "Complete" is always present and enforces
-  MIxS-required fields before finalizing.
+  Traversal (Skip↔Next, skip-loop second pass, review) lives in the shared
+  WizardMachine (src/lib/wizard/machine.svelte.ts); this page owns answer state
+  and rendering. The action button reads "Skip" while the current answer is
+  empty/invalid and flips to "Next" once it's valid; "Complete" is always
+  present and enforces MIxS-required fields before finalizing.
 
   Online-only for now; the IndexedDB outbox + service worker (#2/#3) layer on
   top of finalize() without changing this flow.
@@ -18,9 +13,11 @@
 <script lang="ts">
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
+	import SiteWizard from '$lib/components/SiteWizard.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
 	import type { Picklists } from '$lib/mixs/sample-form';
 	import { buildSampleQueue, isAnswered, isValid, type WizardQuestion } from '$lib/wizard/queue';
+	import { WizardMachine } from '$lib/wizard/machine.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -29,16 +26,19 @@
 	let extension = $state('Water');
 
 	let queue = $derived(buildSampleQueue(checklist, extension, data.picklists as Picklists));
-	let questionByKey = $derived(new Map(queue.map((q) => [q.key, q])));
 
 	// Loaders return loosely-typed rows; pin the shapes the template needs.
 	let projects = $derived(data.projects as { id: string; project_name: string }[]);
-	let allSites = $derived(data.sites as { id: string; site_name: string; project_id: string }[]);
+	let allSites = $state((data.sites as { id: string; site_name: string; project_id: string }[]) ?? []);
 
 	// Answer state. Scalar answers live in `answers`; people/photos are arrays.
 	let answers = $state<Record<string, string>>({});
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 	let photos = $state<File[]>([]);
+
+	const m = new WizardMachine(() => queue);
+	let current = $derived(m.current);
+	let phase = $derived(m.phase);
 
 	// Seed preselected project/site from the query string (scan / deep-link).
 	$effect(() => {
@@ -46,26 +46,11 @@
 		if (data.preselectedSiteId && !answers.site_id) answers.site_id = data.preselectedSiteId;
 	});
 
-	type Phase = 'main' | 'skips' | 'review';
-	let phase = $state<Phase>('main');
-	let mainIdx = $state(0);
-	let skipped = $state<string[]>([]);
-	let skipList = $state<string[]>([]);
-	let skipIdx = $state(0);
-	let history = $state<{ phase: Phase; mainIdx: number; skipIdx: number }[]>([]);
-
 	let saving = $state(false);
 	let errorMsg = $state('');
 	let successMsg = $state('');
 	let missingRequired = $state<WizardQuestion[]>([]);
-
-	let current = $derived<WizardQuestion | null>(
-		phase === 'main'
-			? (queue[mainIdx] ?? null)
-			: phase === 'skips'
-				? (questionByKey.get(skipList[skipIdx]) ?? null)
-				: null
-	);
+	let showSiteWizard = $state(false);
 
 	function valueFor(q: WizardQuestion): unknown {
 		if (q.widget === 'people') return people;
@@ -74,55 +59,14 @@
 	}
 
 	let currentValid = $derived(current ? isValid(current, valueFor(current)) : false);
-
 	const answeredCount = $derived(queue.filter((q) => isAnswered(q, valueFor(q))).length);
 
-	function enterSecondPassOrReview() {
-		if (skipped.length > 0) {
-			skipList = [...skipped];
-			skipped = [];
-			skipIdx = 0;
-			phase = 'skips';
-		} else {
-			phase = 'review';
-		}
-	}
-
-	/** Advance from the current question. `commit` true = Next, false = Skip. */
-	function advance(commit: boolean) {
-		if (!current) return;
-		history = [...history, { phase, mainIdx, skipIdx }];
-		if (phase === 'main') {
-			if (!commit) skipped = [...skipped, current.key];
-			if (mainIdx + 1 >= queue.length) {
-				mainIdx = queue.length;
-				enterSecondPassOrReview();
-			} else {
-				mainIdx += 1;
-			}
-		} else if (phase === 'skips') {
-			if (!commit) {
-				// Leave blank — clear any partial value so review shows it empty.
-				if (current.widget !== 'people' && current.widget !== 'photos') {
-					const { [current.key]: _drop, ...rest } = answers;
-					answers = rest;
-				}
-			}
-			if (skipIdx + 1 >= skipList.length) {
-				phase = 'review';
-			} else {
-				skipIdx += 1;
-			}
-		}
-	}
-
-	function back() {
-		const prev = history[history.length - 1];
-		if (!prev) return;
-		history = history.slice(0, -1);
-		phase = prev.phase;
-		mainIdx = prev.mainIdx;
-		skipIdx = prev.skipIdx;
+	/** Second-pass skip → blank any partial value so review shows it empty. */
+	function clearAnswer(q: WizardQuestion) {
+		if (q.widget === 'people' || q.widget === 'photos') return;
+		const next = { ...answers };
+		delete next[q.key];
+		answers = next;
 	}
 
 	/** Complete: jump to the first unfilled MIxS-required question, else review. */
@@ -130,24 +74,15 @@
 		const missing = queue.filter((q) => q.required && !isAnswered(q, valueFor(q)));
 		if (missing.length > 0) {
 			missingRequired = missing;
-			const idx = queue.indexOf(missing[0]);
-			phase = 'main';
-			mainIdx = idx;
-			skipped = [];
-			skipList = [];
-			history = [];
+			m.reset(queue.indexOf(missing[0]));
 			return;
 		}
 		missingRequired = [];
-		phase = 'review';
+		m.toReview();
 	}
 
 	function jumpTo(q: WizardQuestion) {
-		const idx = queue.indexOf(q);
-		if (idx < 0) return;
-		history = [...history, { phase, mainIdx, skipIdx }];
-		phase = 'main';
-		mainIdx = idx;
+		m.jumpToIndex(queue.indexOf(q));
 	}
 
 	function resetForNext(carry: boolean) {
@@ -160,13 +95,14 @@
 		answers = kept;
 		if (!carry) people = [];
 		photos = [];
-		phase = 'main';
-		mainIdx = carry ? queue.findIndex((q) => q.key === 'samp_name') : 0;
-		skipped = [];
-		skipList = [];
-		skipIdx = 0;
-		history = [];
+		m.reset(carry ? queue.findIndex((q) => q.key === 'samp_name') : 0);
 		missingRequired = [];
+	}
+
+	function onSiteCreated(site: { id: string; site_name: string; project_id: string }) {
+		allSites = [...allSites, site];
+		answers.site_id = site.id;
+		showSiteWizard = false;
 	}
 
 	async function finalize(addAnother: boolean) {
@@ -226,14 +162,22 @@
 
 	function sitesForProject(projectId: string): { id: string; site_name: string }[] {
 		if (!projectId) return [];
-		return (data.sites as { id: string; site_name: string; project_id: string }[]).filter(
-			(s) => s.project_id === projectId
-		);
+		return allSites.filter((s) => s.project_id === projectId);
 	}
 
 	const inputCls =
 		'w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-lg focus:outline-none focus:border-ocean-500';
 </script>
+
+{#if showSiteWizard}
+	<SiteWizard
+		projectId={answers.project_id}
+		projectName={projects.find((p) => p.id === answers.project_id)?.project_name ?? ''}
+		picklists={data.picklists as Picklists}
+		oncreated={onSiteCreated}
+		oncancel={() => (showSiteWizard = false)}
+	/>
+{/if}
 
 <div class="max-w-xl mx-auto space-y-5 pb-28">
 	<div class="flex items-center justify-between">
@@ -258,7 +202,7 @@
 			<div class="h-full bg-ocean-500 transition-all" style:width="{Math.round((answeredCount / Math.max(queue.length, 1)) * 100)}%"></div>
 		</div>
 		<p class="text-xs text-slate-500 flex justify-between">
-			<span>{answeredCount} / {queue.length} answered{skipped.length > 0 ? ` · ${skipped.length} skipped` : ''}</span>
+			<span>{answeredCount} / {queue.length} answered{m.skipped.length > 0 ? ` · ${m.skipped.length} skipped` : ''}</span>
 			{#if phase === 'skips'}<span class="text-amber-400">Reviewing skipped</span>{/if}
 		</p>
 	</div>
@@ -316,7 +260,10 @@
 						<option value="">Select site…</option>
 						{#each sitesForProject(answers.project_id) as s}<option value={s.id}>{s.site_name}</option>{/each}
 					</select>
-					<p class="text-xs text-slate-500">New-site capture (with GPS) arrives in the site sub-wizard (#5).</p>
+					<button type="button" onclick={() => (showSiteWizard = true)}
+						class="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-ocean-700 text-ocean-300 hover:bg-slate-800 text-sm">
+						+ New site (capture GPS)
+					</button>
 				{/if}
 			{:else if current.widget === 'env_medium'}
 				{#if current.options && current.options.length > 0}
@@ -370,7 +317,7 @@
 <!-- Sticky action bar -->
 <div class="fixed bottom-0 inset-x-0 border-t border-slate-800 bg-slate-950/95 backdrop-blur p-3">
 	<div class="max-w-xl mx-auto flex items-center gap-3">
-		<button type="button" onclick={back} disabled={history.length === 0}
+		<button type="button" onclick={() => m.back()} disabled={!m.canGoBack}
 			class="px-4 py-3 border border-slate-700 text-slate-300 rounded-lg disabled:opacity-30 hover:bg-slate-800">Back</button>
 
 		{#if phase === 'review'}
@@ -383,7 +330,7 @@
 				{saving ? 'Saving…' : 'Save'}
 			</button>
 		{:else}
-			<button type="button" onclick={() => advance(currentValid)}
+			<button type="button" onclick={() => m.advance(currentValid, clearAnswer)}
 				class="flex-1 px-4 py-3 rounded-lg font-medium {currentValid ? 'bg-ocean-600 text-white hover:bg-ocean-500' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}">
 				{currentValid ? 'Next' : 'Skip'}
 			</button>

@@ -127,6 +127,25 @@ export function buildSampleQueue(
 	return q;
 }
 
+/**
+ * Build the question queue for the inline site sub-wizard (#5). GPS is a
+ * dedicated widget (device geolocation + map pin); the rest map straight onto
+ * `sites` columns. `site_name` is the only required field (matches the table's
+ * sole NOT NULL beyond the lab/project keys).
+ */
+export function buildSiteQueue(picklists: Picklists = {}): WizardQuestion[] {
+	const sel = (key: string): WizardWidget => (picklists[key]?.length ? 'select' : 'text');
+	return [
+		{ key: 'site_name', label: 'Site name', section: 'Site', required: true, recommended: false, widget: 'text', placeholder: 'e.g. Chukchi Drift Station', carryForward: false },
+		{ key: 'gps', label: 'Location (GPS)', section: 'Site', required: false, recommended: true, widget: 'gps', carryForward: false },
+		{ key: 'geo_loc_name', label: 'Geographic location', section: 'Site', required: false, recommended: true, widget: sel('geo_loc_name'), options: picklists['geo_loc_name'], slot: 'geo_loc_name', placeholder: 'country:region', carryForward: false },
+		{ key: 'locality', label: 'Locality', section: 'Site', required: false, recommended: false, widget: 'text', placeholder: 'finer-grained place name', carryForward: false },
+		{ key: 'env_broad_scale', label: 'Broad-scale environment', section: 'Site', required: false, recommended: true, widget: sel('env_broad_scale'), options: picklists['env_broad_scale'], slot: 'env_broad_scale', placeholder: 'ENVO biome term', carryForward: false },
+		{ key: 'env_local_scale', label: 'Local environmental feature', section: 'Site', required: false, recommended: false, widget: sel('env_local_scale'), options: picklists['env_local_scale'], slot: 'env_local_scale', placeholder: 'ENVO feature term', carryForward: false },
+		{ key: 'description', label: 'Description / access notes', section: 'Site', required: false, recommended: false, widget: 'textarea', carryForward: false }
+	];
+}
+
 /** A value counts as "answered" when it's a non-empty trimmed string. People /
  *  photos arrays count when non-empty. */
 export function isAnswered(q: WizardQuestion, value: unknown): boolean {
