@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 import schema from './schema.sql?raw';
-import { seedConstrainedValues } from './seed-constrained-values';
+import { seedConstrainedValues } from './seed-data.mjs';
 import { startBackupScheduler } from './github';
 
 const DB_PATH = process.env.DB_PATH || 'data/sampletown.db';

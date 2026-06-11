@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { generateId } from './db';
-import { seedConstrainedValues } from './seed-constrained-values';
+import { seedConstrainedValues } from './seed-data.mjs';
 
 /**
  * Lab-setup helpers shared by the self-serve `/api/auth/setup-lab` endpoint

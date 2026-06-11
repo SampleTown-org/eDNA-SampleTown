@@ -1,19 +1,27 @@
-import type Database from 'better-sqlite3';
+/**
+ * Default per-lab seed data (picklists, primer sets, PCR protocols, naming
+ * templates) and the seeding routine that inserts them.
+ *
+ * This is plain ESM (not TS) on purpose: it's the single source of truth
+ * shared by the TS server code (db.ts first-run seed, lab-setup.ts
+ * `createLab`) AND the plain-`node` CLI provisioning script
+ * (scripts/create-lab.mjs), which can't load a `.ts` module. JSDoc types
+ * keep it fully checked under the repo's `checkJs`/`strict` tsconfig.
+ *
+ * The only runtime dependency is the better-sqlite3 `Database` handle passed
+ * in by the caller — this module imports nothing.
+ */
 
 /**
- * Picklist seed data. Each entry is either a bare string (value == label)
- * or a `{value, label}` pair when the canonical value needs a friendlier
- * display label. The `{value, label}` form is used for categories like
- * `seq_platform` whose values must match an SRA/INSDC-mandated string,
- * and for categories like `library_type` where the canonical underscore
- * form is ugly but well-established.
+ * Picklist seed data. Each entry is either a bare string (value == label) or
+ * a `{value, label}` pair when the canonical value needs a friendlier display
+ * label (e.g. `seq_platform` values must match an SRA/INSDC-mandated string).
+ * @typedef {string | { value: string; label: string }} SeedEntry
  */
-type SeedEntry = string | { value: string; label: string };
 
-const SEED_DATA: Record<string, SeedEntry[]> = {
-	pipeline: [
-		'danaseq', 'microscape-nf', 'custom'
-	],
+/** @type {Record<string, SeedEntry[]>} */
+const SEED_DATA = {
+	pipeline: ['danaseq', 'microscape-nf', 'custom'],
 	person_role: [
 		'collector',
 		'co-collector',
@@ -80,11 +88,9 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 	samp_store_sol: [
 		'Ethanol (95%)', 'Ethanol (70%)', 'RNAlater', 'Longmire buffer',
 		'CTAB buffer', 'Flash frozen (LN₂)', 'Frozen (-20°C)', 'Frozen (-80°C)',
-		'Silica desiccant', 'DMSO-EDTA salt', 'Formaldehyde', 'Lugol\'s iodine',
+		'Silica desiccant', 'DMSO-EDTA salt', 'Formaldehyde', "Lugol's iodine",
 		'None (processed immediately)'
 	],
-	// samp_store_temp is numeric (°C) in MIxS 6.3 — so no picklist needed;
-	// removed the old `storage_conditions` enum.
 	samp_collect_device: [
 		'Niskin bottle', 'Go-Flo bottle', 'CTD rosette',
 		'grab sampler', 'push core', 'box core', 'gravity core',
@@ -191,10 +197,13 @@ const SEED_DATA: Record<string, SeedEntry[]> = {
 		{ value: 'other', label: 'Other' },
 		{ value: 'unspecified', label: 'Unspecified' }
 	],
+	// ONT basecaller output naming (barcode01..barcodeNN) — matches the
+	// demultiplexed folder names dorato/guppy produce.
 	barcode: [
-		'BC01', 'BC02', 'BC03', 'BC04', 'BC05', 'BC06', 'BC07', 'BC08',
-		'BC09', 'BC10', 'BC11', 'BC12', 'BC13', 'BC14', 'BC15', 'BC16',
-		'BC17', 'BC18', 'BC19', 'BC20', 'BC21', 'BC22', 'BC23', 'BC24',
+		'barcode01', 'barcode02', 'barcode03', 'barcode04', 'barcode05', 'barcode06',
+		'barcode07', 'barcode08', 'barcode09', 'barcode10', 'barcode11', 'barcode12',
+		'barcode13', 'barcode14', 'barcode15', 'barcode16', 'barcode17', 'barcode18',
+		'barcode19', 'barcode20', 'barcode21', 'barcode22', 'barcode23', 'barcode24',
 		'RB01', 'RB02', 'RB03', 'RB04', 'RB05', 'RB06', 'RB07', 'RB08',
 		'RB09', 'RB10', 'RB11', 'RB12'
 	],
@@ -257,43 +266,70 @@ const NAMING_TEMPLATES = [
 	// shotgun libraries) the extract name.
 	{ value: 'library_name', label: '{Source}_LIB' },
 	{ value: 'library_plate_name', label: '{Type}_{Date}_{PlateNumber}' },
-	{ value: 'run_name', label: 'RUN_{Date}_{Instrument}' },
+	{ value: 'run_name', label: 'RUN_{Date}_{Instrument}' }
 ];
 
 /**
- * Seed picklists, primer sets, and PCR protocols for a specific lab. Called
- * once per lab on creation (default lab at install time, new labs via
- * scripts/create-lab.mjs or self-serve setup). All seeds are scoped to the
- * passed lab_id so each lab gets its own customizable copy.
- *
- * Each category is seeded only if currently empty *for this lab*, so
- * operator edits are never clobbered. NB: there's no migration layer — if
- * SEED_DATA gains new entries in a later release, existing labs do NOT
- * automatically pick them up. Operators add the entries via the Manage UI
- * (or wipe their lab and re-create to get a fresh seed).
+ * @param {SeedEntry} entry
+ * @returns {{ value: string; label: string }}
  */
-export function seedConstrainedValues(db: Database.Database, labId: string) {
+function normalizeSeedEntry(entry) {
+	if (typeof entry === 'string') return { value: entry, label: entry };
+	return entry;
+}
+
+/**
+ * Seed picklists, primer sets, PCR protocols, and naming templates for a
+ * specific lab. Called once per lab on creation (the default lab at install
+ * time via db.ts, and every new lab via lab-setup.ts `createLab` or the CLI
+ * scripts/create-lab.mjs). All seeds are scoped to `labId` so each lab gets
+ * its own customizable copy.
+ *
+ * Each category is seeded only if currently empty *for this lab*, so operator
+ * edits are never clobbered, and re-running is a no-op. NB: there's no
+ * migration layer — if this seed data gains entries in a later release,
+ * existing labs do NOT pick them up automatically.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} labId
+ * @returns {void}
+ */
+export function seedConstrainedValues(db, labId) {
 	const insert = db.prepare(
 		'INSERT OR IGNORE INTO constrained_values (id, lab_id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)'
 	);
 	const countByCategory = db.prepare(
 		'SELECT COUNT(*) AS count FROM constrained_values WHERE lab_id = ? AND category = ?'
 	);
-	const seedCategory = db.transaction((category: string, entries: SeedEntry[]) => {
-		entries.forEach((entry, i) => {
-			const { value, label } = normalizeSeedEntry(entry);
-			insert.run(labId, category, value, label, i);
-		});
-	});
+	const seedCategory = db.transaction(
+		/**
+		 * @param {string} category
+		 * @param {SeedEntry[]} entries
+		 */
+		(category, entries) => {
+			entries.forEach((entry, i) => {
+				const { value, label } = normalizeSeedEntry(entry);
+				insert.run(labId, category, value, label, i);
+			});
+		}
+	);
 	for (const [category, entries] of Object.entries(SEED_DATA)) {
-		const { count } = countByCategory.get(labId, category) as { count: number };
+		const { count } = /** @type {{ count: number }} */ (countByCategory.get(labId, category));
 		if (count === 0) seedCategory(category, entries);
 	}
 
 	// Seed naming templates
-	const namingCount = db.prepare("SELECT COUNT(*) AS count FROM constrained_values WHERE lab_id = ? AND category = 'naming_template'").get(labId) as { count: number };
+	const namingCount = /** @type {{ count: number }} */ (
+		db
+			.prepare(
+				"SELECT COUNT(*) AS count FROM constrained_values WHERE lab_id = ? AND category = 'naming_template'"
+			)
+			.get(labId)
+	);
 	if (namingCount.count === 0) {
-		const insertNaming = db.prepare('INSERT OR IGNORE INTO constrained_values (id, lab_id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)');
+		const insertNaming = db.prepare(
+			'INSERT OR IGNORE INTO constrained_values (id, lab_id, category, value, label, sort_order) VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)'
+		);
 		const insertAllNaming = db.transaction(() => {
 			NAMING_TEMPLATES.forEach((t, i) => insertNaming.run(labId, 'naming_template', t.value, t.label, i));
 		});
@@ -301,32 +337,32 @@ export function seedConstrainedValues(db: Database.Database, labId: string) {
 	}
 
 	// Seed primer sets
-	const primerCount = db.prepare('SELECT COUNT(*) AS count FROM primer_sets WHERE lab_id = ?').get(labId) as { count: number };
+	const primerCount = /** @type {{ count: number }} */ (
+		db.prepare('SELECT COUNT(*) AS count FROM primer_sets WHERE lab_id = ?').get(labId)
+	);
 	if (primerCount.count === 0) {
-		const insert = db.prepare(`INSERT OR IGNORE INTO primer_sets
+		const insertPrimer = db.prepare(`INSERT OR IGNORE INTO primer_sets
 			(id, lab_id, name, target_gene, target_subfragment, forward_primer_name, forward_primer_seq, reverse_primer_name, reverse_primer_seq, reference, sort_order)
 			VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 		const insertAll = db.transaction(() => {
-			PRIMER_SETS.forEach((p, i) => insert.run(labId, p.name, p.target_gene, p.target_subfragment, p.forward_primer_name, p.forward_primer_seq, p.reverse_primer_name, p.reverse_primer_seq, p.reference, i));
+			PRIMER_SETS.forEach((p, i) =>
+				insertPrimer.run(labId, p.name, p.target_gene, p.target_subfragment, p.forward_primer_name, p.forward_primer_seq, p.reverse_primer_name, p.reverse_primer_seq, p.reference, i)
+			);
 		});
 		insertAll();
 	}
 
 	// Seed PCR protocols
-	const protocolCount = db.prepare('SELECT COUNT(*) AS count FROM pcr_protocols WHERE lab_id = ?').get(labId) as { count: number };
+	const protocolCount = /** @type {{ count: number }} */ (
+		db.prepare('SELECT COUNT(*) AS count FROM pcr_protocols WHERE lab_id = ?').get(labId)
+	);
 	if (protocolCount.count === 0) {
-		const insert = db.prepare(`INSERT OR IGNORE INTO pcr_protocols
+		const insertProtocol = db.prepare(`INSERT OR IGNORE INTO pcr_protocols
 			(id, lab_id, name, annealing_temp_c, num_cycles, pcr_cond, sort_order)
 			VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?)`);
 		const insertAll = db.transaction(() => {
-			PCR_PROTOCOLS.forEach((p, i) => insert.run(labId, p.name, p.annealing_temp_c, p.num_cycles, p.pcr_cond, i));
+			PCR_PROTOCOLS.forEach((p, i) => insertProtocol.run(labId, p.name, p.annealing_temp_c, p.num_cycles, p.pcr_cond, i));
 		});
 		insertAll();
 	}
 }
-
-function normalizeSeedEntry(entry: SeedEntry): { value: string; label: string } {
-	if (typeof entry === 'string') return { value: entry, label: entry };
-	return entry;
-}
-
