@@ -821,6 +821,73 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labels
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Labels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zebra-thermal-printer-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zebra thermal printer setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Zebra thermal printer setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-printer-admin-one-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server printer (admin, one-time)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#this-computer-browser-print" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        This computer (Browser Print)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#label-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#backup" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1402,6 +1469,73 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labels
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Labels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zebra-thermal-printer-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zebra thermal printer setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Zebra thermal printer setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-printer-admin-one-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server printer (admin, one-time)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#this-computer-browser-print" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        This computer (Browser Print)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#label-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#backup" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1490,7 +1624,7 @@ people management, and ops.</p>
 <tr>
 <td><strong>Labels</strong></td>
 <td>all</td>
-<td>Avery 5160 sticker sheet generator</td>
+<td>QR label generator — Avery 5160 PDF sheets <strong>or</strong> direct-to-Zebra thermal printing</td>
 </tr>
 <tr>
 <td><strong>Backup</strong></td>
@@ -1550,6 +1684,101 @@ string. Pick on a plate to populate atomically. Default seeds include
   did the work" attribution on samples / extracts / PCRs. Optionally
   linked to a User Account row (so a User and a Personnel record can
   be the same human or not).</li>
+</ul>
+<h2 id="labels">Labels<a class="headerlink" href="#labels" title="Permanent link">&para;</a></h2>
+<p>Two ways to put a scannable QR on a tube, box, or plate. Both encode the
+same URL — <code>&lt;origin&gt;/id/&lt;uuid&gt;[?t=&lt;type&gt;]</code> — so a scan lands on the entity's
+detail page (or, for a fresh blank code, a pre-typed new-form). See
+<a href="../scanning/">Scanning</a> for the read side.</p>
+<p><strong>Two label sources, on every tab:</strong></p>
+<ul>
+<li><strong>Cart items</strong> — one sticker per item in the cart, carrying its name,
+  project/site context, and type tag.</li>
+<li><strong>Blank sheets</strong> — pre-allocated UUIDs minted in the browser for future
+  sampling trips; they don't exist in the DB until a scan claims them.
+  Optionally pre-assign a type so scanning skips the claim picker.</li>
+</ul>
+<p><strong>Two output paths:</strong></p>
+<ul>
+<li><strong>Download PDF</strong> — Avery 5160 sticker sheets (US Letter, 30 per page,
+  1″ × 2⅝″). Works on any laser/inkjet printer. QR is rastered client-side.</li>
+<li><strong>Print to Zebra</strong> / <strong>Save .zpl</strong> — for a Zebra desktop thermal printer
+  (ZD421 and friends). The QR is rendered <em>natively by the printer</em> (ZPL
+  <code>^BQ</code>), so it's crisp at any size and no bitmap crosses the wire.</li>
+</ul>
+<h3 id="zebra-thermal-printer-setup">Zebra thermal printer setup<a class="headerlink" href="#zebra-thermal-printer-setup" title="Permanent link">&para;</a></h3>
+<p>The <strong>Zebra label printer</strong> panel at the top of the Labels tab drives direct
+printing. A <strong>Print via</strong> switch picks where the printer lives:</p>
+<ul>
+<li><strong>Server printer</strong> — the Zebra is plugged into the box running SampleTown
+  (a lab/ship server, the LAN instance). Printing goes through the server, so
+  <em>any</em> operator on that instance can use it with zero local software. Set up
+  once by an admin (below). This is the option to use on a Linux bench —
+  Zebra ships no Linux Browser Print agent.</li>
+<li><strong>This computer</strong> — the Zebra is plugged into <em>your own</em> laptop via USB.
+  Printing goes through Zebra's <strong>Browser Print</strong> agent (Windows/Mac), so it
+  works even though the app itself is cloud-hosted — the print path stays
+  local to your machine.</li>
+</ul>
+<p>Either way, <strong>Save .zpl</strong> downloads the raw ZPL for offline testing, and the
+label settings below apply to both.</p>
+<h4 id="server-printer-admin-one-time">Server printer (admin, one-time)<a class="headerlink" href="#server-printer-admin-one-time" title="Permanent link">&para;</a></h4>
+<p>On the host the printer is attached to:</p>
+<ol>
+<li>Plug in the Zebra over USB and power it on.</li>
+<li>Create a CUPS print queue:
+   <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sudo node scripts/setup-zebra.mjs
+</span></code></pre></div>
+   It auto-discovers the USB Zebra and makes a raw queue named <code>zebra</code>
+   (<code>--name</code> to override). Re-runnable; <code>--dry-run</code> to preview.</li>
+<li>Add to the server <code>.env</code> and restart the app:
+   <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ZEBRA_PRINTER=zebra
+</span></code></pre></div></li>
+<li>In <strong>Manage → Labels</strong>, set <strong>Print via → Server printer</strong>; the status
+   turns green with the queue name and the <strong>Print to Zebra</strong> buttons light up.</li>
+</ol>
+<p>(No CUPS? The fallback is <code>ZEBRA_DEVICE=/dev/usb/lp0</code> — a raw device path —
+but the server process must then be in the <code>lp</code> group.)</p>
+<h4 id="this-computer-browser-print">This computer (Browser Print)<a class="headerlink" href="#this-computer-browser-print" title="Permanent link">&para;</a></h4>
+<ol>
+<li><strong>Install Browser Print</strong> on the workstation the printer is plugged into:
+   <a href="https://www.zebra.com/us/en/support-downloads/printer-software/browser-print.html">https://www.zebra.com/us/en/support-downloads/printer-software/browser-print.html</a>.
+   Launch it; it runs in the tray/menu bar and listens on <code>127.0.0.1:9100</code>.</li>
+<li><strong>Set the default printer</strong> in the Browser Print app.</li>
+<li>In SampleTown, set <strong>Print via → This computer</strong> and click <strong>Re-check</strong>.
+   The panel should turn green with the printer's name.</li>
+</ol>
+<h4 id="label-settings">Label settings<a class="headerlink" href="#label-settings" title="Permanent link">&para;</a></h4>
+<p>Tune these in the panel (saved in your browser, per bench — they apply to
+both backends):</p>
+<ul>
+<li><strong>Width / Height</strong> — match the media on the roll. Default 2.25″ × 1.25″.</li>
+<li><strong>Resolution</strong> — 203 dpi for a standard ZD421, 300 dpi for the hi-res
+  variant (check the part number — <code>…042</code> = 203, <code>…043</code> = 300).</li>
+<li><strong>QR error-correct</strong> — <code>M</code> is fine for normal use; bump to <code>Q</code>/<code>H</code> for
+  cryo labels that get frosted/scuffed (costs QR capacity).</li>
+<li><strong>Darkness / Speed</strong> — thermal-transfer ribbon usually wants more darkness
+  than direct-thermal. Start at 12 / 4 in/s and adjust.</li>
+<li><strong>QR size</strong> — Auto fits the symbol to the label height; override only if it
+  over/under-shoots your stock.</li>
+<li><strong>Agent URL</strong> <em>(This computer only)</em> — leave as <code>http://127.0.0.1:9100</code> on
+  Chrome/Edge. On Firefox/Safari (stricter about HTTPS→loopback), switch to
+  <code>https://127.0.0.1:9101</code>.</li>
+</ul>
+<p><strong>No ribbon / offline check:</strong> click <strong>Save .zpl</strong> to download the raw ZPL.
+Drop it onto the printer's USB mass-storage to print, or paste it into
+<a href="https://labelary.com/viewer.html">https://labelary.com/viewer.html</a> (set to the matching dpmm + label size) to
+preview exactly what would print — no media needed.</p>
+<p><strong>Troubleshooting:</strong></p>
+<ul>
+<li><em>"Browser Print not detected"</em> — the agent isn't running, or the browser
+  blocked the loopback request. Confirm the tray app is up, then Re-check; on
+  Firefox/Safari switch the Agent URL to the <code>https://…:9101</code> form.</li>
+<li><em>Agent running, no default printer set</em> — pick a default in the Browser
+  Print app, then Re-check.</li>
+<li><em>QR won't scan</em> — likely too small for the URL length on a tiny label;
+  shorten by using a smaller label <em>width</em> of text or a larger media size,
+  raise QR size, or lower the error-correction level.</li>
 </ul>
 <h2 id="backup">Backup<a class="headerlink" href="#backup" title="Permanent link">&para;</a></h2>
 <p>The whole <a href="../../dev/backup/">GitHub backup &amp; restore</a> story lives
