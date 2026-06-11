@@ -1,0 +1,160 @@
+/**
+ * Wizard question queue — the data model behind the one-question-per-page
+ * field-capture flow (docs/dev/offline-pwa.md, issue #4).
+ *
+ * Questions are derived from the active MIxS combination class via the same
+ * `organizeForm()` the desktop batch grid uses, so the wizard inherits every
+ * slot, widget type, picklist binding, and required/recommended marker for
+ * free. Synthetic questions (project / site / samp_name / collection_date /
+ * env_medium / people / photos) bracket the MIxS-derived ones because they map
+ * to SampleTown-local concepts or special widgets the route renders itself.
+ */
+import { organizeForm, type Picklists, type SlotConfig } from '$lib/mixs/sample-form';
+import { getSlot } from '$lib/mixs/schema-index';
+
+/** Widget kinds. The MIxS-derived ones mirror SlotConfig['type']; the rest are
+ *  SampleTown-local widgets the route special-cases. */
+export type WizardWidget =
+	| 'text'
+	| 'number'
+	| 'date'
+	| 'datetime'
+	| 'select'
+	| 'textarea'
+	| 'project'
+	| 'site'
+	| 'env_medium'
+	| 'people'
+	| 'photos'
+	| 'gps';
+
+export interface WizardQuestion {
+	/** Field key — a MIxS slot name, a samples column, or a synthetic key
+	 *  ('project_id', 'site_id', 'people', 'photos'). */
+	key: string;
+	label: string;
+	section: string;
+	required: boolean;
+	recommended: boolean;
+	widget: WizardWidget;
+	options?: { value: string; label: string }[];
+	placeholder?: string;
+	/** MIxS slot name for the glossary doc icon, when one applies. */
+	slot?: string;
+	/** Carried across consecutive samples in a burst (site, date, people, …)
+	 *  so the wizard only re-asks per-sample deltas. */
+	carryForward: boolean;
+}
+
+/** Keys the route renders with bespoke widgets and excludes from the MIxS pass. */
+export const SYNTHETIC_KEYS = new Set([
+	'project_id',
+	'site_id',
+	'samp_name',
+	'collection_date',
+	'env_medium',
+	'people',
+	'photos'
+]);
+
+function fromSlotConfig(cfg: SlotConfig, required: boolean, section: string): WizardQuestion {
+	const meta = getSlot(cfg.slot);
+	return {
+		key: cfg.slot,
+		label: meta?.title ?? cfg.slot,
+		section,
+		required,
+		recommended: cfg.recommended ?? false,
+		widget: cfg.type,
+		options: cfg.options,
+		placeholder: cfg.placeholder,
+		slot: cfg.slot,
+		carryForward: false
+	};
+}
+
+/**
+ * Build the full ordered question queue for one sample.
+ *
+ * Order: identity (project → site → samp_name → collection_date → env_medium)
+ * → MIxS-required → people → MIxS-recommended/optional (Sampling & Storage,
+ * then Other) → photos. `picklists` binds local vocabularies onto matching
+ * slots exactly as the batch grid does.
+ */
+export function buildSampleQueue(
+	checklist: string,
+	extension: string | null,
+	picklists: Picklists = {}
+): WizardQuestion[] {
+	const org = organizeForm(checklist, extension, picklists);
+	const q: WizardQuestion[] = [];
+
+	// Identity — synthetic widgets, all carry-forward except the per-sample name.
+	q.push({ key: 'project_id', label: 'Project', section: 'Identity', required: true, recommended: false, widget: 'project', carryForward: true });
+	q.push({ key: 'site_id', label: 'Site', section: 'Identity', required: true, recommended: false, widget: 'site', carryForward: true });
+	q.push({ key: 'samp_name', label: 'Sample name', section: 'Identity', required: true, recommended: false, widget: 'text', placeholder: 'e.g. CHDR-W-01', slot: 'samp_name', carryForward: false });
+	q.push({ key: 'collection_date', label: 'Collection date', section: 'Identity', required: true, recommended: false, widget: 'date', slot: 'collection_date', carryForward: true });
+	q.push({
+		key: 'env_medium',
+		label: 'Environmental medium',
+		section: 'Identity',
+		required: true,
+		recommended: false,
+		widget: 'env_medium',
+		options: picklists['env_medium'],
+		slot: 'env_medium',
+		carryForward: false
+	});
+
+	// MIxS-required slots that live on the samples table (organizeForm already
+	// filtered out header + off-table slots).
+	for (const cfg of org.required) q.push(fromSlotConfig(cfg, true, 'Required'));
+
+	// People — carry-forward; a crew usually works a station together.
+	q.push({ key: 'people', label: 'People', section: 'People', required: false, recommended: false, widget: 'people', carryForward: true });
+
+	// Recommended / optional, Sampling & Storage first then everything else.
+	const buckets = Object.entries(org.optional).sort(([a], [b]) =>
+		a === 'Sampling & Storage' ? -1 : b === 'Sampling & Storage' ? 1 : a.localeCompare(b)
+	);
+	for (const [bucket, list] of buckets) {
+		for (const cfg of list) q.push(fromSlotConfig(cfg, false, bucket));
+	}
+
+	// Photos last — captions handled in the photos widget (#8).
+	q.push({ key: 'photos', label: 'Photos', section: 'Photos', required: false, recommended: false, widget: 'photos', carryForward: false });
+
+	return q;
+}
+
+/** A value counts as "answered" when it's a non-empty trimmed string. People /
+ *  photos arrays count when non-empty. */
+export function isAnswered(q: WizardQuestion, value: unknown): boolean {
+	if (q.widget === 'people' || q.widget === 'photos') {
+		return Array.isArray(value) && value.length > 0;
+	}
+	return typeof value === 'string' ? value.trim() !== '' : value != null;
+}
+
+/**
+ * Validate an answer for the Skip↔Next flip. Empty is "not yet valid" (button
+ * stays on Skip). Non-empty must pass the widget's type check. Required-ness is
+ * enforced separately at Complete time, not here.
+ */
+export function isValid(q: WizardQuestion, value: unknown): boolean {
+	if (!isAnswered(q, value)) return false;
+	if (q.widget === 'number') {
+		return !Number.isNaN(Number(String(value).trim()));
+	}
+	if (q.widget === 'date') {
+		return /^\d{4}-\d{2}-\d{2}/.test(String(value).trim());
+	}
+	if (q.widget === 'datetime') {
+		return /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2})?/.test(String(value).trim());
+	}
+	if (q.widget === 'select' || q.widget === 'env_medium') {
+		if (!q.options || q.options.length === 0) return true;
+		return q.options.some((o) => o.value === String(value));
+	}
+	return true;
+}
