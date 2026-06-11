@@ -701,6 +701,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Scanning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#handheld-barcode-scanner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handheld barcode scanner
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1333,6 +1350,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Scanning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#handheld-barcode-scanner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handheld barcode scanner
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1421,6 +1455,25 @@ one of two things:</p>
 </ul>
 <p>Mobile cameras work fine — the read-only mobile UI explicitly keeps
 the scanner button visible on phones.</p>
+<h3 id="handheld-barcode-scanner">Handheld barcode scanner<a class="headerlink" href="#handheld-barcode-scanner" title="Permanent link">&para;</a></h3>
+<p>A USB or Bluetooth handheld scanner works too — handy at a bench
+workstation with no camera. Two requirements:</p>
+<ul>
+<li>It must be a <strong>2D imager</strong> (reads QR codes), <strong>not</strong> a 1D laser
+  scanner. Zebra examples: DS2208 (corded), DS2278 / DS8178 (Bluetooth).</li>
+<li>Leave it in its default <strong>keyboard / HID mode</strong> with an <strong>Enter (CR)
+  suffix</strong> — almost always the factory default. (No Enter suffix still
+  works: the app flushes the scan after a brief pause.)</li>
+</ul>
+<p>To use it: open the scan modal with the <strong>QR icon</strong> (the same one the
+camera uses), then pull the trigger. The modal shows <strong>"Handheld
+scanner ready"</strong> while it's listening. SampleTown only listens for the
+scanner <em>while that modal is open</em> — never app-wide — so it can't
+interfere with typing elsewhere. On a desktop with no camera, the modal
+shows a muted "camera unavailable" note and the handheld still works.</p>
+<p>The handheld reads the <strong>same QR labels</strong> you already print and routes
+exactly like the camera: existing entity → detail page; pre-allocated
+UUID → claim page or, with a type hint, straight to the new-form.</p>
 <h2 id="qr-codes-on-detail-pages">QR codes on detail pages<a class="headerlink" href="#qr-codes-on-detail-pages" title="Permanent link">&para;</a></h2>
 <p>Every entity detail page renders its QR inline (small thumbnail with
 click-to-enlarge). Useful when you've lost the physical label or want
