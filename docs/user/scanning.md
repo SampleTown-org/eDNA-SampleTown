@@ -41,6 +41,28 @@ one of two things:
 Mobile cameras work fine — the read-only mobile UI explicitly keeps
 the scanner button visible on phones.
 
+### Handheld barcode scanner
+
+A USB or Bluetooth handheld scanner works too — handy at a bench
+workstation with no camera. Two requirements:
+
+- It must be a **2D imager** (reads QR codes), **not** a 1D laser
+  scanner. Zebra examples: DS2208 (corded), DS2278 / DS8178 (Bluetooth).
+- Leave it in its default **keyboard / HID mode** with an **Enter (CR)
+  suffix** — almost always the factory default. (No Enter suffix still
+  works: the app flushes the scan after a brief pause.)
+
+To use it: open the scan modal with the **QR icon** (the same one the
+camera uses), then pull the trigger. The modal shows **"Handheld
+scanner ready"** while it's listening. SampleTown only listens for the
+scanner *while that modal is open* — never app-wide — so it can't
+interfere with typing elsewhere. On a desktop with no camera, the modal
+shows a muted "camera unavailable" note and the handheld still works.
+
+The handheld reads the **same QR labels** you already print and routes
+exactly like the camera: existing entity → detail page; pre-allocated
+UUID → claim page or, with a type hint, straight to the new-form.
+
 ## QR codes on detail pages
 
 Every entity detail page renders its QR inline (small thumbnail with
