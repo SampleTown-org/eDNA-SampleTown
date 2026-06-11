@@ -34,7 +34,7 @@
 	// Answer state. Scalar answers live in `answers`; people/photos are arrays.
 	let answers = $state<Record<string, string>>({});
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
-	let photos = $state<File[]>([]);
+	let photos = $state<{ file: File; caption: string }[]>([]);
 
 	const m = new WizardMachine(() => queue);
 	let current = $derived(m.current);
@@ -145,19 +145,27 @@
 		}
 		const created = (await res.json().catch(() => null)) as { id?: string } | null;
 		if (created?.id && photos.length > 0) {
-			for (const file of photos) {
+			for (const p of photos) {
 				const fd = new FormData();
-				fd.append('file', file);
+				fd.append('file', p.file);
+				if (p.caption?.trim()) fd.append('caption', p.caption.trim());
 				const up = await fetch(`/api/samples/${created.id}/photos`, { method: 'POST', body: fd });
 				if (!up.ok) {
 					const err = await up.json().catch(() => ({}));
-					errorMsg = `Sample saved, but photo ${file.name} failed: ${err.error ?? up.status}`;
+					errorMsg = `Sample saved, but photo ${p.file.name} failed: ${err.error ?? up.status}`;
 				}
 			}
 		}
 		saving = false;
 		successMsg = `Saved “${body.samp_name}”.`;
 		resetForNext(addAnother);
+	}
+
+	/** Local-time `YYYY-MM-DDTHH:mm` for the datetime-local input (#6). */
+	function localDateTimeNow(): string {
+		const d = new Date();
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 	}
 
 	function sitesForProject(projectId: string): { id: string; site_name: string }[] {
@@ -280,20 +288,30 @@
 				<label class="inline-flex items-center gap-2 px-4 py-3 rounded-lg border border-slate-700 text-slate-300 cursor-pointer hover:bg-slate-800">
 					<span>+ Add photo</span>
 					<input type="file" accept="image/*" capture="environment" multiple class="hidden"
-						onchange={(e) => { const inp = e.currentTarget; photos = [...photos, ...Array.from(inp.files ?? [])]; inp.value = ''; }} />
+						onchange={(e) => { const inp = e.currentTarget; photos = [...photos, ...Array.from(inp.files ?? []).map((file) => ({ file, caption: '' }))]; inp.value = ''; }} />
 				</label>
 				{#if photos.length > 0}
-					<ul class="space-y-1">
-						{#each photos as file, i}
-							<li class="flex items-center gap-2 text-sm text-slate-400">
-								<span class="truncate flex-1">{file.name}</span>
-								<button type="button" onclick={() => (photos = photos.filter((_, idx) => idx !== i))} class="text-slate-600 hover:text-red-400">✕</button>
+					<ul class="space-y-2">
+						{#each photos as p, i}
+							<li class="space-y-1 rounded-lg border border-slate-800 p-2">
+								<div class="flex items-center gap-2 text-sm text-slate-400">
+									<span class="truncate flex-1">{p.file.name}</span>
+									<button type="button" onclick={() => (photos = photos.filter((_, idx) => idx !== i))} class="text-slate-600 hover:text-red-400">✕</button>
+								</div>
+								<input type="text" bind:value={photos[i].caption} placeholder="Caption (optional)"
+									class="w-full px-2 py-1 bg-slate-900 border border-slate-800 rounded text-white text-sm focus:outline-none focus:border-ocean-500" />
 							</li>
 						{/each}
 					</ul>
 				{/if}
 			{:else if current.widget === 'date'}
 				<input type="date" bind:value={answers[current.key]} class={inputCls} />
+			{:else if current.widget === 'datetime'}
+				<input type="datetime-local" bind:value={answers[current.key]} class={inputCls} />
+				<button type="button" onclick={() => (answers[current.key] = localDateTimeNow())}
+					class="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-sm">
+					Set to now
+				</button>
 			{:else if current.widget === 'select'}
 				<select bind:value={answers[current.key]} class={inputCls}>
 					<option value="">Select…</option>

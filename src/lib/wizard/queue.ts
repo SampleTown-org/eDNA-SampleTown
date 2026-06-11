@@ -9,8 +9,8 @@
  * env_medium / people / photos) bracket the MIxS-derived ones because they map
  * to SampleTown-local concepts or special widgets the route renders itself.
  */
-import { organizeForm, type Picklists, type SlotConfig } from '$lib/mixs/sample-form';
-import { getSlot } from '$lib/mixs/schema-index';
+import { organizeForm, MISC_PARAM_PREFIX, type Picklists, type SlotConfig } from '$lib/mixs/sample-form';
+import { getSlot, getEnum } from '$lib/mixs/schema-index';
 
 /** Widget kinds. The MIxS-derived ones mirror SlotConfig['type']; the rest are
  *  SampleTown-local widgets the route special-cases. */
@@ -57,6 +57,33 @@ export const SYNTHETIC_KEYS = new Set([
 	'photos'
 ]);
 
+/** Tier-2 field-condition slots (#7), all real MIxS v6.3.0 slots → stored in
+ *  the sample_values EAV, no migration. Order = capture order in the wizard. */
+const WEATHER_SLOTS = [
+	'air_temp',
+	'wind_speed',
+	'wind_direction',
+	'barometric_press',
+	'humidity',
+	'water_current',
+	'tidal_stage'
+];
+
+/** Resolve a weather slot's widget from its MIxS range: enum → select,
+ *  numeric → number, else text. (organizeForm's resolver is private, and
+ *  these slots may not be class properties, so we resolve them directly.) */
+function weatherWidget(slot: string): { widget: WizardWidget; options?: { value: string; label: string }[] } {
+	const meta = getSlot(slot);
+	if (meta?.range) {
+		const enumDef = getEnum(meta.range);
+		if (enumDef && enumDef.values.length > 0) {
+			return { widget: 'select', options: enumDef.values.map((v) => ({ value: v.value, label: v.value })) };
+		}
+		if (/^(float|double|integer|decimal)$/i.test(meta.range)) return { widget: 'number' };
+	}
+	return { widget: 'text' };
+}
+
 function fromSlotConfig(cfg: SlotConfig, required: boolean, section: string): WizardQuestion {
 	const meta = getSlot(cfg.slot);
 	return {
@@ -93,7 +120,7 @@ export function buildSampleQueue(
 	q.push({ key: 'project_id', label: 'Project', section: 'Identity', required: true, recommended: false, widget: 'project', carryForward: true });
 	q.push({ key: 'site_id', label: 'Site', section: 'Identity', required: true, recommended: false, widget: 'site', carryForward: true });
 	q.push({ key: 'samp_name', label: 'Sample name', section: 'Identity', required: true, recommended: false, widget: 'text', placeholder: 'e.g. CHDR-W-01', slot: 'samp_name', carryForward: false });
-	q.push({ key: 'collection_date', label: 'Collection date', section: 'Identity', required: true, recommended: false, widget: 'date', slot: 'collection_date', carryForward: true });
+	q.push({ key: 'collection_date', label: 'Collection date & time', section: 'Identity', required: true, recommended: false, widget: 'datetime', slot: 'collection_date', carryForward: true });
 	q.push({
 		key: 'env_medium',
 		label: 'Environmental medium',
@@ -113,12 +140,42 @@ export function buildSampleQueue(
 	// People — carry-forward; a crew usually works a station together.
 	q.push({ key: 'people', label: 'People', section: 'People', required: false, recommended: false, widget: 'people', carryForward: true });
 
+	// Conditions block (#7) — carry-forward field context, promoted out of the
+	// generic optional buckets into one obvious "Conditions" step. Weather slots
+	// that are also class properties get deduped below so they appear once here.
+	const seen = new Set(q.map((x) => x.key));
+	for (const slot of WEATHER_SLOTS) {
+		if (seen.has(slot)) continue;
+		const meta = getSlot(slot);
+		if (!meta) continue;
+		const { widget, options } = weatherWidget(slot);
+		q.push({
+			key: slot,
+			label: meta.title ?? slot,
+			section: 'Conditions',
+			required: false,
+			recommended: true,
+			widget,
+			options,
+			placeholder: meta.examples?.[0],
+			slot,
+			carryForward: true
+		});
+		seen.add(slot);
+	}
+	// Secchi clarity has no MIxS slot — capture as a misc_param.
+	q.push({ key: `${MISC_PARAM_PREFIX}secchi_depth_m`, label: 'Secchi depth (m)', section: 'Conditions', required: false, recommended: true, widget: 'number', placeholder: 'water clarity', carryForward: true });
+
 	// Recommended / optional, Sampling & Storage first then everything else.
+	// Skip anything already promoted into the Conditions block.
 	const buckets = Object.entries(org.optional).sort(([a], [b]) =>
 		a === 'Sampling & Storage' ? -1 : b === 'Sampling & Storage' ? 1 : a.localeCompare(b)
 	);
 	for (const [bucket, list] of buckets) {
-		for (const cfg of list) q.push(fromSlotConfig(cfg, false, bucket));
+		for (const cfg of list) {
+			if (seen.has(cfg.slot)) continue;
+			q.push(fromSlotConfig(cfg, false, bucket));
+		}
 	}
 
 	// Photos last — captions handled in the photos widget (#8).
