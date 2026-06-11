@@ -18,6 +18,8 @@
 	import type { Picklists } from '$lib/mixs/sample-form';
 	import { buildSampleQueue, isAnswered, isValid, type WizardQuestion } from '$lib/wizard/queue';
 	import { WizardMachine } from '$lib/wizard/machine.svelte';
+	import { enqueueSample, flush, genClientId, pendingCount } from '$lib/offline/outbox';
+	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -51,6 +53,38 @@
 	let successMsg = $state('');
 	let missingRequired = $state<WizardQuestion[]>([]);
 	let showSiteWizard = $state(false);
+	let pending = $state({ sites: 0, samples: 0 });
+	let syncing = $state(false);
+
+	async function refreshPending() {
+		try {
+			pending = await pendingCount();
+		} catch {
+			/* IndexedDB unavailable (private mode) — ignore */
+		}
+	}
+
+	async function syncNow() {
+		if (syncing) return;
+		syncing = true;
+		try {
+			const r = await flush();
+			if (r.synced > 0) successMsg = `Synced ${r.synced} queued record(s).`;
+			if (r.failed > 0) errorMsg = `${r.failed} queued record(s) were rejected — open them to fix.`;
+		} catch {
+			/* ignore */
+		}
+		await refreshPending();
+		syncing = false;
+	}
+
+	onMount(() => {
+		refreshPending();
+		if (navigator.onLine) syncNow();
+		const onOnline = () => syncNow();
+		window.addEventListener('online', onOnline);
+		return () => window.removeEventListener('online', onOnline);
+	});
 
 	function valueFor(q: WizardQuestion): unknown {
 		if (q.widget === 'people') return people;
@@ -115,7 +149,11 @@
 			return;
 		}
 		saving = true;
+		// Client-generated id doubles as the server PK (idempotent re-POST + lets
+		// an offline sample reference an offline site by the same id).
+		const clientId = genClientId();
 		const body: Record<string, unknown> = {
+			id: clientId,
 			project_id: answers.project_id,
 			site_id: answers.site_id,
 			samp_name: answers.samp_name?.trim(),
@@ -131,34 +169,50 @@
 			const v = answers[q.key];
 			if (v && v.toString().trim()) body[q.key] = v;
 		}
+		const sampName = body.samp_name as string;
+		const photoPayload = photos.map((p) => ({ name: p.file.name, type: p.file.type, caption: p.caption, blob: p.file as Blob }));
 
-		const res = await fetch('/api/samples', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
-		});
-		if (!res.ok) {
-			const err = await res.json().catch(() => ({}));
-			errorMsg = err.error ?? `HTTP ${res.status}`;
+		async function queueOffline(note: string) {
+			await enqueueSample({ clientId, body, photos: photoPayload, createdAt: new Date().toISOString() });
+			await refreshPending();
 			saving = false;
+			successMsg = `${note} “${sampName}” saved offline — will sync.`;
+			resetForNext(addAnother);
+		}
+
+		if (typeof navigator !== 'undefined' && !navigator.onLine) {
+			await queueOffline('Offline:');
 			return;
 		}
-		const created = (await res.json().catch(() => null)) as { id?: string } | null;
-		if (created?.id && photos.length > 0) {
+		try {
+			const res = await fetch('/api/samples', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				errorMsg = err.error ?? `HTTP ${res.status}`;
+				saving = false;
+				return;
+			}
 			for (const p of photos) {
 				const fd = new FormData();
 				fd.append('file', p.file);
 				if (p.caption?.trim()) fd.append('caption', p.caption.trim());
-				const up = await fetch(`/api/samples/${created.id}/photos`, { method: 'POST', body: fd });
+				const up = await fetch(`/api/samples/${clientId}/photos`, { method: 'POST', body: fd });
 				if (!up.ok) {
 					const err = await up.json().catch(() => ({}));
 					errorMsg = `Sample saved, but photo ${p.file.name} failed: ${err.error ?? up.status}`;
 				}
 			}
+			saving = false;
+			successMsg = `Saved “${sampName}”.`;
+			resetForNext(addAnother);
+		} catch {
+			// Network dropped mid-request — queue for retry.
+			await queueOffline('Network lost:');
 		}
-		saving = false;
-		successMsg = `Saved “${body.samp_name}”.`;
-		resetForNext(addAnother);
 	}
 
 	/** Local-time `YYYY-MM-DDTHH:mm` for the datetime-local input (#6). */
@@ -214,6 +268,18 @@
 			{#if phase === 'skips'}<span class="text-amber-400">Reviewing skipped</span>{/if}
 		</p>
 	</div>
+
+	{#if pending.samples > 0 || pending.sites > 0}
+		<div class="flex items-center gap-3 p-2.5 rounded-lg bg-amber-900/20 border border-amber-800 text-amber-200 text-sm">
+			<span class="flex-1">
+				{pending.samples} sample(s){pending.sites > 0 ? ` · ${pending.sites} site(s)` : ''} queued offline
+			</span>
+			<button type="button" onclick={syncNow} disabled={syncing}
+				class="px-3 py-1.5 rounded border border-amber-700 hover:bg-amber-900/40 disabled:opacity-50">
+				{syncing ? 'Syncing…' : 'Sync now'}
+			</button>
+		</div>
+	{/if}
 
 	{#if errorMsg}
 		<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{errorMsg}</div>

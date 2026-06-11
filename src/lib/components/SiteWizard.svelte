@@ -14,6 +14,7 @@
 	import type { Picklists } from '$lib/mixs/sample-form';
 	import { buildSiteQueue, isAnswered, isValid, type WizardQuestion } from '$lib/wizard/queue';
 	import { WizardMachine } from '$lib/wizard/machine.svelte';
+	import { enqueueSite, genClientId } from '$lib/offline/outbox';
 
 	interface Props {
 		projectId: string;
@@ -96,6 +97,7 @@
 			return;
 		}
 		saving = true;
+		const clientId = genClientId();
 		const body: Record<string, unknown> = {
 			project_id: projectId,
 			site_name: answers.site_name.trim(),
@@ -110,19 +112,37 @@
 			body.longitude = lon;
 			body.lat_lon = formatLatLon(lat, lon);
 		}
-		const res = await fetch('/api/sites', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
-		});
-		saving = false;
-		if (!res.ok) {
-			const err = await res.json().catch(() => ({}));
-			errorMsg = err.error ?? `HTTP ${res.status}`;
+
+		// Offline: queue the site and return it provisionally. Its clientId is the
+		// id the server will adopt, so the sample that selects it references the
+		// same id — sites flush before samples (#3).
+		async function queueOffline() {
+			await enqueueSite({ clientId, projectId, body, createdAt: new Date().toISOString() });
+			saving = false;
+			oncreated({ id: clientId, site_name: body.site_name as string, project_id: projectId });
+		}
+
+		if (typeof navigator !== 'undefined' && !navigator.onLine) {
+			await queueOffline();
 			return;
 		}
-		const site = (await res.json()) as { id: string; site_name: string; project_id: string };
-		oncreated(site);
+		try {
+			const res = await fetch('/api/sites', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id: clientId, ...body })
+			});
+			saving = false;
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				errorMsg = err.error ?? `HTTP ${res.status}`;
+				return;
+			}
+			const site = (await res.json()) as { id: string; site_name: string; project_id: string };
+			oncreated(site);
+		} catch {
+			await queueOffline();
+		}
 	}
 
 	const inputCls =
