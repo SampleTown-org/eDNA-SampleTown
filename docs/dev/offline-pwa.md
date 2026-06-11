@@ -1,9 +1,18 @@
 # Offline field-capture PWA
 
-Status: **planned** (2026-06-11). This document is the design of record for the
-offline, mobile-first sample-submission wizard. The schema has reserved sync
-columns since the multi-lab work (`client_id`, `local_created_at`,
+Status: **Tier 1+2 MVP implemented on branch `feat/offline-pwa`** (2026-06-11),
+pending on-device verification + review. This document is the design of record
+for the offline, mobile-first sample-submission wizard. The schema has reserved
+sync columns since the multi-lab work (`client_id`, `local_created_at`,
 `sync_version`, `sync_log`); this is the plan that finally uses them.
+
+Implemented: the wizard route `/samples/wizard` (#4), the inline site
+sub-wizard with GPS (#5), date+time / weather-conditions / photo-caption field
+additions (#6/#7/#8), the `src/service-worker.ts` app-shell cache (#2), and the
+`src/lib/offline/outbox.ts` IndexedDB queue + on-reconnect flush (#3). The
+offline runtime path still needs manual on-device testing — typecheck/build
+can't exercise it. Offline-site linkage uses the client-id-as-PK trick (below),
+so the `sites.client_id` migration question is moot for the MVP.
 
 Tracking: see the "Offline field-capture PWA" epic on
 `SampleTown-org/eDNA-SampleTown`.
