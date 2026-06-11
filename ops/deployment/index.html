@@ -1235,6 +1235,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#database-migrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database migrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nginx-tls" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1272,6 +1283,17 @@
     <span class="md-ellipsis">
       
         Ops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#label-printing-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label printing (optional)
       
     </span>
   </a>
@@ -1420,6 +1442,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#database-migrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database migrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nginx-tls" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1457,6 +1490,17 @@
     <span class="md-ellipsis">
       
         Ops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#label-printing-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Label printing (optional)
       
     </span>
   </a>
@@ -1552,28 +1596,40 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>./deploy.sh
 </span></code></pre></div>
 <p>This pushes to <code>origin/$BRANCH</code>, then on the remote runs <code>git pull &amp;&amp; npm ci &amp;&amp; npm run build &amp;&amp; pm2 restart sampletown --update-env</code>. The <code>.env</code> file on the server is preserved.</p>
+<h3 id="database-migrations">Database migrations<a class="headerlink" href="#database-migrations" title="Permanent link">&para;</a></h3>
+<p><code>deploy.sh</code> does <strong>not</strong> run database migrations, and <code>schema.sql</code> only uses <code>CREATE TABLE IF NOT EXISTS</code> / <code>CREATE INDEX IF NOT EXISTS</code> — it never reshapes existing tables. So:</p>
+<ul>
+<li><strong>New tables / indexes</strong> are created automatically on the next app startup. Nothing to do.</li>
+<li><strong>A change that adds a column to an existing table</strong> (or any <code>ALTER</code>) will <em>not</em> reach a DB that has prior data, and the app will error on the missing column. These ship as idempotent <code>scripts/migrate-*.mjs</code> scripts that must be run on the server <strong>before the restart</strong>:</li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ssh<span class="w"> </span>my-vm<span class="w"> </span><span class="s1">&#39;cd /opt/sampletown &amp;&amp; pm2 stop sampletown &amp;&amp; \</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="s1">  cp data/sampletown.db data/sampletown.db.bak.$(date +%F-%H%M%S) &amp;&amp; \</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="s1">  DB_PATH=data/sampletown.db node scripts/migrate-&lt;name&gt;.mjs &amp;&amp; \</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="s1">  pm2 restart sampletown --update-env&#39;</span>
+</span></code></pre></div>
+<p>Bare <code>deploy.sh</code> is fine for <strong>frontend-only</strong> changes — but for a column-adding release it would restart onto an unmigrated DB. Always check a release's diff for new columns on existing tables before deploying.</p>
 <h3 id="nginx-tls">nginx + TLS<a class="headerlink" href="#nginx-tls" title="Permanent link">&para;</a></h3>
 <p>Point an nginx server block at <code>127.0.0.1:$PORT</code>:</p>
-<div class="language-nginx highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">server</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="kn">listen</span><span class="w"> </span><span class="mi">80</span><span class="p">;</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="kn">server_name</span><span class="w"> </span><span class="s">sampletown.example.com</span><span class="p">;</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="kn">client_max_body_size</span><span class="w"> </span><span class="s">100M</span><span class="p">;</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://127.0.0.1:3000</span><span class="p">;</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">        </span><span class="kn">proxy_http_version</span><span class="w"> </span><span class="mi">1</span><span class="s">.1</span><span class="p">;</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Upgrade</span><span class="w"> </span><span class="nv">$http_upgrade</span><span class="p">;</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Connection</span><span class="w"> </span><span class="s">&#39;upgrade&#39;</span><span class="p">;</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Host</span><span class="w"> </span><span class="nv">$host</span><span class="p">;</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Real-IP</span><span class="w"> </span><span class="nv">$remote_addr</span><span class="p">;</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-For</span><span class="w"> </span><span class="nv">$proxy_add_x_forwarded_for</span><span class="p">;</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-Proto</span><span class="w"> </span><span class="nv">$scheme</span><span class="p">;</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">        </span><span class="kn">proxy_read_timeout</span><span class="w"> </span><span class="mi">300</span><span class="p">;</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="p">}</span>
+<div class="language-nginx highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">server</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="kn">listen</span><span class="w"> </span><span class="mi">80</span><span class="p">;</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="kn">server_name</span><span class="w"> </span><span class="s">sampletown.example.com</span><span class="p">;</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="kn">client_max_body_size</span><span class="w"> </span><span class="s">100M</span><span class="p">;</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://127.0.0.1:3000</span><span class="p">;</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">        </span><span class="kn">proxy_http_version</span><span class="w"> </span><span class="mi">1</span><span class="s">.1</span><span class="p">;</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Upgrade</span><span class="w"> </span><span class="nv">$http_upgrade</span><span class="p">;</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Connection</span><span class="w"> </span><span class="s">&#39;upgrade&#39;</span><span class="p">;</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Host</span><span class="w"> </span><span class="nv">$host</span><span class="p">;</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Real-IP</span><span class="w"> </span><span class="nv">$remote_addr</span><span class="p">;</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-For</span><span class="w"> </span><span class="nv">$proxy_add_x_forwarded_for</span><span class="p">;</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-Proto</span><span class="w"> </span><span class="nv">$scheme</span><span class="p">;</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="kn">proxy_read_timeout</span><span class="w"> </span><span class="mi">300</span><span class="p">;</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>Then run certbot to get a Let's Encrypt cert and let it rewrite the vhost to listen on 443 with auto-HTTP→HTTPS redirect:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>sudo<span class="w"> </span>certbot<span class="w"> </span>--nginx<span class="w"> </span>-d<span class="w"> </span>sampletown.example.com
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>sudo<span class="w"> </span>certbot<span class="w"> </span>--nginx<span class="w"> </span>-d<span class="w"> </span>sampletown.example.com
 </span></code></pre></div>
 <p><strong>Three things that have to line up</strong> for the production deploy to work:</p>
 <ol>
@@ -1590,30 +1646,30 @@
 <li><strong>Homepage URL</strong>: <code>https://sampletown.example.com</code></li>
 <li><strong>Authorization callback URL</strong>: <code>https://sampletown.example.com/auth/login/github/callback</code> ← the <strong>full path</strong>, not <code>/auth/callback</code>. SampleTown does not pass an explicit <code>redirect_uri</code> to GitHub, so this registered URL is what GitHub will send the user back to. Getting it wrong fails the entire flow with <code>mismatching_state</code> (the request lands on the wrong app or path).</li>
 <li>Generate a client secret and copy both the client ID and secret into <code>.env</code>:
-   <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>GITHUB_CLIENT_ID=Iv23li...
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>GITHUB_CLIENT_SECRET=...
+   <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>GITHUB_CLIENT_ID=Iv23li...
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>GITHUB_CLIENT_SECRET=...
 </span></code></pre></div></li>
 <li><code>pm2 restart sampletown --update-env</code>.</li>
 </ol>
 <p><strong>Don't reuse another app's OAuth App.</strong> Each callback URL belongs to exactly one OAuth App in GitHub's database — if you point SampleTown at omc-platform's credentials, GitHub will redirect users to omc-platform's callback handler, which will fail to validate SampleTown's <code>state</code> and bounce them with an error.</p>
 <h3 id="creating-the-first-admin-user">Creating the first admin user<a class="headerlink" href="#creating-the-first-admin-user" title="Permanent link">&para;</a></h3>
 <p>On first startup (when the <code>users</code> table is empty), SampleTown automatically seeds a default account:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>username: admin
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>password: admin
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>role:     admin
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>must_change_password: 1
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>username: admin
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>password: admin
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>role:     admin
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>must_change_password: 1
 </span></code></pre></div>
 <p>The <code>must_change_password</code> flag means the first login is <strong>forced</strong> to the <code>/auth/change-password</code> page before any other route works. The seed never runs again once any user exists.</p>
 <blockquote>
 <p><strong>Security warning</strong> — the literal <code>admin/admin</code> is exploitable until the first login changes it. <strong>Always bootstrap from a private network or SSH tunnel BEFORE adding the public DNS A record / opening the firewall</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># On your workstation, tunnel the app port through SSH</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ssh<span class="w"> </span>-L<span class="w"> </span><span class="m">13001</span>:127.0.0.1:3001<span class="w"> </span>your-vm
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># In a browser, visit http://127.0.0.1:13001/auth/login</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Sign in as admin / admin</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># You&#39;ll be redirected to /auth/change-password</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Set a real password (≥ 10 chars)</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Then expose the public hostname</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># On your workstation, tunnel the app port through SSH</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>ssh<span class="w"> </span>-L<span class="w"> </span><span class="m">13001</span>:127.0.0.1:3001<span class="w"> </span>your-vm
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># In a browser, visit http://127.0.0.1:13001/auth/login</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Sign in as admin / admin</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># You&#39;ll be redirected to /auth/change-password</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Set a real password (≥ 10 chars)</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Then expose the public hostname</span>
 </span></code></pre></div>
 <p>If you forget and an attacker logs in first, they'll be forced into the change-password page too — and they'll lock you out by setting their own password. The seed only fires once, so the only recovery is to delete the prod DB and re-bootstrap.</p>
 </blockquote>
@@ -1623,13 +1679,21 @@
 <li><strong>Approve a GitHub OAuth user</strong> — anyone who signs in with GitHub creates a row in <code>users</code> with <code>is_approved=0</code> and is bounced to <code>/auth/pending</code>. The admin sees them in the User Accounts list with a "Pending" badge and an Approve button. Approving sets <code>is_approved=1</code> and they can sign in. (Revoking later is just toggling <code>is_approved=0</code> back; existing sessions are invalidated immediately because <code>validateSession</code> requires <code>is_approved=1</code>.)</li>
 </ul>
 <h3 id="ops">Ops<a class="headerlink" href="#ops" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pm2<span class="w"> </span>status
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>pm2<span class="w"> </span>logs<span class="w"> </span>sampletown
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>pm2<span class="w"> </span>restart<span class="w"> </span>sampletown
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pm2<span class="w"> </span>status
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>pm2<span class="w"> </span>logs<span class="w"> </span>sampletown
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>pm2<span class="w"> </span>restart<span class="w"> </span>sampletown
 </span></code></pre></div>
 <p>The SQLite DB lives at <code>$APP_DIR/data/sampletown.db</code>. Back it up by copying with the SQLite <code>.backup</code> command (safe with WAL):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>sqlite3<span class="w"> </span>data/sampletown.db<span class="w"> </span><span class="s2">&quot;.backup /tmp/sampletown-</span><span class="k">$(</span>date<span class="w"> </span>+%F<span class="k">)</span><span class="s2">.db&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>sqlite3<span class="w"> </span>data/sampletown.db<span class="w"> </span><span class="s2">&quot;.backup /tmp/sampletown-</span><span class="k">$(</span>date<span class="w"> </span>+%F<span class="k">)</span><span class="s2">.db&quot;</span>
 </span></code></pre></div>
+<h3 id="label-printing-optional">Label printing (optional)<a class="headerlink" href="#label-printing-optional" title="Permanent link">&para;</a></h3>
+<p>SampleTown can print QR labels to a Zebra desktop thermal printer (ZD421 etc.) two ways: <strong>server-side</strong> (printer attached to this host) or <strong>browser-side</strong> (Zebra Browser Print on the operator's own laptop — no server config needed). To enable the server-side path on a host with a USB Zebra:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>sudo<span class="w"> </span>node<span class="w"> </span>scripts/setup-zebra.mjs<span class="w">   </span><span class="c1"># discovers the USB Zebra, creates a CUPS raw queue &quot;zebra&quot;</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># then in .env:</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="nv">ZEBRA_PRINTER</span><span class="o">=</span>zebra
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>pm2<span class="w"> </span>restart<span class="w"> </span>sampletown<span class="w"> </span>--update-env
+</span></code></pre></div>
+<p>Leave <code>ZEBRA_PRINTER</code> <strong>unset</strong> on hosts without a printer (e.g. a cloud VM) — the server-side path stays disabled and the feature simply doesn't appear. CUPS is preferred over a raw device path because the CUPS daemon owns the device permissions, so the app prints via <code>lp</code> without being in the <code>lp</code> group. Browser Print has <strong>no Linux build</strong>, so a Linux bench must use the server-side queue. Full user-facing setup + troubleshooting lives in the <a href="../../user/manage/">Manage → Labels</a> docs.</p>
 <h2 id="ship-lan-mode">Ship / LAN mode<a class="headerlink" href="#ship-lan-mode" title="Permanent link">&para;</a></h2>
 <p>For deployments with no upstream internet (e.g. on a ship's internal network):</p>
 <ol>
@@ -1672,6 +1736,11 @@
 <td><code>DB_PATH</code></td>
 <td><code>data/sampletown.db</code></td>
 <td><code>data/sampletown.db</code></td>
+</tr>
+<tr>
+<td><code>ZEBRA_PRINTER</code></td>
+<td>optional — CUPS queue name if a Zebra is attached to the host</td>
+<td>optional</td>
 </tr>
 </tbody>
 </table>
