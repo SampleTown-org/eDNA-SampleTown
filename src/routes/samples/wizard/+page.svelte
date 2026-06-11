@@ -75,6 +75,8 @@
 			/* ignore */
 		}
 		await refreshPending();
+		// Queued sites are now real rows — stop force-queueing samples for them.
+		if (pending.sites === 0) offlineSiteIds = new Set();
 		syncing = false;
 	}
 
@@ -133,9 +135,15 @@
 		missingRequired = [];
 	}
 
-	function onSiteCreated(site: { id: string; site_name: string; project_id: string }) {
+	/** Sites that exist only in the offline outbox. A sample referencing one of
+	 *  these must be queued (not POSTed), so the site flushes first and the FK
+	 *  resolves. Cleared once a flush drains all queued sites. */
+	let offlineSiteIds = $state<Set<string>>(new Set());
+
+	function onSiteCreated(site: { id: string; site_name: string; project_id: string }, pending: boolean) {
 		allSites = [...allSites, site];
 		answers.site_id = site.id;
+		if (pending) offlineSiteIds = new Set([...offlineSiteIds, site.id]);
 		showSiteWizard = false;
 	}
 
@@ -180,8 +188,11 @@
 			resetForNext(addAnother);
 		}
 
-		if (typeof navigator !== 'undefined' && !navigator.onLine) {
-			await queueOffline('Offline:');
+		// Queue if offline, or if the chosen site is itself still queued (so the
+		// site POSTs before this sample and the FK resolves on flush).
+		const siteStillQueued = offlineSiteIds.has(answers.site_id);
+		if ((typeof navigator !== 'undefined' && !navigator.onLine) || siteStillQueued) {
+			await queueOffline(siteStillQueued ? 'Queued (new site):' : 'Offline:');
 			return;
 		}
 		try {

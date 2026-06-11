@@ -20,7 +20,10 @@
 		projectId: string;
 		projectName: string;
 		picklists: Picklists;
-		oncreated: (site: { id: string; site_name: string; project_id: string }) => void;
+		/** `pending` = site is only in the offline outbox, not yet on the server.
+		 *  The parent must then queue any sample referencing it (so the site
+		 *  flushes first) instead of POSTing the sample directly. */
+		oncreated: (site: { id: string; site_name: string; project_id: string }, pending: boolean) => void;
 		oncancel: () => void;
 	}
 	let { projectId, projectName, picklists, oncreated, oncancel }: Props = $props();
@@ -119,7 +122,7 @@
 		async function queueOffline() {
 			await enqueueSite({ clientId, projectId, body, createdAt: new Date().toISOString() });
 			saving = false;
-			oncreated({ id: clientId, site_name: body.site_name as string, project_id: projectId });
+			oncreated({ id: clientId, site_name: body.site_name as string, project_id: projectId }, true);
 		}
 
 		if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -139,7 +142,7 @@
 				return;
 			}
 			const site = (await res.json()) as { id: string; site_name: string; project_id: string };
-			oncreated(site);
+			oncreated(site, false);
 		} catch {
 			await queueOffline();
 		}
