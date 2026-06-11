@@ -44,6 +44,22 @@ Then:
 
 This pushes to `origin/$BRANCH`, then on the remote runs `git pull && npm ci && npm run build && pm2 restart sampletown --update-env`. The `.env` file on the server is preserved.
 
+### Database migrations
+
+`deploy.sh` does **not** run database migrations, and `schema.sql` only uses `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` — it never reshapes existing tables. So:
+
+- **New tables / indexes** are created automatically on the next app startup. Nothing to do.
+- **A change that adds a column to an existing table** (or any `ALTER`) will *not* reach a DB that has prior data, and the app will error on the missing column. These ship as idempotent `scripts/migrate-*.mjs` scripts that must be run on the server **before the restart**:
+
+```bash
+ssh my-vm 'cd /opt/sampletown && pm2 stop sampletown && \
+  cp data/sampletown.db data/sampletown.db.bak.$(date +%F-%H%M%S) && \
+  DB_PATH=data/sampletown.db node scripts/migrate-<name>.mjs && \
+  pm2 restart sampletown --update-env'
+```
+
+Bare `deploy.sh` is fine for **frontend-only** changes — but for a column-adding release it would restart onto an unmigrated DB. Always check a release's diff for new columns on existing tables before deploying.
+
 ### nginx + TLS
 
 Point an nginx server block at `127.0.0.1:$PORT`:
@@ -145,6 +161,19 @@ The SQLite DB lives at `$APP_DIR/data/sampletown.db`. Back it up by copying with
 sqlite3 data/sampletown.db ".backup /tmp/sampletown-$(date +%F).db"
 ```
 
+### Label printing (optional)
+
+SampleTown can print QR labels to a Zebra desktop thermal printer (ZD421 etc.) two ways: **server-side** (printer attached to this host) or **browser-side** (Zebra Browser Print on the operator's own laptop — no server config needed). To enable the server-side path on a host with a USB Zebra:
+
+```bash
+sudo node scripts/setup-zebra.mjs   # discovers the USB Zebra, creates a CUPS raw queue "zebra"
+# then in .env:
+ZEBRA_PRINTER=zebra
+pm2 restart sampletown --update-env
+```
+
+Leave `ZEBRA_PRINTER` **unset** on hosts without a printer (e.g. a cloud VM) — the server-side path stays disabled and the feature simply doesn't appear. CUPS is preferred over a raw device path because the CUPS daemon owns the device permissions, so the app prints via `lp` without being in the `lp` group. Browser Print has **no Linux build**, so a Linux bench must use the server-side queue. Full user-facing setup + troubleshooting lives in the [Manage → Labels](../user/manage.md) docs.
+
 ## Ship / LAN mode
 
 For deployments with no upstream internet (e.g. on a ship's internal network):
@@ -164,6 +193,7 @@ Run `node build/index.js` directly under pm2, or wrap it in Docker. The DB is ju
 | `GITHUB_CLIENT_ID` / `_SECRET` | required | unused |
 | `GITHUB_REPO` / `GITHUB_TOKEN` | required for snapshots | leave blank |
 | `DB_PATH` | `data/sampletown.db` | `data/sampletown.db` |
+| `ZEBRA_PRINTER` | optional — CUPS queue name if a Zebra is attached to the host | optional |
 
 ## Troubleshooting
 
