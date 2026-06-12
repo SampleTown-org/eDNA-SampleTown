@@ -102,10 +102,20 @@ export async function pendingCount(): Promise<{ sites: number; samples: number }
 	return { sites: sites.length, samples: samples.length };
 }
 
-/** A non-ok response whose error looks like a duplicate-id collision — means an
- *  earlier POST of this clientId actually landed; safe to drop the queue row. */
-function looksDuplicate(status: number, msg: string): boolean {
-	return status === 409 || /unique|constraint|already exists|duplicate/i.test(msg);
+/**
+ * Confirm a row with OUR client id actually landed on the server. A 409 from a
+ * write is ambiguous — it can mean (a) an earlier POST of this same clientId
+ * succeeded but its response was lost (safe to drop the queue row), or (b) a
+ * DIFFERENT row collided on a UNIQUE field like (project_id, samp_name) — a real
+ * rejection the user must resolve (e.g. rename). We disambiguate by GETting the
+ * row by id: a 200 means it's ours and synced; a 404 means our write never
+ * landed, so the conflict was a genuine collision. (A substring match on the
+ * error text can't tell these apart and would silently drop the capture.)
+ */
+async function existsOnServer(kind: 'samples' | 'sites', id: string): Promise<boolean> {
+	const r = await fetch(`/api/${kind}/${id}`, { headers: { Accept: 'application/json' } });
+	if (r.status === 404) return false;
+	return r.ok;
 }
 
 async function postJson(url: string, body: unknown): Promise<Response> {
@@ -134,16 +144,15 @@ export async function flush(): Promise<FlushResult> {
 			if (r.ok) {
 				await remove('sites', site.clientId);
 				res.synced++;
+			} else if (r.status === 409 && (await existsOnServer('sites', site.clientId))) {
+				// Our earlier POST already landed (lost success response) — done.
+				await remove('sites', site.clientId);
+				res.synced++;
 			} else {
 				const msg = (await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`;
-				if (looksDuplicate(r.status, msg)) {
-					await remove('sites', site.clientId);
-					res.synced++;
-				} else {
-					await put('sites', { ...site, error: msg });
-					res.failed++;
-					res.errors.push(`site ${site.body.site_name}: ${msg}`);
-				}
+				await put('sites', { ...site, error: msg });
+				res.failed++;
+				res.errors.push(`site ${site.body.site_name}: ${msg}`);
 			}
 		} catch {
 			res.offline = true;
@@ -154,7 +163,7 @@ export async function flush(): Promise<FlushResult> {
 	for (const sample of await getAll<QueuedSample>('samples')) {
 		try {
 			const r = await postJson('/api/samples', { id: sample.clientId, ...sample.body });
-			if (r.ok || looksDuplicate(r.status, '')) {
+			if (r.ok) {
 				for (const p of sample.photos) {
 					try {
 						const fd = new FormData();
@@ -165,6 +174,10 @@ export async function flush(): Promise<FlushResult> {
 						/* photo upload best-effort; sample already saved */
 					}
 				}
+				await remove('samples', sample.clientId);
+				res.synced++;
+			} else if (r.status === 409 && (await existsOnServer('samples', sample.clientId))) {
+				// Our earlier POST already landed; its photos were handled on that pass.
 				await remove('samples', sample.clientId);
 				res.synced++;
 			} else {

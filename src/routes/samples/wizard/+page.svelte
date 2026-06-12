@@ -174,8 +174,12 @@
 		for (const q of queue) {
 			if (['project_id', 'site_id', 'samp_name', 'collection_date', 'env_medium'].includes(q.key)) continue;
 			if (q.widget === 'people' || q.widget === 'photos') continue;
+			// Keep a genuine 0 (depth/temp/wind_speed/secchi = 0) — only skip
+			// null/undefined/blank. A number-bound input yields the number 0,
+			// which the old `v &&` truthy check silently dropped.
 			const v = answers[q.key];
-			if (v && v.toString().trim()) body[q.key] = v;
+			const s = v == null ? '' : v.toString().trim();
+			if (s !== '') body[q.key] = s;
 		}
 		const sampName = body.samp_name as string;
 		const photoPayload = photos.map((p) => ({ name: p.file.name, type: p.file.type, caption: p.caption, blob: p.file as Blob }));
