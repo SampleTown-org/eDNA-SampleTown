@@ -73,7 +73,7 @@
 						<path d="M17 3c0 4-10 5-10 9s10 5 10 9" />
 						<path d="M9 5h6 M8 9h8 M8 15h8 M9 19h6" />
 					</svg>
-					SampleTown.org
+					<span class="hidden sm:inline">SampleTown.org</span>
 				</a>
 				{#if lab}
 					<span class="text-slate-600 hidden sm:inline">/</span>
@@ -162,6 +162,21 @@
 						{/if}
 					</button>
 
+					<!-- New sample (wizard) — primary create action, visible all sizes
+					     so it's reachable on mobile where +New page buttons are hidden. -->
+					{#if user.role !== 'viewer'}
+						<a
+							href="/samples/wizard"
+							class="text-ocean-400 hover:text-ocean-300"
+							title="New sample"
+							aria-label="New sample"
+						>
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+								<path d="M12 5v14M5 12h14" />
+							</svg>
+						</a>
+					{/if}
+
 					<!-- Right-side cluster, ordered: search → qr → username → emoji → sign out -->
 					<a
 						href="/#dashboard-search"
@@ -196,7 +211,7 @@
 						class="text-base hover:opacity-80 transition-opacity"
 						title="{ROLE_LABEL[user.role] ?? user.role} — manage account"
 					>{user.avatar_emoji ?? ROLE_ICON[user.role] ?? '👤'}</a>
-					<form method="POST" action="/auth/logout" class="inline">
+					<form method="POST" action="/auth/logout" class="hidden md:inline">
 						<button type="submit" class="text-sm text-slate-400 hover:text-white">Sign out</button>
 					</form>
 
@@ -222,6 +237,15 @@
 		<!-- Mobile nav (only when signed in; the toggle is also hidden otherwise) -->
 		{#if mobileOpen && user}
 			<div class="md:hidden pb-3 border-t border-slate-800 mt-1 pt-2">
+				{#if user.role !== 'viewer'}
+					<a
+						href="/samples/wizard"
+						class="block px-3 py-2 text-sm text-ocean-400 hover:text-ocean-300 hover:bg-slate-800 rounded font-medium"
+						onclick={() => (mobileOpen = false)}
+					>
+						+ New Sample
+					</a>
+				{/if}
 				{#each navLinks.filter((l) => !l.desktopOnly && (!l.writerOnly || user?.role !== 'viewer')) as link}
 					<a
 						href={link.href}
@@ -231,6 +255,9 @@
 						{link.label}
 					</a>
 				{/each}
+				<form method="POST" action="/auth/logout" class="block border-t border-slate-800 mt-1 pt-1">
+					<button type="submit" class="block w-full text-left px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded">Sign out</button>
+				</form>
 			</div>
 		{/if}
 	</div>

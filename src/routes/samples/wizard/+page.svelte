@@ -256,7 +256,7 @@
 	/>
 {/if}
 
-<div class="max-w-xl mx-auto space-y-5 pb-28">
+<div class="max-w-xl mx-auto space-y-4 pb-8">
 	<div class="flex items-center justify-between">
 		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
 		<details class="text-xs text-slate-400">
@@ -271,6 +271,34 @@
 				</select>
 			</div>
 		</details>
+	</div>
+
+	<!-- Action bar — sticky at the TOP so the on-screen keyboard (which covers
+	     the bottom of the viewport while an input is focused) never hides
+	     Back / Skip / Next / Complete and there's no dismiss-keyboard step. -->
+	<div class="sticky top-14 z-30 -mx-4 px-4 py-2 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+		<div class="flex items-center gap-3">
+			<button type="button" onclick={() => m.back()} disabled={!m.canGoBack}
+				class="px-4 py-3 border border-slate-700 text-slate-300 rounded-lg disabled:opacity-30 hover:bg-slate-800">Back</button>
+
+			{#if phase === 'review'}
+				<button type="button" onclick={() => finalize(true)} disabled={saving}
+					class="flex-1 px-4 py-3 border border-ocean-700 text-ocean-300 rounded-lg hover:bg-slate-800 disabled:opacity-50 font-medium">
+					{saving ? 'Saving…' : 'Save & add another'}
+				</button>
+				<button type="button" onclick={() => finalize(false)} disabled={saving}
+					class="flex-1 px-4 py-3 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 font-medium">
+					{saving ? 'Saving…' : 'Save'}
+				</button>
+			{:else}
+				<button type="button" onclick={() => m.advance(currentValid, clearAnswer)}
+					class="flex-1 px-4 py-3 rounded-lg font-medium {currentValid ? 'bg-ocean-600 text-white hover:bg-ocean-500' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}">
+					{currentValid ? 'Next' : 'Skip'}
+				</button>
+				<button type="button" onclick={tryComplete}
+					class="px-4 py-3 border border-green-700 text-green-300 rounded-lg hover:bg-slate-800 font-medium">Complete</button>
+			{/if}
+		</div>
 	</div>
 
 	<!-- Progress -->
@@ -413,28 +441,3 @@
 	{/if}
 </div>
 
-<!-- Sticky action bar -->
-<div class="fixed bottom-0 inset-x-0 border-t border-slate-800 bg-slate-950/95 backdrop-blur p-3">
-	<div class="max-w-xl mx-auto flex items-center gap-3">
-		<button type="button" onclick={() => m.back()} disabled={!m.canGoBack}
-			class="px-4 py-3 border border-slate-700 text-slate-300 rounded-lg disabled:opacity-30 hover:bg-slate-800">Back</button>
-
-		{#if phase === 'review'}
-			<button type="button" onclick={() => finalize(true)} disabled={saving}
-				class="flex-1 px-4 py-3 border border-ocean-700 text-ocean-300 rounded-lg hover:bg-slate-800 disabled:opacity-50 font-medium">
-				{saving ? 'Saving…' : 'Save & add another'}
-			</button>
-			<button type="button" onclick={() => finalize(false)} disabled={saving}
-				class="flex-1 px-4 py-3 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 font-medium">
-				{saving ? 'Saving…' : 'Save'}
-			</button>
-		{:else}
-			<button type="button" onclick={() => m.advance(currentValid, clearAnswer)}
-				class="flex-1 px-4 py-3 rounded-lg font-medium {currentValid ? 'bg-ocean-600 text-white hover:bg-ocean-500' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}">
-				{currentValid ? 'Next' : 'Skip'}
-			</button>
-			<button type="button" onclick={tryComplete}
-				class="px-4 py-3 border border-green-700 text-green-300 rounded-lg hover:bg-slate-800 font-medium">Complete</button>
-		{/if}
-	</div>
-</div>
