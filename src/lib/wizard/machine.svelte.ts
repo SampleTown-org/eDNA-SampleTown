@@ -105,12 +105,17 @@ export class WizardMachine {
 		this.skipIdx = prev.skipIdx;
 	}
 
-	/** Jump to a queue index in the main phase (Edit-from-review / Complete). */
+	/** Jump to a queue index in the main phase (Edit-from-review / Complete).
+	 *  Pushes history so Back still works, and clears the skip queue so a jump
+	 *  doesn't later re-trigger a stale second pass. */
 	jumpToIndex(idx: number, pushHistory = true) {
 		if (idx < 0) return;
 		if (pushHistory) this.history = [...this.history, this.#snapshot()];
 		this.phase = 'main';
 		this.mainIdx = idx;
+		this.skipped = [];
+		this.skipList = [];
+		this.skipIdx = 0;
 	}
 
 	toReview() {

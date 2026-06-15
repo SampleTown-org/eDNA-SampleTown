@@ -137,51 +137,43 @@ export function buildSampleQueue(
 	// filtered out header + off-table slots).
 	for (const cfg of org.required) q.push(fromSlotConfig(cfg, true, 'Required'));
 
-	// People — carry-forward; a crew usually works a station together.
-	q.push({ key: 'people', label: 'People', section: 'People', required: false, recommended: false, widget: 'people', carryForward: true });
-
-	// Conditions block (#7) — carry-forward field context, promoted out of the
-	// generic optional buckets into one obvious "Conditions" step. Weather slots
-	// that are also class properties get deduped below so they appear once here.
+	// Everything after the Required block is split into two tiers and appended
+	// in order, so the wizard always runs Required → Suggested → Optional and
+	// the tier chips (red Required, amber Suggested, slate Optional) match the
+	// run order. `q` so far holds only Required (identity core + MIxS-required).
+	const suggested: WizardQuestion[] = [];
+	const optional: WizardQuestion[] = [];
 	const seen = new Set(q.map((x) => x.key));
+
+	// Weather/conditions are MIxS-recommended field context → Suggested.
 	for (const slot of WEATHER_SLOTS) {
 		if (seen.has(slot)) continue;
 		const meta = getSlot(slot);
 		if (!meta) continue;
 		const { widget, options } = weatherWidget(slot);
-		q.push({
-			key: slot,
-			label: meta.title ?? slot,
-			section: 'Conditions',
-			required: false,
-			recommended: true,
-			widget,
-			options,
-			placeholder: meta.examples?.[0],
-			slot,
-			carryForward: true
-		});
+		suggested.push({ key: slot, label: meta.title ?? slot, section: 'Conditions', required: false, recommended: true, widget, options, placeholder: meta.examples?.[0], slot, carryForward: true });
 		seen.add(slot);
 	}
-	// Secchi clarity has no MIxS slot — capture as a misc_param.
-	q.push({ key: `${MISC_PARAM_PREFIX}secchi_depth_m`, label: 'Secchi depth (m)', section: 'Conditions', required: false, recommended: true, widget: 'number', placeholder: 'water clarity', carryForward: true });
+	// Secchi clarity has no MIxS slot — capture as a misc_param. Suggested.
+	suggested.push({ key: `${MISC_PARAM_PREFIX}secchi_depth_m`, label: 'Secchi depth (m)', section: 'Conditions', required: false, recommended: true, widget: 'number', placeholder: 'water clarity', carryForward: true });
 
-	// Recommended / optional, Sampling & Storage first then everything else.
-	// Skip anything already promoted into the Conditions block.
+	// Remaining class slots: Suggested if MIxS-recommended, else Optional.
 	const buckets = Object.entries(org.optional).sort(([a], [b]) =>
 		a === 'Sampling & Storage' ? -1 : b === 'Sampling & Storage' ? 1 : a.localeCompare(b)
 	);
 	for (const [bucket, list] of buckets) {
 		for (const cfg of list) {
 			if (seen.has(cfg.slot)) continue;
-			q.push(fromSlotConfig(cfg, false, bucket));
+			seen.add(cfg.slot);
+			(cfg.recommended ? suggested : optional).push(fromSlotConfig(cfg, false, bucket));
 		}
 	}
 
-	// Photos last — captions handled in the photos widget (#8).
-	q.push({ key: 'photos', label: 'Photos', section: 'Photos', required: false, recommended: false, widget: 'photos', carryForward: false });
+	// SampleTown extras (people, photos) are Optional, at the very end.
+	optional.push({ key: 'people', label: 'People', section: 'People', required: false, recommended: false, widget: 'people', carryForward: true });
+	optional.push({ key: 'photos', label: 'Photos', section: 'Photos', required: false, recommended: false, widget: 'photos', carryForward: false });
 
-	return q;
+	return [...q, ...suggested, ...optional];
 }
 
 /**
