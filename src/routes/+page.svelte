@@ -215,7 +215,7 @@
 	}
 </script>
 
-<div class="space-y-8">
+<div class="space-y-8 pb-24 sm:pb-0">
 	<div>
 		<h1 class="text-3xl font-bold text-white tracking-tight">
 			{data.lab?.name ?? 'SampleTown'}
@@ -479,3 +479,13 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Mobile-only quick-capture banner → the field wizard. Hidden on ≥sm and,
+     for read-only viewers, via the layout's .role-viewer .write-only rule. -->
+<a
+	href="/samples/wizard"
+	class="write-only sm:hidden fixed bottom-0 inset-x-0 z-40 flex items-center justify-center gap-2 px-4 py-3.5 bg-ocean-600 text-white font-semibold shadow-lg active:bg-ocean-500"
+>
+	<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
+	New sample
+</a>

@@ -52,7 +52,6 @@
 		{ href: '/projects', label: 'Projects' },
 		{ href: '/sites', label: 'Sites' },
 		{ href: '/samples', label: 'Samples' },
-		{ href: '/samples/wizard', label: 'Capture', writerOnly: true },
 		{ href: '/extracts', label: 'Extracts' },
 		{ href: '/pcr', label: 'PCR' },
 		{ href: '/libraries', label: 'Libraries' },
