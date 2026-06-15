@@ -28,9 +28,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		.all(labId);
 	// Existing (project_id, samp_name) pairs so the wizard can flag a duplicate
 	// name as you type instead of only failing at save. Names are small; ships
-	// in the SSR payload so the check still works offline (SW-cached).
+	// in the SSR payload so the check still works offline (SW-cached). NOTE: no
+	// is_deleted filter — the UNIQUE(project_id, samp_name) constraint ignores
+	// soft-deletes, so a deleted sample still reserves its name and re-using it
+	// would 409. The live /api/samples/check-name endpoint is authoritative.
 	const sampleNames = db
-		.prepare('SELECT project_id, samp_name FROM samples WHERE lab_id = ? AND is_deleted = 0')
+		.prepare('SELECT project_id, samp_name FROM samples WHERE lab_id = ?')
 		.all(labId);
 	const picklists = getConstrainedValues(
 		labId,

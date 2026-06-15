@@ -109,18 +109,42 @@
 		return answers[q.key] ?? '';
 	}
 
-	// Duplicate sample-name detection (UNIQUE(project_id, samp_name)). Existing
-	// names come from the loader; session-saved names are added as we go, so the
-	// clash is flagged at the name field, not at save.
+	// Duplicate sample-name detection. Matches UNIQUE(project_id, samp_name)
+	// exactly: case-sensitive, and including soft-deleted rows (loader snapshot
+	// + live endpoint both ignore is_deleted, since a deleted sample still
+	// reserves its name). existingNames = instant/offline snapshot;
+	// nameTakenRemote = authoritative server check (debounced); savedNames =
+	// names created this session.
 	let existingNames = $derived(
-		new Set((data.sampleNames as { project_id: string; samp_name: string }[]).map((r) => `${r.project_id}|${r.samp_name.trim().toLowerCase()}`))
+		new Set((data.sampleNames as { project_id: string; samp_name: string }[]).map((r) => `${r.project_id}|${r.samp_name.trim()}`))
 	);
 	let savedNames = $state<Set<string>>(new Set());
+	let nameTakenRemote = $state(false);
+	let nameCheckTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		const name = answers.samp_name?.trim();
+		const proj = answers.project_id;
+		nameTakenRemote = false;
+		if (!name || !proj) return;
+		clearTimeout(nameCheckTimer);
+		nameCheckTimer = setTimeout(async () => {
+			try {
+				const res = await fetch(`/api/samples/check-name?project_id=${encodeURIComponent(proj)}&samp_name=${encodeURIComponent(name)}`);
+				if (res.ok) {
+					const { taken } = await res.json();
+					// Only apply if the field hasn't changed since the request fired.
+					if (answers.samp_name?.trim() === name && answers.project_id === proj) nameTakenRemote = taken;
+				}
+			} catch {
+				/* offline — rely on the loaded snapshot */
+			}
+		}, 300);
+	});
 	let nameTaken = $derived.by(() => {
-		const n = answers.samp_name?.trim().toLowerCase();
+		const n = answers.samp_name?.trim();
 		if (!n || !answers.project_id) return false;
 		const key = `${answers.project_id}|${n}`;
-		return existingNames.has(key) || savedNames.has(key);
+		return existingNames.has(key) || savedNames.has(key) || nameTakenRemote;
 	});
 
 	let currentAnswered = $derived(current ? isAnswered(current, valueFor(current)) : false);
@@ -145,21 +169,23 @@
 		}
 		return '';
 	});
-	/** Non-blocking MIxS suggestion — does NOT gate Next/Complete, just nudges.
-	 *  Most MIxS measurement slots have a structured_pattern of
-	 *  "<number> <unit>"; if the operator entered a bare number, suggest the
-	 *  unit form using the slot's own example. */
-	let currentSuggestion = $derived.by(() => {
-		if (!current?.slot || !currentAnswered || currentError) return '';
-		const v = answers[current.key];
-		if (v == null) return '';
-		const meta = getSlot(current.slot);
-		if (meta?.structured_pattern?.includes('{text}') && /^\s*-?\d*\.?\d+\s*$/.test(String(v))) {
-			const eg = meta.examples?.[0];
-			return eg ? `Tip: MIxS usually includes units here — e.g. “${eg}”.` : 'Tip: MIxS usually includes units here.';
-		}
-		return '';
-	});
+	/** Non-blocking MIxS "value + unit" nudge: shows the expected form from the
+	 *  glossary (the slot's own example, else its number+unit pattern) when a
+	 *  measurement slot that wants units got a bare number. Used for the current
+	 *  question and for each Add-parameters extra. Never gates Next/Complete. */
+	function unitSuggestion(slot: string | undefined, value: unknown): string {
+		if (!slot || value == null) return '';
+		const meta = getSlot(slot);
+		if (!meta?.structured_pattern?.includes('{text}')) return '';
+		if (!/^\s*-?\d*\.?\d+\s*$/.test(String(value))) return '';
+		const eg = meta.examples?.[0];
+		return eg
+			? `MIxS expects a value with its unit — e.g. “${eg}”.`
+			: 'MIxS expects a value with its unit (number + unit, e.g. “5 m”).';
+	}
+	let currentSuggestion = $derived(
+		current && currentAnswered && !currentError ? unitSuggestion(current.slot, answers[current.key]) : ''
+	);
 	const answeredCount = $derived(queue.filter((q) => isAnswered(q, valueFor(q))).length);
 
 	/** Second-pass skip → blank any partial value so review shows it empty. */
@@ -329,7 +355,7 @@
 
 		async function queueOffline(note: string) {
 			await enqueueSample({ clientId, body, photos: photoPayload, createdAt: new Date().toISOString() });
-			savedNames = new Set([...savedNames, `${answers.project_id}|${sampName.toLowerCase()}`]);
+			savedNames = new Set([...savedNames, `${answers.project_id}|${sampName}`]);
 			await refreshPending();
 			saving = false;
 			successMsg = `${note} “${sampName}” saved offline — will sync.`;
@@ -362,7 +388,7 @@
 				}
 				return;
 			}
-			savedNames = new Set([...savedNames, `${answers.project_id}|${sampName.toLowerCase()}`]);
+			savedNames = new Set([...savedNames, `${answers.project_id}|${sampName}`]);
 			for (const p of photos) {
 				const fd = new FormData();
 				fd.append('file', p.file);
@@ -474,7 +500,7 @@
 				<button type="button" onclick={() => m.advance(currentValid, clearAnswer)}
 					disabled={currentAnswered && !currentValid}
 					class="flex-1 px-4 py-3 rounded-lg font-medium disabled:opacity-50 {currentValid ? 'bg-ocean-600 text-white hover:bg-ocean-500' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}">
-					{currentAnswered ? 'Next' : 'Skip'}
+					{currentAnswered || current?.widget === 'add_params' ? 'Next' : 'Skip'}
 				</button>
 				<button type="button" onclick={tryComplete}
 					class="px-4 py-3 border border-green-700 text-green-300 rounded-lg hover:bg-slate-800 font-medium">Complete</button>
@@ -652,9 +678,11 @@
 				{#if extraQuestions.length > 0}
 					<ul class="space-y-2 pt-2 border-t border-slate-800">
 						{#each extraQuestions as q (q.key)}
+							{@const sug = unitSuggestion(q.slot, answers[q.key])}
 							<li class="space-y-1">
 								<div class="flex items-center gap-2">
 									<span class="text-sm text-slate-300 flex-1">{q.label}</span>
+									{#if q.slot && getSlot(q.slot)}<GlossaryDoc slot={q.slot} iconOnly />{/if}
 									<button type="button" onclick={() => removeExtra(q.key)} class="text-slate-600 hover:text-red-400 text-xs">✕</button>
 								</div>
 								{#if q.widget === 'select'}
@@ -669,6 +697,7 @@
 								{:else}
 									<input type="text" bind:value={answers[q.key]} placeholder={q.placeholder} class={inputCls} />
 								{/if}
+								{#if sug}<p class="text-xs text-amber-400">{sug}</p>{/if}
 							</li>
 						{/each}
 					</ul>
