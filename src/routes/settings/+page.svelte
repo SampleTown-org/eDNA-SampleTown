@@ -2,8 +2,44 @@
 	import { page } from '$app/stores';
 	import LabelGenerator from '$lib/components/LabelGenerator.svelte';
 	import PermitsTab from '$lib/components/PermitsTab.svelte';
+	import TemplateBuilder from '$lib/components/TemplateBuilder.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
+
+	// Sample-capture templates (lab-scoped). Managed here + via the wizard's
+	// quick-add; both use TemplateBuilder. Picklists rebuilt from categories so
+	// the builder's pre-fill inputs bind local vocabularies like the form does.
+	type SampleTemplate = { id: string; name: string; description?: string | null; mixs_checklist: string; extension: string | null; params: string };
+	let templates = $state<SampleTemplate[]>((data.templates as SampleTemplate[]) ?? []);
+	let templatePicklists = $derived(
+		Object.fromEntries(
+			Object.entries(data.categories as Record<string, { value: string; label?: string }[]>).map(([k, rows]) => [
+				k,
+				rows.map((r) => ({ value: r.value, label: r.label || r.value }))
+			])
+		)
+	);
+	let editingTemplate = $state<SampleTemplate | null>(null);
+	let showTemplateBuilder = $state(false);
+
+	function onTemplateSaved(t: SampleTemplate) {
+		const i = templates.findIndex((x) => x.id === t.id);
+		templates = i >= 0 ? templates.map((x) => (x.id === t.id ? t : x)) : [...templates, t];
+		showTemplateBuilder = false;
+		editingTemplate = null;
+	}
+	async function deleteTemplate(t: SampleTemplate) {
+		if (!confirm(`Delete template “${t.name}”?`)) return;
+		const res = await fetch(`/api/settings/templates/${t.id}`, { method: 'DELETE' });
+		if (res.ok) templates = templates.filter((x) => x.id !== t.id);
+	}
+	function templateParamCount(t: SampleTemplate): number {
+		try {
+			return (JSON.parse(t.params) as unknown[]).length;
+		} catch {
+			return 0;
+		}
+	}
 
 	const CATEGORY_LABELS: Record<string, string> = {
 		geo_loc_name: 'Geographic Locations',
@@ -84,7 +120,7 @@
 		return 'MIxS';
 	}
 
-	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'people' | 'permits' | 'feedback' | 'labels' | 'backup' | 'danger';
+	type TabType = 'naming' | 'category' | 'primers' | 'protocols' | 'templates' | 'people' | 'permits' | 'feedback' | 'labels' | 'backup' | 'danger';
 
 	// --- Search filter (shared across the list-based tabs, reset on tab switch) ---
 	let searchQuery = $state('');
@@ -513,7 +549,7 @@
 
 	// Support ?tab= URL parameter to deep-link to a category
 	const urlTab = $page.url.searchParams.get('tab');
-	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'people' ? 'people' : urlTab === 'permits' ? 'permits' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : urlTab === 'backup' ? 'backup' : urlTab === 'danger' ? 'danger' : 'category';
+	const initialTab: TabType = urlTab === 'naming' ? 'naming' : urlTab === 'primers' ? 'primers' : urlTab === 'protocols' ? 'protocols' : urlTab === 'templates' ? 'templates' : urlTab === 'people' ? 'people' : urlTab === 'permits' ? 'permits' : urlTab === 'feedback' ? 'feedback' : urlTab === 'labels' ? 'labels' : urlTab === 'backup' ? 'backup' : urlTab === 'danger' ? 'danger' : 'category';
 	const initialCategory = (urlTab && urlTab in CATEGORY_LABELS) ? urlTab : 'geo_loc_name';
 
 	let tabType = $state<TabType>(initialTab);
@@ -804,6 +840,7 @@
 		<button onclick={() => { tabType = 'category'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'category' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Picklists</button>
 		<button onclick={() => { tabType = 'primers'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'primers' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Primer Sets</button>
 		<button onclick={() => { tabType = 'protocols'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'protocols' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">PCR Protocols</button>
+		<button onclick={() => { tabType = 'templates'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'templates' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Templates</button>
 		<button onclick={() => { tabType = 'people'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'people' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">People</button>
 		<button onclick={() => { tabType = 'permits'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'permits' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Permits</button>
 		<button onclick={() => { tabType = 'labels'; resetSearch(); }} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {tabType === 'labels' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Labels</button>
@@ -1033,6 +1070,31 @@
 				<button type="submit" disabled={!newPrimer.name.trim()} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 text-sm font-medium">Add Primer Set</button>
 			</form>
 		</details>
+		{/if}
+	</div>
+
+	{:else if tabType === 'templates'}
+	<!-- Sample-capture templates -->
+	<div class="space-y-3">
+		<div class="flex items-center justify-between">
+			<p class="text-sm text-slate-400">Named parameter sets for the field-capture wizard. Each can pre-fill values. The wizard always asks project, site, name, date & medium plus its required fields.</p>
+			<button onclick={() => { editingTemplate = null; showTemplateBuilder = true; }} class="shrink-0 px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">+ New</button>
+		</div>
+		{#if templates.length === 0}
+			<p class="text-sm text-slate-500 italic">No custom templates yet. The built-in “Default — required only” is always available in the wizard.</p>
+		{:else}
+			<ul class="divide-y divide-slate-800 rounded-lg border border-slate-800">
+				{#each templates as t (t.id)}
+					<li class="flex items-center gap-3 px-3 py-2">
+						<div class="flex-1 min-w-0">
+							<p class="text-sm font-medium text-white truncate">{t.name}</p>
+							<p class="text-xs text-slate-500">{t.mixs_checklist}{t.extension ? ` · ${t.extension}` : ''} · {templateParamCount(t)} param(s){t.description ? ` — ${t.description}` : ''}</p>
+						</div>
+						<button onclick={() => { editingTemplate = t; showTemplateBuilder = true; }} class="text-xs text-ocean-400 hover:text-ocean-300 shrink-0">Edit</button>
+						<button onclick={() => deleteTemplate(t)} class="text-xs text-red-400 hover:text-red-300 shrink-0">Delete</button>
+					</li>
+				{/each}
+			</ul>
 		{/if}
 	</div>
 
@@ -1665,3 +1727,12 @@
 
 	{/if}
 </div>
+
+{#if showTemplateBuilder}
+	<TemplateBuilder
+		picklists={templatePicklists}
+		template={editingTemplate}
+		oncreated={onTemplateSaved}
+		oncancel={() => { showTemplateBuilder = false; editingTemplate = null; }}
+	/>
+{/if}

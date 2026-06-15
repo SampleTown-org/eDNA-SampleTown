@@ -92,10 +92,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const sraVocabulary = getSraVocabularySync();
 
+	const templates = db
+		.prepare(
+			`SELECT id, name, description, mixs_checklist, extension, params
+			 FROM sample_templates WHERE lab_id = ? AND is_deleted = 0 ORDER BY name`
+		)
+		.all(labId);
+
 	return {
 		categories,
 		primerSets,
 		pcrProtocols,
+		templates,
 		naming,
 		feedback,
 		personnel,
