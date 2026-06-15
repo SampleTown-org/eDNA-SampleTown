@@ -9,8 +9,9 @@
  * env_medium / people / photos) bracket the MIxS-derived ones because they map
  * to SampleTown-local concepts or special widgets the route renders itself.
  */
-import { organizeForm, MISC_PARAM_PREFIX, type Picklists, type SlotConfig } from '$lib/mixs/sample-form';
-import { getSlot, getEnum } from '$lib/mixs/schema-index';
+import { organizeForm, resolveSlotConfig, MISC_PARAM_PREFIX, type Picklists } from '$lib/mixs/sample-form';
+import { getSlot, requiredSlotsFor, recommendedSlotsFor, allSlotsFor } from '$lib/mixs/schema-index';
+import { slotTable } from '$lib/mixs/slot-ownership';
 
 /** Widget kinds. The MIxS-derived ones mirror SlotConfig['type']; the rest are
  *  SampleTown-local widgets the route special-cases. */
@@ -26,7 +27,8 @@ export type WizardWidget =
 	| 'env_medium'
 	| 'people'
 	| 'photos'
-	| 'gps';
+	| 'gps'
+	| 'add_params';
 
 export interface WizardQuestion {
 	/** Field key — a MIxS slot name, a samples column, or a synthetic key
@@ -57,123 +59,122 @@ export const SYNTHETIC_KEYS = new Set([
 	'photos'
 ]);
 
-/** Tier-2 field-condition slots (#7), all real MIxS v6.3.0 slots → stored in
- *  the sample_values EAV, no migration. Order = capture order in the wizard. */
-const WEATHER_SLOTS = [
+/** Quick-add suggestions for the "Add parameters" screen — common field context
+ *  beyond the required-only default. Weather are real MIxS slots; secchi has no
+ *  slot so it's a misc_param. */
+export const SUGGESTED_EXTRA_KEYS = [
 	'air_temp',
 	'wind_speed',
 	'wind_direction',
 	'barometric_press',
 	'humidity',
 	'water_current',
-	'tidal_stage'
+	'tidal_stage',
+	`${MISC_PARAM_PREFIX}secchi_depth_m`
 ];
 
-/** Resolve a weather slot's widget from its MIxS range: enum → select,
- *  numeric → number, else text. (organizeForm's resolver is private, and
- *  these slots may not be class properties, so we resolve them directly.) */
-function weatherWidget(slot: string): { widget: WizardWidget; options?: { value: string; label: string }[] } {
-	const meta = getSlot(slot);
-	if (meta?.range) {
-		const enumDef = getEnum(meta.range);
-		if (enumDef && enumDef.values.length > 0) {
-			return { widget: 'select', options: enumDef.values.map((v) => ({ value: v.value, label: v.value })) };
-		}
-		if (/^(float|double|integer|decimal)$/i.test(meta.range)) return { widget: 'number' };
-	}
-	return { widget: 'text' };
+/** One template parameter: a MIxS slot or `misc_param:<tag>`, optionally
+ *  pre-filled with a default the wizard seeds (still editable). Mirrors the
+ *  server-side TemplateParam. */
+export interface TemplateParam {
+	key: string;
+	value?: string;
 }
 
-function fromSlotConfig(cfg: SlotConfig, required: boolean, section: string): WizardQuestion {
-	const meta = getSlot(cfg.slot);
+/** Identity questions the wizard always asks first (also the keys never
+ *  duplicated as template params). */
+const IDENTITY_KEYS = new Set(['project_id', 'site_id', 'samp_name', 'collection_date', 'env_medium']);
+
+function identityQuestions(picklists: Picklists): WizardQuestion[] {
+	return [
+		{ key: 'project_id', label: 'Project', section: 'Identity', required: true, recommended: false, widget: 'project', carryForward: true },
+		{ key: 'site_id', label: 'Site', section: 'Identity', required: true, recommended: false, widget: 'site', carryForward: true },
+		{ key: 'samp_name', label: 'Sample name', section: 'Identity', required: true, recommended: false, widget: 'text', placeholder: 'e.g. CHDR-W-01', slot: 'samp_name', carryForward: false },
+		{ key: 'collection_date', label: 'Collection date & time', section: 'Identity', required: true, recommended: false, widget: 'datetime', slot: 'collection_date', carryForward: true },
+		{ key: 'env_medium', label: 'Environmental medium', section: 'Identity', required: true, recommended: false, widget: 'env_medium', options: picklists['env_medium'], slot: 'env_medium', carryForward: false }
+	];
+}
+
+/** Build a WizardQuestion for an arbitrary parameter key (MIxS slot or
+ *  misc_param tag), resolving the widget exactly as the sample form does. */
+export function questionForKey(
+	key: string,
+	picklists: Picklists,
+	tier: { required: boolean; recommended: boolean }
+): WizardQuestion {
+	if (key.startsWith(MISC_PARAM_PREFIX)) {
+		return {
+			key,
+			label: key.slice(MISC_PARAM_PREFIX.length).replace(/_/g, ' '),
+			section: 'Custom',
+			required: false,
+			recommended: tier.recommended,
+			widget: 'text',
+			carryForward: false
+		};
+	}
+	const cfg = resolveSlotConfig(key, picklists);
+	const meta = getSlot(key);
 	return {
-		key: cfg.slot,
-		label: meta?.title ?? cfg.slot,
-		section,
-		required,
-		recommended: cfg.recommended ?? false,
+		key,
+		label: meta?.title ?? key,
+		section: 'Parameters',
+		required: tier.required,
+		recommended: tier.recommended,
 		widget: cfg.type,
 		options: cfg.options,
 		placeholder: cfg.placeholder,
-		slot: cfg.slot,
+		slot: key,
 		carryForward: false
 	};
 }
 
+/** The built-in default template for a MIxS combination: its required slots
+ *  only (identity core is always asked separately). */
+export function defaultTemplateParams(
+	checklist: string,
+	extension: string | null,
+	picklists: Picklists = {}
+): TemplateParam[] {
+	return organizeForm(checklist, extension, picklists).required.map((c) => ({ key: c.slot }));
+}
+
+/** Sample slots valid for the combination that aren't already in `exclude` —
+ *  drives the "Add parameters" dropdown. */
+export function availableSlots(checklist: string, extension: string | null, exclude: Set<string>): string[] {
+	return allSlotsFor(checklist, extension ?? '')
+		.filter((s) => !exclude.has(s) && slotTable(s) === 'samples')
+		.sort();
+}
+
 /**
- * Build the full ordered question queue for one sample.
- *
- * Order: identity (project → site → samp_name → collection_date → env_medium)
- * → MIxS-required → people → MIxS-recommended/optional (Sampling & Storage,
- * then Other) → photos. `picklists` binds local vocabularies onto matching
- * slots exactly as the batch grid does.
+ * Build the wizard queue for one sample from a template (or the built-in
+ * required-only default when `templateParams` is omitted). Order: identity →
+ * the template's parameters → "Add parameters" → photos. Required/recommended
+ * tiers come from the MIxS combination, so the chips stay accurate regardless
+ * of the template's own ordering.
  */
 export function buildSampleQueue(
 	checklist: string,
 	extension: string | null,
-	picklists: Picklists = {}
+	picklists: Picklists = {},
+	templateParams?: TemplateParam[]
 ): WizardQuestion[] {
-	const org = organizeForm(checklist, extension, picklists);
-	const q: WizardQuestion[] = [];
+	const requiredSet = new Set(requiredSlotsFor(checklist, extension ?? ''));
+	const recommendedSet = recommendedSlotsFor(checklist, extension ?? '');
+	const params = templateParams ?? defaultTemplateParams(checklist, extension, picklists);
 
-	// Identity — synthetic widgets, all carry-forward except the per-sample name.
-	q.push({ key: 'project_id', label: 'Project', section: 'Identity', required: true, recommended: false, widget: 'project', carryForward: true });
-	q.push({ key: 'site_id', label: 'Site', section: 'Identity', required: true, recommended: false, widget: 'site', carryForward: true });
-	q.push({ key: 'samp_name', label: 'Sample name', section: 'Identity', required: true, recommended: false, widget: 'text', placeholder: 'e.g. CHDR-W-01', slot: 'samp_name', carryForward: false });
-	q.push({ key: 'collection_date', label: 'Collection date & time', section: 'Identity', required: true, recommended: false, widget: 'datetime', slot: 'collection_date', carryForward: true });
-	q.push({
-		key: 'env_medium',
-		label: 'Environmental medium',
-		section: 'Identity',
-		required: true,
-		recommended: false,
-		widget: 'env_medium',
-		options: picklists['env_medium'],
-		slot: 'env_medium',
-		carryForward: false
-	});
-
-	// MIxS-required slots that live on the samples table (organizeForm already
-	// filtered out header + off-table slots).
-	for (const cfg of org.required) q.push(fromSlotConfig(cfg, true, 'Required'));
-
-	// Everything after the Required block is split into two tiers and appended
-	// in order, so the wizard always runs Required → Suggested → Optional and
-	// the tier chips (red Required, amber Suggested, slate Optional) match the
-	// run order. `q` so far holds only Required (identity core + MIxS-required).
-	const suggested: WizardQuestion[] = [];
-	const optional: WizardQuestion[] = [];
+	const q: WizardQuestion[] = identityQuestions(picklists);
 	const seen = new Set(q.map((x) => x.key));
-
-	// Weather/conditions are MIxS-recommended field context → Suggested.
-	for (const slot of WEATHER_SLOTS) {
-		if (seen.has(slot)) continue;
-		const meta = getSlot(slot);
-		if (!meta) continue;
-		const { widget, options } = weatherWidget(slot);
-		suggested.push({ key: slot, label: meta.title ?? slot, section: 'Conditions', required: false, recommended: true, widget, options, placeholder: meta.examples?.[0], slot, carryForward: true });
-		seen.add(slot);
-	}
-	// Secchi clarity has no MIxS slot — capture as a misc_param. Suggested.
-	suggested.push({ key: `${MISC_PARAM_PREFIX}secchi_depth_m`, label: 'Secchi depth (m)', section: 'Conditions', required: false, recommended: true, widget: 'number', placeholder: 'water clarity', carryForward: true });
-
-	// Remaining class slots: Suggested if MIxS-recommended, else Optional.
-	const buckets = Object.entries(org.optional).sort(([a], [b]) =>
-		a === 'Sampling & Storage' ? -1 : b === 'Sampling & Storage' ? 1 : a.localeCompare(b)
-	);
-	for (const [bucket, list] of buckets) {
-		for (const cfg of list) {
-			if (seen.has(cfg.slot)) continue;
-			seen.add(cfg.slot);
-			(cfg.recommended ? suggested : optional).push(fromSlotConfig(cfg, false, bucket));
-		}
+	for (const p of params) {
+		if (IDENTITY_KEYS.has(p.key) || seen.has(p.key)) continue;
+		seen.add(p.key);
+		q.push(questionForKey(p.key, picklists, { required: requiredSet.has(p.key), recommended: recommendedSet.has(p.key) }));
 	}
 
-	// SampleTown extras (people, photos) are Optional, at the very end.
-	optional.push({ key: 'people', label: 'People', section: 'People', required: false, recommended: false, widget: 'people', carryForward: true });
-	optional.push({ key: 'photos', label: 'Photos', section: 'Photos', required: false, recommended: false, widget: 'photos', carryForward: false });
-
-	return [...q, ...suggested, ...optional];
+	q.push({ key: '__add_params__', label: 'Add parameters', section: 'More', required: false, recommended: false, widget: 'add_params', carryForward: false });
+	q.push({ key: 'photos', label: 'Photos', section: 'Photos', required: false, recommended: false, widget: 'photos', carryForward: false });
+	return q;
 }
 
 /**
@@ -210,6 +211,8 @@ export function isAnswered(q: WizardQuestion, value: unknown): boolean {
  * enforced separately at Complete time, not here.
  */
 export function isValid(q: WizardQuestion, value: unknown): boolean {
+	// The "Add parameters" step has nothing to answer — always proceedable.
+	if (q.widget === 'add_params') return true;
 	if (!isAnswered(q, value)) return false;
 	if (q.widget === 'number') {
 		return !Number.isNaN(Number(String(value).trim()));

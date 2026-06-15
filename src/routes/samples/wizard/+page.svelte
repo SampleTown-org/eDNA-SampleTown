@@ -14,9 +14,11 @@
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import SiteWizard from '$lib/components/SiteWizard.svelte';
+	import TemplateBuilder from '$lib/components/TemplateBuilder.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import type { Picklists } from '$lib/mixs/sample-form';
-	import { buildSampleQueue, isAnswered, isValid, type WizardQuestion } from '$lib/wizard/queue';
+	import { sanitizeMiscParamName, MISC_PARAM_PREFIX, type Picklists } from '$lib/mixs/sample-form';
+	import { getSlot } from '$lib/mixs/schema-index';
+	import { buildSampleQueue, isAnswered, isValid, availableSlots, questionForKey, SUGGESTED_EXTRA_KEYS, type WizardQuestion, type TemplateParam } from '$lib/wizard/queue';
 	import { WizardMachine } from '$lib/wizard/machine.svelte';
 	import { enqueueSample, flush, genClientId, pendingCount } from '$lib/offline/outbox';
 	import { onMount } from 'svelte';
@@ -24,10 +26,23 @@
 
 	let { data }: { data: PageData } = $props();
 
+	const picklists = data.picklists as Picklists;
+
 	let checklist = $state('MimarksS');
 	let extension = $state('Water');
 
-	let queue = $derived(buildSampleQueue(checklist, extension, data.picklists as Picklists));
+	// Templates (docs/dev/offline-pwa.md). selectedParams === null → the built-in
+	// default (required-only). A custom template supplies its own ordered params.
+	type Template = { id: string; name: string; description?: string | null; mixs_checklist: string; extension: string | null; params: string };
+	let templates = $derived((data.templates as Template[]) ?? []);
+	let selectedParams = $state<TemplateParam[] | null>(null);
+	let templateChosen = $state(false);
+	let templateName = $state('Default — required only');
+	let fromTemplate = $state<Set<string>>(new Set());
+	let extraKeys = $state<string[]>([]);
+	let showBuilder = $state(false);
+
+	let queue = $derived(buildSampleQueue(checklist, extension, picklists, selectedParams ?? undefined));
 
 	// Loaders return loosely-typed rows; pin the shapes the template needs.
 	let projects = $derived(data.projects as { id: string; project_name: string }[]);
@@ -123,13 +138,16 @@
 	}
 
 	function resetForNext(carry: boolean) {
-		const kept: Record<string, string> = {};
+		const carried: Record<string, string> = {};
 		if (carry) {
 			for (const q of queue) {
-				if (q.carryForward && answers[q.key]) kept[q.key] = answers[q.key];
+				if (q.carryForward && answers[q.key]) carried[q.key] = answers[q.key];
 			}
 		}
-		answers = kept;
+		// Re-apply the template's pre-fills for the next sample, then overlay any
+		// carried-forward values on top.
+		seedFromParams(selectedParams ?? []);
+		answers = { ...answers, ...carried };
 		if (!carry) people = [];
 		photos = [];
 		m.reset(carry ? queue.findIndex((q) => q.key === 'samp_name') : 0);
@@ -146,6 +164,76 @@
 		answers.site_id = site.id;
 		if (pending) offlineSiteIds = new Set([...offlineSiteIds, site.id]);
 		showSiteWizard = false;
+	}
+
+	// --- Template selection (Step 0) ---
+	/** Seed answers from a template's pre-fills (preserving any project/site
+	 *  already chosen), and record which keys came from the template. */
+	function seedFromParams(params: TemplateParam[]) {
+		const seeded: Record<string, string> = {};
+		if (answers.project_id) seeded.project_id = answers.project_id;
+		if (answers.site_id) seeded.site_id = answers.site_id;
+		const ft = new Set<string>();
+		for (const p of params) {
+			if (p.value != null && p.value !== '') {
+				seeded[p.key] = p.value;
+				ft.add(p.key);
+			}
+		}
+		answers = seeded;
+		fromTemplate = ft;
+		extraKeys = [];
+	}
+	function chooseDefault() {
+		selectedParams = null;
+		templateName = 'Default — required only';
+		seedFromParams([]);
+		templateChosen = true;
+		m.reset(0);
+	}
+	function chooseTemplate(t: Template) {
+		checklist = t.mixs_checklist;
+		extension = t.extension ?? '';
+		selectedParams = JSON.parse(t.params) as TemplateParam[];
+		templateName = t.name;
+		seedFromParams(selectedParams);
+		templateChosen = true;
+		m.reset(0);
+	}
+	function onTemplateCreated(t: Template) {
+		showBuilder = false;
+		chooseTemplate(t);
+	}
+
+	// --- "Add parameters" screen ---
+	let addExtraKey = $state('');
+	let addMiscName = $state('');
+	const extraExclude = $derived(
+		new Set<string>([...queue.map((q) => q.key), ...extraKeys, 'project_id', 'site_id', 'samp_name', 'collection_date', 'env_medium'])
+	);
+	const extraSlotChoices = $derived(availableSlots(checklist, extension || null, extraExclude));
+	const extraSuggestions = $derived(
+		SUGGESTED_EXTRA_KEYS.filter((k) => !extraExclude.has(k) && (k.startsWith(MISC_PARAM_PREFIX) || extraSlotChoices.includes(k)))
+	);
+	const extraQuestions = $derived(extraKeys.map((k) => questionForKey(k, picklists, { required: false, recommended: false })));
+
+	function addExtra(key: string) {
+		if (!key || extraExclude.has(key)) return;
+		extraKeys = [...extraKeys, key];
+		if (answers[key] == null) answers[key] = '';
+		addExtraKey = '';
+	}
+	function addMiscExtra() {
+		const n = sanitizeMiscParamName(addMiscName);
+		if (!n) return;
+		addExtra(`${MISC_PARAM_PREFIX}${n}`);
+		addMiscName = '';
+	}
+	function removeExtra(key: string) {
+		extraKeys = extraKeys.filter((k) => k !== key);
+		const next = { ...answers };
+		delete next[key];
+		answers = next;
 	}
 
 	async function finalize(addAnother: boolean) {
@@ -172,15 +260,14 @@
 			extension: extension || null,
 			people
 		};
-		for (const q of queue) {
-			if (['project_id', 'site_id', 'samp_name', 'collection_date', 'env_medium'].includes(q.key)) continue;
-			if (q.widget === 'people' || q.widget === 'photos') continue;
-			// Keep a genuine 0 (depth/temp/wind_speed/secchi = 0) — only skip
-			// null/undefined/blank. A number-bound input yields the number 0,
-			// which the old `v &&` truthy check silently dropped.
-			const v = answers[q.key];
+		// Every answered parameter — template pre-fills, walked questions, and
+		// Add-parameters extras — lives in `answers`; ship all the non-core ones.
+		// (A genuine 0 is kept; only null/blank is skipped.)
+		const CORE = new Set(['project_id', 'site_id', 'samp_name', 'collection_date', 'env_medium']);
+		for (const [k, v] of Object.entries(answers)) {
+			if (CORE.has(k)) continue;
 			const s = v == null ? '' : v.toString().trim();
-			if (s !== '') body[q.key] = s;
+			if (s !== '') body[k] = s;
 		}
 		const sampName = body.samp_name as string;
 		const photoPayload = photos.map((p) => ({ name: p.file.name, type: p.file.type, caption: p.caption, blob: p.file as Blob }));
@@ -260,19 +347,45 @@
 <div class="max-w-xl mx-auto space-y-4 pb-8">
 	<div class="flex items-center justify-between">
 		<a href="/samples" class="text-sm text-slate-400 hover:text-ocean-400">&larr; Samples</a>
-		<details class="text-xs text-slate-400">
-			<summary class="cursor-pointer">{checklist}{extension ? ` · ${extension}` : ''}</summary>
-			<div class="mt-2 grid grid-cols-2 gap-2 p-2 rounded-lg border border-slate-800 bg-slate-900/60">
-				<select bind:value={checklist} class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs">
+		{#if templateChosen}
+			<button type="button" onclick={() => (templateChosen = false)} class="text-xs text-slate-400 hover:text-ocean-400">
+				{templateName} <span class="text-ocean-400">· change</span>
+			</button>
+		{/if}
+	</div>
+
+	{#if !templateChosen}
+		<!-- Step 0: choose a template — the built-in required-only default or a
+		     custom one. Picking sets the MIxS combo + seeds any pre-fills. -->
+		<div class="space-y-3">
+			<h1 class="text-xl font-bold text-white">New sample — choose a template</h1>
+			<div class="grid grid-cols-2 gap-2">
+				<select bind:value={checklist} class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm">
 					{#each CHECKLIST_OPTIONS as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
-				<select bind:value={extension} class="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs">
+				<select bind:value={extension} class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm">
 					<option value="">None</option>
 					{#each EXTENSION_OPTIONS as opt}<option value={opt.value}>{opt.label}</option>{/each}
 				</select>
 			</div>
-		</details>
-	</div>
+			<button type="button" onclick={chooseDefault}
+				class="w-full text-left p-4 rounded-xl border border-ocean-700 bg-slate-900/40 hover:bg-slate-800">
+				<div class="font-semibold text-white">Default — required only</div>
+				<div class="text-xs text-slate-400">Just the MIxS-required fields for {checklist}{extension ? ` · ${extension}` : ''}; add more at the end.</div>
+			</button>
+			{#each templates as t}
+				<button type="button" onclick={() => chooseTemplate(t)}
+					class="w-full text-left p-4 rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-800">
+					<div class="font-semibold text-white">{t.name}</div>
+					<div class="text-xs text-slate-400">{t.description || `${t.mixs_checklist}${t.extension ? ` · ${t.extension}` : ''}`}</div>
+				</button>
+			{/each}
+			<button type="button" onclick={() => (showBuilder = true)}
+				class="w-full p-3 rounded-xl border border-dashed border-slate-700 text-ocean-300 hover:bg-slate-800 text-sm">
+				+ New template
+			</button>
+		</div>
+	{:else}
 
 	<!-- Action bar — sticky at the TOP so the on-screen keyboard (which covers
 	     the bottom of the viewport while an input is focused) never hides
@@ -337,7 +450,7 @@
 		<div class="space-y-3">
 			<h2 class="text-xl font-bold text-white">Review</h2>
 			<ul class="divide-y divide-slate-800 rounded-lg border border-slate-800">
-				{#each queue as q}
+				{#each queue.filter((q) => q.widget !== 'add_params') as q}
 					{@const answered = isAnswered(q, valueFor(q))}
 					<li class="flex items-center gap-3 px-3 py-2">
 						<div class="flex-1 min-w-0">
@@ -351,6 +464,14 @@
 							</p>
 						</div>
 						<button type="button" onclick={() => jumpTo(q)} class="text-xs text-ocean-400 hover:text-ocean-300 shrink-0">Edit</button>
+					</li>
+				{/each}
+				{#each extraQuestions as q (q.key)}
+					<li class="flex items-center gap-3 px-3 py-2">
+						<div class="flex-1 min-w-0">
+							<p class="text-xs text-slate-500">{q.label}</p>
+							<p class="text-sm {answers[q.key]?.toString().trim() ? 'text-white' : 'text-slate-600 italic'} truncate">{answers[q.key]?.toString().trim() || 'skipped'}</p>
+						</div>
 					</li>
 				{/each}
 			</ul>
@@ -369,6 +490,7 @@
 				{:else}
 					<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-slate-600/20 text-slate-400">Optional</span>
 				{/if}
+				{#if fromTemplate.has(current.key)}<span class="px-1.5 py-0.5 rounded text-[10px] bg-ocean-500/15 text-ocean-300">from template</span>{/if}
 				{#if current.slot}<GlossaryDoc slot={current.slot} iconOnly />{/if}
 			</div>
 			<p class="text-xs text-slate-500 uppercase tracking-wider">{current.section}</p>
@@ -439,6 +561,51 @@
 				<input type="number" step="any" inputmode="decimal" bind:value={answers[current.key]} placeholder={current.placeholder} class={inputCls} />
 			{:else if current.widget === 'textarea'}
 				<textarea bind:value={answers[current.key]} placeholder={current.placeholder} rows="3" class={inputCls}></textarea>
+			{:else if current.widget === 'add_params'}
+				<p class="text-sm text-slate-400">Add any extra parameters for this sample, then tap Next.</p>
+				{#if extraSuggestions.length > 0}
+					<div class="flex flex-wrap gap-1.5">
+						{#each extraSuggestions as s}
+							<button type="button" onclick={() => addExtra(s)} class="px-2 py-1 rounded-full border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs">+ {s.startsWith(MISC_PARAM_PREFIX) ? s.slice(MISC_PARAM_PREFIX.length).replace(/_/g, ' ') : (getSlot(s)?.title ?? s)}</button>
+						{/each}
+					</div>
+				{/if}
+				<div class="flex items-center gap-2">
+					<input type="text" list="extra-slots" bind:value={addExtraKey} placeholder="Search parameters…" class={inputCls}
+						onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addExtra(addExtraKey); } }} />
+					<datalist id="extra-slots">
+						{#each extraSlotChoices as s}<option value={s}>{getSlot(s)?.title ?? s}</option>{/each}
+					</datalist>
+					<button type="button" onclick={() => addExtra(addExtraKey)} disabled={!extraSlotChoices.includes(addExtraKey)} class="px-3 py-3 border border-slate-700 text-slate-300 rounded-lg disabled:opacity-40">Add</button>
+				</div>
+				<div class="flex items-center gap-2">
+					<input type="text" bind:value={addMiscName} placeholder="custom param name" class={inputCls} />
+					<button type="button" onclick={addMiscExtra} disabled={!addMiscName.trim()} class="px-3 py-3 border border-slate-700 text-slate-300 rounded-lg disabled:opacity-40">Add</button>
+				</div>
+				{#if extraQuestions.length > 0}
+					<ul class="space-y-2 pt-2 border-t border-slate-800">
+						{#each extraQuestions as q (q.key)}
+							<li class="space-y-1">
+								<div class="flex items-center gap-2">
+									<span class="text-sm text-slate-300 flex-1">{q.label}</span>
+									<button type="button" onclick={() => removeExtra(q.key)} class="text-slate-600 hover:text-red-400 text-xs">✕</button>
+								</div>
+								{#if q.widget === 'select'}
+									<select bind:value={answers[q.key]} class={inputCls}>
+										<option value="">Select…</option>
+										{#each q.options ?? [] as o}<option value={o.value}>{o.label}</option>{/each}
+									</select>
+								{:else if q.widget === 'number'}
+									<input type="number" step="any" inputmode="decimal" bind:value={answers[q.key]} placeholder={q.placeholder} class={inputCls} />
+								{:else if q.widget === 'textarea'}
+									<textarea bind:value={answers[q.key]} placeholder={q.placeholder} rows="2" class={inputCls}></textarea>
+								{:else}
+									<input type="text" bind:value={answers[q.key]} placeholder={q.placeholder} class={inputCls} />
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			{:else}
 				<input type="text" bind:value={answers[current.key]} placeholder={current.placeholder} class={inputCls} />
 			{/if}
@@ -448,5 +615,10 @@
 	{#if missingRequired.length > 0 && phase !== 'review'}
 		<p class="text-sm text-rose-400">{missingRequired.length} required field(s) still need an answer.</p>
 	{/if}
+	{/if}
 </div>
+
+{#if showBuilder}
+	<TemplateBuilder {picklists} initialChecklist={checklist} initialExtension={extension} oncreated={onTemplateCreated} oncancel={() => (showBuilder = false)} />
+{/if}
 

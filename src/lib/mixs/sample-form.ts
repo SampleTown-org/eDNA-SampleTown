@@ -117,7 +117,7 @@ export function organizeForm(
  * Local picklist wins over MIxS enum because operators curate kits/vocabularies
  * that are narrower than the MIxS-defined set in practice.
  */
-function resolveSlotConfig(slot: string, picklists: Picklists): SlotConfig {
+export function resolveSlotConfig(slot: string, picklists: Picklists): SlotConfig {
 	const meta = getSlot(slot);
 	const override = OVERRIDES[slot];
 	const placeholder = meta?.examples?.[0];

@@ -20,6 +20,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		.prepare('SELECT id, site_name, project_id FROM sites WHERE is_deleted = 0 AND lab_id = ? ORDER BY site_name')
 		.all(labId);
 	const personnel = getActivePersonnel(labId);
+	const templates = db
+		.prepare(
+			`SELECT id, name, description, mixs_checklist, extension, params
+			 FROM sample_templates WHERE lab_id = ? AND is_deleted = 0 ORDER BY name`
+		)
+		.all(labId);
 	const picklists = getConstrainedValues(
 		labId,
 		'geo_loc_name', 'env_broad_scale', 'env_local_scale', 'env_medium',
@@ -32,6 +38,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		projects,
 		sites,
 		personnel,
+		templates,
 		picklists,
 		preselectedProjectId: url.searchParams.get('project_id') || '',
 		preselectedSiteId: url.searchParams.get('site_id') || '',
