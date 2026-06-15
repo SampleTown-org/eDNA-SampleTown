@@ -10,6 +10,17 @@
 
 	let { data }: { data: PageData } = $props();
 
+	/** Normalize a stored collection_date for the datetime-local control. The
+	 *  wizard writes a full 'YYYY-MM-DDTHH:mm'; legacy/batch rows are date-only
+	 *  'YYYY-MM-DD' (padded to midnight so the date isn't lost when the input
+	 *  can't render a bare date). Anything else (e.g. a MIxS missing sentinel)
+	 *  is left untouched. */
+	function toDateTimeLocal(v: string): string {
+		if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) return v.slice(0, 16);
+		if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v}T00:00`;
+		return v;
+	}
+
 	// Seed form state from the existing sample row. The server already
 	// spreads sample_values onto the sample object, so every EAV-stored
 	// slot (silicate, ammonium, misc_param:*, …) arrives as a plain key.
@@ -19,7 +30,7 @@
 		mixs_checklist: (sample.mixs_checklist as string) || 'MimarksS',
 		extension: (sample.extension as string) || '',
 		samp_name: (sample.samp_name as string) || '',
-		collection_date: (sample.collection_date as string) || '',
+		collection_date: toDateTimeLocal((sample.collection_date as string) || ''),
 		env_medium: (sample.env_medium as string) || '',
 		notes: (sample.notes as string) || ''
 	});
@@ -187,7 +198,7 @@
 				</div>
 				<div>
 					<FieldLabel slot="collection_date" required />
-					<input id="collection_date" type="date" bind:value={form.collection_date} class={inputCls} />
+					<input id="collection_date" type="datetime-local" bind:value={form.collection_date} class={inputCls} />
 				</div>
 
 				<div class="sm:col-span-2">
