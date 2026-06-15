@@ -145,6 +145,21 @@
 		}
 		return '';
 	});
+	/** Non-blocking MIxS suggestion — does NOT gate Next/Complete, just nudges.
+	 *  Most MIxS measurement slots have a structured_pattern of
+	 *  "<number> <unit>"; if the operator entered a bare number, suggest the
+	 *  unit form using the slot's own example. */
+	let currentSuggestion = $derived.by(() => {
+		if (!current?.slot || !currentAnswered || currentError) return '';
+		const v = answers[current.key];
+		if (v == null) return '';
+		const meta = getSlot(current.slot);
+		if (meta?.structured_pattern?.includes('{text}') && /^\s*-?\d*\.?\d+\s*$/.test(String(v))) {
+			const eg = meta.examples?.[0];
+			return eg ? `Tip: MIxS usually includes units here — e.g. “${eg}”.` : 'Tip: MIxS usually includes units here.';
+		}
+		return '';
+	});
 	const answeredCount = $derived(queue.filter((q) => isAnswered(q, valueFor(q))).length);
 
 	/** Second-pass skip → blank any partial value so review shows it empty. */
@@ -664,6 +679,8 @@
 
 			{#if currentError}
 				<p class="text-sm text-rose-400">{currentError}</p>
+			{:else if currentSuggestion}
+				<p class="text-sm text-amber-400">{currentSuggestion}</p>
 			{/if}
 		</div>
 	{/if}

@@ -138,32 +138,13 @@
 
 			<div class="flex items-center gap-3">
 				{#if user}
-					<!-- Cart sits between the main nav and the right-side icon
-					     cluster (search/qr/username/emoji/sign out) per beta
-					     feedback — it's a workflow tool, closer in role to the
-					     nav than to the account utilities. -->
-					<button
-						onclick={() => { cart.toggleSidebar(); if (cart.count === 0 && !cart.sidebarOpen) cart.openSidebar(); }}
-						class="relative p-1 transition-colors {cart.sidebarOpen ? 'text-ocean-400' : 'text-slate-400 hover:text-white'}"
-						title="{cart.sidebarOpen ? 'Close' : 'Open'} cart ({cart.count})"
-						aria-label="{cart.sidebarOpen ? 'Close' : 'Open'} cart"
-					>
-						<!-- Shopping-cart icon. Same visual weight as the
-						     other right-side icons (search, scan). -->
-						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-							<path d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13l-1.6 4.6a1 1 0 00.9 1.4H19" />
-							<circle cx="9" cy="20" r="1.5" />
-							<circle cx="17" cy="20" r="1.5" />
-						</svg>
-						{#if cart.count > 0}
-							<span class="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 bg-ocean-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-								{cart.count}
-							</span>
-						{/if}
-					</button>
+					<!-- Icon cluster order (per request): new → search → scan → cart →
+					     (username) → avatar → (sign out) → burger. Username + sign out
+					     are hidden on mobile, so the mobile sequence reads
+					     new · search · scan · cart · avatar · burger. -->
 
-					<!-- New sample (wizard) — primary create action, visible all sizes
-					     so it's reachable on mobile where +New page buttons are hidden. -->
+					<!-- New sample (wizard) — primary create action, all sizes so it's
+					     reachable on mobile where +New page buttons are hidden. -->
 					{#if user.role !== 'viewer'}
 						<a
 							href="/samples/wizard"
@@ -177,7 +158,6 @@
 						</a>
 					{/if}
 
-					<!-- Right-side cluster, ordered: search → qr → username → emoji → sign out -->
 					<a
 						href="/#dashboard-search"
 						class="text-slate-400 hover:text-white"
@@ -200,6 +180,23 @@
 							<path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/>
 							<path d="M7 8h3v3H7zM14 8h3v3h-3zM7 13h3v3H7zM14 13h3v3h-3z"/>
 						</svg>
+					</button>
+					<button
+						onclick={() => { cart.toggleSidebar(); if (cart.count === 0 && !cart.sidebarOpen) cart.openSidebar(); }}
+						class="relative p-1 transition-colors {cart.sidebarOpen ? 'text-ocean-400' : 'text-slate-400 hover:text-white'}"
+						title="{cart.sidebarOpen ? 'Close' : 'Open'} cart ({cart.count})"
+						aria-label="{cart.sidebarOpen ? 'Close' : 'Open'} cart"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+							<path d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13l-1.6 4.6a1 1 0 00.9 1.4H19" />
+							<circle cx="9" cy="20" r="1.5" />
+							<circle cx="17" cy="20" r="1.5" />
+						</svg>
+						{#if cart.count > 0}
+							<span class="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 bg-ocean-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+								{cart.count}
+							</span>
+						{/if}
 					</button>
 					<a
 						href="/account"

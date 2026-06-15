@@ -28,10 +28,18 @@ sw.addEventListener('install', (event) => {
 sw.addEventListener('activate', (event) => {
 	event.waitUntil(
 		(async () => {
-			for (const key of await caches.keys()) {
-				if (key !== CACHE) await caches.delete(key);
-			}
+			const keys = await caches.keys();
+			// If an older version's cache exists, this activation is an UPDATE
+			// (not a first install) — we'll force open windows to reload so they
+			// pick up the new build instead of running stale code until the user
+			// happens to hard-refresh.
+			const wasUpdate = keys.some((k) => k !== CACHE);
+			for (const key of keys) if (key !== CACHE) await caches.delete(key);
 			await sw.clients.claim();
+			if (wasUpdate) {
+				const windows = await sw.clients.matchAll({ type: 'window' });
+				for (const c of windows) c.navigate(c.url);
+			}
 		})()
 	);
 });
