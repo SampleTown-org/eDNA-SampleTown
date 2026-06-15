@@ -155,7 +155,9 @@
 		answers = next;
 	}
 
-	/** Complete: jump to the first unfilled MIxS-required question, else review. */
+	/** Complete: jump to the first unfilled required field, then to any
+	 *  present-but-invalid blocker (e.g. a duplicate sample name) — so Complete
+	 *  can't bypass the per-field validation and hit a save-time error. */
 	function tryComplete() {
 		const missing = queue.filter((q) => q.required && !isAnswered(q, valueFor(q)));
 		if (missing.length > 0) {
@@ -165,6 +167,11 @@
 			return;
 		}
 		missingRequired = [];
+		if (nameTaken) {
+			// Duplicate name — surface it at the field instead of failing at save.
+			m.jumpToIndex(queue.findIndex((q) => q.key === 'samp_name'));
+			return;
+		}
 		m.toReview();
 	}
 

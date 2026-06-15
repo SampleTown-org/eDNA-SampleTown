@@ -4,6 +4,7 @@
 	import CartSidebar from '$lib/components/CartSidebar.svelte';
 	import FeedbackForm from '$lib/components/FeedbackForm.svelte';
 	import { cart } from '$lib/stores/cart.svelte';
+	import { updated } from '$app/stores';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -27,6 +28,15 @@
 		}
 	});
 </script>
+
+{#if $updated}
+	<!-- A newer deploy is live; an installed PWA / open tab may be running a
+	     stale cached build. Prompt a reload so fixes actually take effect. -->
+	<div class="fixed bottom-0 inset-x-0 z-[60] bg-ocean-600 text-white text-sm flex items-center justify-center gap-3 px-4 py-2">
+		<span>A new version of SampleTown is available.</span>
+		<button type="button" onclick={() => location.reload()} class="px-3 py-1 rounded bg-white/20 hover:bg-white/30 font-medium">Reload</button>
+	</div>
+{/if}
 
 <div class="min-h-screen flex flex-col" class:role-viewer={data.user?.role === 'viewer'}>
 	<Navbar user={data.user} lab={data.lab} labs={data.labs} />

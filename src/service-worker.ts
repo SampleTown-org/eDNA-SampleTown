@@ -54,20 +54,21 @@ sw.addEventListener('fetch', (event) => {
 				if (hit) return hit;
 			}
 
-			// API reads + cacheable routes: network-first, fall back to cache,
-			// and stash fresh successful responses for offline use.
+			// Only the wizard route is cached for offline render (it embeds its
+			// own data). We deliberately do NOT cache /api/* — those responses
+			// are per-user and per-lab, and a shared device must never serve one
+			// user's cached data to another. Everything else is network-only.
+			const cacheable = CACHEABLE_ROUTES.has(url.pathname);
 			try {
 				const res = await fetch(request);
-				if (res.ok && (url.pathname.startsWith('/api/') || CACHEABLE_ROUTES.has(url.pathname))) {
-					cache.put(request, res.clone());
-				}
+				if (res.ok && cacheable) cache.put(request, res.clone());
 				return res;
 			} catch (err) {
-				const cached = await cache.match(request);
-				if (cached) return cached;
-				if (request.mode === 'navigate') {
-					const shell = await cache.match('/samples/wizard');
-					if (shell) return shell;
+				// Offline: serve the cached copy only for routes we explicitly
+				// cache; never substitute the wizard shell for an unrelated route.
+				if (cacheable || ASSET_SET.has(url.pathname)) {
+					const cached = await cache.match(request);
+					if (cached) return cached;
 				}
 				throw err;
 			}

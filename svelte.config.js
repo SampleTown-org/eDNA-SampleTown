@@ -6,6 +6,10 @@ const config = {
 	preprocess: vitePreprocess(),
 	kit: {
 		adapter: adapter(),
+		// Poll for new deploys every 60s so the app can prompt a refresh — the
+		// `updated` store flips true and +layout shows a reload banner. Without
+		// this, an installed PWA can run a stale cached build indefinitely.
+		version: { pollInterval: 60_000 },
 		// SvelteKit-managed Content Security Policy. `mode: 'hash'` computes
 		// a sha256 for every inline <script> and <style> SvelteKit emits
 		// (SSR data injection, hydration bootstrap) and adds them to the
