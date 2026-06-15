@@ -23,15 +23,19 @@
 		/** `pending` = site is only in the offline outbox, not yet on the server.
 		 *  The parent must then queue any sample referencing it (so the site
 		 *  flushes first) instead of POSTing the sample directly. */
-		oncreated: (site: { id: string; site_name: string; project_id: string }, pending: boolean) => void;
+		oncreated: (site: { id: string; site_name: string; project_id: string; latitude?: number | null; longitude?: number | null }, pending: boolean) => void;
 		oncancel: () => void;
+		/** Pre-fill GPS from a location the parent already obtained (the wizard's
+		 *  nearby-sites lookup), so creating a site here doesn't re-prompt. */
+		initialLat?: number | null;
+		initialLon?: number | null;
 	}
-	let { projectId, projectName, picklists, oncreated, oncancel }: Props = $props();
+	let { projectId, projectName, picklists, oncreated, oncancel, initialLat = null, initialLon = null }: Props = $props();
 
 	let queue = $derived(buildSiteQueue(picklists));
 	let answers = $state<Record<string, string>>({});
-	let lat = $state<number | null>(null);
-	let lon = $state<number | null>(null);
+	let lat = $state<number | null>(initialLat);
+	let lon = $state<number | null>(initialLon);
 	let accuracy = $state<number | null>(null);
 	let altitude = $state<number | null>(null);
 	let geoErr = $state('');
@@ -122,7 +126,7 @@
 		async function queueOffline() {
 			await enqueueSite({ clientId, projectId, body, createdAt: new Date().toISOString() });
 			saving = false;
-			oncreated({ id: clientId, site_name: body.site_name as string, project_id: projectId }, true);
+			oncreated({ id: clientId, site_name: body.site_name as string, project_id: projectId, latitude: lat, longitude: lon }, true);
 		}
 
 		if (typeof navigator !== 'undefined' && !navigator.onLine) {

@@ -46,7 +46,8 @@
 
 	// Loaders return loosely-typed rows; pin the shapes the template needs.
 	let projects = $derived(data.projects as { id: string; project_name: string }[]);
-	let allSites = $state((data.sites as { id: string; site_name: string; project_id: string }[]) ?? []);
+	type SiteRow = { id: string; site_name: string; project_id: string; latitude: number | null; longitude: number | null };
+	let allSites = $state((data.sites as SiteRow[]) ?? []);
 
 	// Answer state. Scalar answers live in `answers`; people/photos are arrays.
 	let answers = $state<Record<string, string>>({});
@@ -242,8 +243,11 @@
 	 *  resolves. Cleared once a flush drains all queued sites. */
 	let offlineSiteIds = $state<Set<string>>(new Set());
 
-	function onSiteCreated(site: { id: string; site_name: string; project_id: string }, pending: boolean) {
-		allSites = [...allSites, site];
+	function onSiteCreated(
+		site: { id: string; site_name: string; project_id: string; latitude?: number | null; longitude?: number | null },
+		pending: boolean
+	) {
+		allSites = [...allSites, { ...site, latitude: site.latitude ?? null, longitude: site.longitude ?? null }];
 		answers.site_id = site.id;
 		if (pending) offlineSiteIds = new Set([...offlineSiteIds, site.id]);
 		showSiteWizard = false;
@@ -415,10 +419,75 @@
 		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 	}
 
-	function sitesForProject(projectId: string): { id: string; site_name: string }[] {
+	function sitesForProject(projectId: string): SiteRow[] {
 		if (!projectId) return [];
 		return allSites.filter((s) => s.project_id === projectId);
 	}
+
+	// --- Nearby-site suggestions on the site step ---
+	let userLat = $state<number | null>(null);
+	let userLon = $state<number | null>(null);
+	let geoErr = $state('');
+	let locating = $state(false);
+	let geoAttempted = false;
+	let siteFilter = $state('');
+	let showAllSites = $state(false);
+
+	function locateUser() {
+		geoErr = '';
+		if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+			geoErr = 'This device has no geolocation.';
+			return;
+		}
+		locating = true;
+		navigator.geolocation.getCurrentPosition(
+			(pos) => { userLat = +pos.coords.latitude.toFixed(6); userLon = +pos.coords.longitude.toFixed(6); locating = false; },
+			(err) => { geoErr = err.message || 'Could not get your location.'; locating = false; },
+			{ enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+		);
+	}
+
+	// Auto-locate the first time the site step is reached.
+	$effect(() => {
+		if (current?.widget === 'site' && answers.project_id && userLat == null && !geoAttempted) {
+			geoAttempted = true;
+			locateUser();
+		}
+	});
+
+	/** Great-circle distance in metres (haversine). */
+	function distM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+		const R = 6371000;
+		const toRad = (d: number) => (d * Math.PI) / 180;
+		const dLat = toRad(lat2 - lat1);
+		const dLon = toRad(lon2 - lon1);
+		const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+		return 2 * R * Math.asin(Math.sqrt(a));
+	}
+	function fmtDist(m: number): string {
+		return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+	}
+
+	/** Sites in the chosen project, annotated with distance from the device and
+	 *  sorted nearest-first (sites without coordinates fall to the end), then
+	 *  filtered by the search box. */
+	let sortedSites = $derived.by(() => {
+		const f = siteFilter.trim().toLowerCase();
+		const withDist = sitesForProject(answers.project_id).map((s) => ({
+			...s,
+			dist:
+				userLat != null && userLon != null && s.latitude != null && s.longitude != null
+					? distM(userLat, userLon, s.latitude, s.longitude)
+					: null
+		}));
+		withDist.sort((a, b) => {
+			if (a.dist == null && b.dist == null) return a.site_name.localeCompare(b.site_name);
+			if (a.dist == null) return 1;
+			if (b.dist == null) return -1;
+			return a.dist - b.dist;
+		});
+		return f ? withDist.filter((s) => s.site_name.toLowerCase().includes(f)) : withDist;
+	});
 
 	const inputCls =
 		'w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-lg focus:outline-none focus:border-ocean-500';
@@ -429,6 +498,8 @@
 		projectId={answers.project_id}
 		projectName={projects.find((p) => p.id === answers.project_id)?.project_name ?? ''}
 		picklists={data.picklists as Picklists}
+		initialLat={userLat}
+		initialLon={userLon}
 		oncreated={onSiteCreated}
 		oncancel={() => (showSiteWizard = false)}
 	/>
@@ -597,13 +668,50 @@
 				{#if !answers.project_id}
 					<p class="text-amber-400 text-sm">Pick a project first.</p>
 				{:else}
-					<select bind:value={answers.site_id} class={inputCls}>
-						<option value="">Select site…</option>
-						{#each sitesForProject(answers.project_id) as s}<option value={s.id}>{s.site_name}</option>{/each}
-					</select>
+					<!-- Nearby-first site picker: device GPS → existing sites sorted by
+					     distance; add a new one manually only if none fit. -->
+					<div class="flex items-center gap-2 text-xs text-slate-400">
+						{#if locating}
+							<span>Finding your location…</span>
+						{:else if userLat != null}
+							<span>📍 Sorted by distance from you.</span>
+							<button type="button" onclick={locateUser} class="text-ocean-400 hover:text-ocean-300">refresh</button>
+						{:else}
+							<button type="button" onclick={locateUser} class="inline-flex items-center gap-1 text-ocean-400 hover:text-ocean-300">📍 Find nearby sites</button>
+						{/if}
+					</div>
+					{#if geoErr}<p class="text-xs text-amber-400">{geoErr} — showing all sites.</p>{/if}
+
+					{#if sitesForProject(answers.project_id).length > 6}
+						<input type="text" bind:value={siteFilter} placeholder="Filter sites…" class="{inputCls} text-base" />
+					{/if}
+
+					{#if sortedSites.length > 0}
+						<ul class="space-y-1.5 max-h-[40vh] overflow-y-auto">
+							{#each (showAllSites ? sortedSites : sortedSites.slice(0, 8)) as s (s.id)}
+								<li>
+									<button type="button" onclick={() => (answers.site_id = s.id)}
+										class="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg border text-left {answers.site_id === s.id ? 'border-ocean-500 bg-ocean-900/30 text-white' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}">
+										<span class="truncate">{s.site_name}</span>
+										{#if s.dist != null}
+											<span class="shrink-0 text-xs text-slate-400">{fmtDist(s.dist)}</span>
+										{:else}
+											<span class="shrink-0 text-xs text-slate-600">no GPS</span>
+										{/if}
+									</button>
+								</li>
+							{/each}
+						</ul>
+						{#if !showAllSites && sortedSites.length > 8}
+							<button type="button" onclick={() => (showAllSites = true)} class="text-xs text-ocean-400 hover:text-ocean-300">Show all {sortedSites.length} sites</button>
+						{/if}
+					{:else}
+						<p class="text-sm text-slate-500">{siteFilter ? 'No sites match.' : 'No sites in this project yet.'}</p>
+					{/if}
+
 					<button type="button" onclick={() => (showSiteWizard = true)}
-						class="mt-2 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-ocean-700 text-ocean-300 hover:bg-slate-800 text-sm">
-						+ New site (capture GPS)
+						class="mt-1 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-ocean-700 text-ocean-300 hover:bg-slate-800 text-sm">
+						+ New site here (capture GPS)
 					</button>
 				{/if}
 			{:else if current.widget === 'env_medium'}

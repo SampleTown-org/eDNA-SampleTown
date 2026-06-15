@@ -17,7 +17,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		.prepare('SELECT id, project_name FROM projects WHERE lab_id = ? ORDER BY project_name')
 		.all(labId);
 	const sites = db
-		.prepare('SELECT id, site_name, project_id FROM sites WHERE is_deleted = 0 AND lab_id = ? ORDER BY site_name')
+		.prepare('SELECT id, site_name, project_id, latitude, longitude FROM sites WHERE is_deleted = 0 AND lab_id = ? ORDER BY site_name')
 		.all(labId);
 	const personnel = getActivePersonnel(labId);
 	const templates = db
