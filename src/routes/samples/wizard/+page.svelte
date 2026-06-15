@@ -110,7 +110,8 @@
 		const missing = queue.filter((q) => q.required && !isAnswered(q, valueFor(q)));
 		if (missing.length > 0) {
 			missingRequired = missing;
-			m.reset(queue.indexOf(missing[0]));
+			// jumpToIndex (not reset) so Back still works after a premature Complete.
+			m.jumpToIndex(queue.indexOf(missing[0]));
 			return;
 		}
 		missingRequired = [];
@@ -359,7 +360,15 @@
 		<div class="space-y-3 rounded-xl border border-slate-800 bg-slate-900/40 p-5 min-h-[40vh]">
 			<div class="flex items-center gap-2">
 				<h2 class="text-xl font-bold text-white">{current.label}</h2>
-				{#if current.required}<span class="text-rose-400" title="Required">*</span>{:else if current.recommended}<span class="text-amber-400" title="Recommended">*</span>{/if}
+				<!-- Tier chip: explicit label + consistent color (red Required,
+				     amber Suggested, slate Optional) — clearer than a bare *. -->
+				{#if current.required}
+					<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-rose-500/15 text-rose-300">Required</span>
+				{:else if current.recommended}
+					<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-amber-500/15 text-amber-300">Suggested</span>
+				{:else}
+					<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-slate-600/20 text-slate-400">Optional</span>
+				{/if}
 				{#if current.slot}<GlossaryDoc slot={current.slot} iconOnly />{/if}
 			</div>
 			<p class="text-xs text-slate-500 uppercase tracking-wider">{current.section}</p>
@@ -437,7 +446,7 @@
 	{/if}
 
 	{#if missingRequired.length > 0 && phase !== 'review'}
-		<p class="text-sm text-amber-400">{missingRequired.length} required field(s) still need an answer.</p>
+		<p class="text-sm text-rose-400">{missingRequired.length} required field(s) still need an answer.</p>
 	{/if}
 </div>
 
