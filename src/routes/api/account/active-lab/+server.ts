@@ -6,6 +6,13 @@ import { requireUser } from '$lib/server/guards';
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = requireUser(locals);
 
+	// Demo accounts (guest/guest) are locked to their lab — they can't switch
+	// away. Pairs with the join/setup-lab guards so a shared demo account can't
+	// drift into another tenant's lab. See scripts/seed-demo-lab.mjs.
+	if (user.is_demo) {
+		return json({ error: 'Demo accounts are locked to their lab.' }, { status: 403 });
+	}
+
 	let labId: string;
 	try {
 		const body = await request.json();

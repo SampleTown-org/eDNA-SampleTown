@@ -26,6 +26,11 @@ interface InviteRow {
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
 	const user = requireUser(locals);
 
+	// Demo accounts (guest/guest) are locked to their lab and cannot join others.
+	if (user.is_demo) {
+		return json({ error: 'Demo accounts cannot join other labs.' }, { status: 403 });
+	}
+
 	const ip = getClientAddress();
 	if (!checkRate(`invite-join:${ip}`, 10, 60 * 60_000)) {
 		return json({ error: 'Too many join attempts; try again later' }, { status: 429 });
