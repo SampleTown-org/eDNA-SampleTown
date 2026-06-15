@@ -26,6 +26,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			 FROM sample_templates WHERE lab_id = ? AND is_deleted = 0 ORDER BY name`
 		)
 		.all(labId);
+	// Existing (project_id, samp_name) pairs so the wizard can flag a duplicate
+	// name as you type instead of only failing at save. Names are small; ships
+	// in the SSR payload so the check still works offline (SW-cached).
+	const sampleNames = db
+		.prepare('SELECT project_id, samp_name FROM samples WHERE lab_id = ? AND is_deleted = 0')
+		.all(labId);
 	const picklists = getConstrainedValues(
 		labId,
 		'geo_loc_name', 'env_broad_scale', 'env_local_scale', 'env_medium',
@@ -39,6 +45,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		sites,
 		personnel,
 		templates,
+		sampleNames,
 		picklists,
 		preselectedProjectId: url.searchParams.get('project_id') || '',
 		preselectedSiteId: url.searchParams.get('site_id') || '',

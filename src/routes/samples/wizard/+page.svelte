@@ -109,7 +109,42 @@
 		return answers[q.key] ?? '';
 	}
 
-	let currentValid = $derived(current ? isValid(current, valueFor(current)) : false);
+	// Duplicate sample-name detection (UNIQUE(project_id, samp_name)). Existing
+	// names come from the loader; session-saved names are added as we go, so the
+	// clash is flagged at the name field, not at save.
+	let existingNames = $derived(
+		new Set((data.sampleNames as { project_id: string; samp_name: string }[]).map((r) => `${r.project_id}|${r.samp_name.trim().toLowerCase()}`))
+	);
+	let savedNames = $state<Set<string>>(new Set());
+	let nameTaken = $derived.by(() => {
+		const n = answers.samp_name?.trim().toLowerCase();
+		if (!n || !answers.project_id) return false;
+		const key = `${answers.project_id}|${n}`;
+		return existingNames.has(key) || savedNames.has(key);
+	});
+
+	let currentAnswered = $derived(current ? isAnswered(current, valueFor(current)) : false);
+	let currentValid = $derived.by(() => {
+		if (!current) return false;
+		if (!isValid(current, valueFor(current))) return false;
+		if (current.key === 'samp_name' && nameTaken) return false;
+		return true;
+	});
+	/** Inline, as-you-go message for the current question when its value is
+	 *  present but not acceptable — shown under the field so problems surface
+	 *  here, not at save. */
+	let currentError = $derived.by(() => {
+		if (!current || !currentAnswered) return '';
+		if (current.key === 'samp_name' && nameTaken) return `A sample named “${answers.samp_name}” already exists in this project — pick a different name.`;
+		if (!isValid(current, valueFor(current))) {
+			if (current.widget === 'number') return 'Enter a number.';
+			if (current.widget === 'date') return 'Enter a valid date (YYYY-MM-DD).';
+			if (current.widget === 'datetime') return 'Enter a valid date & time.';
+			if (current.widget === 'select' || current.widget === 'env_medium') return 'Pick a value from the list.';
+			return 'That value isn’t valid.';
+		}
+		return '';
+	});
 	const answeredCount = $derived(queue.filter((q) => isAnswered(q, valueFor(q))).length);
 
 	/** Second-pass skip → blank any partial value so review shows it empty. */
@@ -272,6 +307,7 @@
 
 		async function queueOffline(note: string) {
 			await enqueueSample({ clientId, body, photos: photoPayload, createdAt: new Date().toISOString() });
+			savedNames = new Set([...savedNames, `${answers.project_id}|${sampName.toLowerCase()}`]);
 			await refreshPending();
 			saving = false;
 			successMsg = `${note} “${sampName}” saved offline — will sync.`;
@@ -293,10 +329,18 @@
 			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
-				errorMsg = err.error ?? `HTTP ${res.status}`;
 				saving = false;
+				// 409 here is a UNIQUE(project_id, samp_name) clash (the id is a
+				// fresh client uuid) — route the operator back to the name field.
+				if (res.status === 409) {
+					errorMsg = `“${sampName}” already exists in this project — pick a different sample name.`;
+					m.jumpToIndex(queue.findIndex((q) => q.key === 'samp_name'));
+				} else {
+					errorMsg = err.error ?? `HTTP ${res.status}`;
+				}
 				return;
 			}
+			savedNames = new Set([...savedNames, `${answers.project_id}|${sampName.toLowerCase()}`]);
 			for (const p of photos) {
 				const fd = new FormData();
 				fd.append('file', p.file);
@@ -403,9 +447,12 @@
 					{saving ? 'Saving…' : 'Save'}
 				</button>
 			{:else}
+				<!-- Empty → Skip; valid → Next; present-but-invalid → Next disabled
+				     (the inline error below the field explains why). -->
 				<button type="button" onclick={() => m.advance(currentValid, clearAnswer)}
-					class="flex-1 px-4 py-3 rounded-lg font-medium {currentValid ? 'bg-ocean-600 text-white hover:bg-ocean-500' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}">
-					{currentValid ? 'Next' : 'Skip'}
+					disabled={currentAnswered && !currentValid}
+					class="flex-1 px-4 py-3 rounded-lg font-medium disabled:opacity-50 {currentValid ? 'bg-ocean-600 text-white hover:bg-ocean-500' : 'border border-slate-700 text-slate-300 hover:bg-slate-800'}">
+					{currentAnswered ? 'Next' : 'Skip'}
 				</button>
 				<button type="button" onclick={tryComplete}
 					class="px-4 py-3 border border-green-700 text-green-300 rounded-lg hover:bg-slate-800 font-medium">Complete</button>
@@ -606,6 +653,10 @@
 				{/if}
 			{:else}
 				<input type="text" bind:value={answers[current.key]} placeholder={current.placeholder} class={inputCls} />
+			{/if}
+
+			{#if currentError}
+				<p class="text-sm text-rose-400">{currentError}</p>
 			{/if}
 		</div>
 	{/if}
