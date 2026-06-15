@@ -6,7 +6,8 @@
 -->
 <script lang="ts">
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
-	import { availableSlots, defaultTemplateParams, questionForKey, SUGGESTED_EXTRA_KEYS, type TemplateParam } from '$lib/wizard/queue';
+	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
+	import { availableSlots, defaultTemplateParams, questionForKey, suggestedExtraKeys, type TemplateParam } from '$lib/wizard/queue';
 	import { sanitizeMiscParamName, MISC_PARAM_PREFIX, type Picklists } from '$lib/mixs/sample-form';
 	import { getSlot } from '$lib/mixs/schema-index';
 
@@ -42,12 +43,11 @@
 	let miscName = $state('');
 	let saving = $state(false);
 	let errorMsg = $state('');
+	let seedMsg = $state('');
 
 	const present = $derived(new Set(params.map((p) => p.key)));
 	const slotChoices = $derived(availableSlots(checklist, extension || null, present));
-	const suggestions = $derived(
-		SUGGESTED_EXTRA_KEYS.filter((k) => !present.has(k) && (k.startsWith(MISC_PARAM_PREFIX) || slotChoices.includes(k)))
-	);
+	const suggestions = $derived(suggestedExtraKeys(checklist, extension || null, present));
 
 	function labelFor(key: string): string {
 		if (key.startsWith(MISC_PARAM_PREFIX)) return key.slice(MISC_PARAM_PREFIX.length).replace(/_/g, ' ');
@@ -70,9 +70,15 @@
 	}
 	function seedRequired() {
 		const req = defaultTemplateParams(checklist, extension || null, picklists);
+		const before = params.length;
 		const merged = [...params];
 		for (const r of req) if (!merged.some((p) => p.key === r.key)) merged.push(r);
 		params = merged;
+		const added = params.length - before;
+		seedMsg =
+			added > 0
+				? `Added ${added} required parameter(s).`
+				: 'No sample-level required fields for this combination beyond the identity fields (project, site, name, date, medium) the wizard always asks.';
 	}
 
 	async function save() {
@@ -107,8 +113,9 @@
 	const inputCls = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-ocean-500';
 </script>
 
-<div class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur overflow-y-auto">
-	<div class="max-w-xl mx-auto p-4 space-y-4 pb-24">
+<div class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur flex flex-col">
+	<div class="flex-1 overflow-y-auto">
+		<div class="max-w-xl mx-auto p-4 space-y-4">
 		<div class="flex items-center justify-between">
 			<h1 class="text-lg font-bold text-white">{template ? 'Edit' : 'New'} template</h1>
 			<button type="button" onclick={oncancel} class="text-sm text-slate-400 hover:text-red-400">Cancel</button>
@@ -143,6 +150,7 @@
 				<h2 class="text-sm font-semibold text-slate-300">Parameters</h2>
 				<button type="button" onclick={seedRequired} class="text-xs text-ocean-400 hover:text-ocean-300">+ Seed required</button>
 			</div>
+			{#if seedMsg}<p class="text-xs text-ocean-300">{seedMsg}</p>{/if}
 			{#if params.length === 0}
 				<p class="text-xs text-slate-500">No parameters yet. Seed the required set or add your own below. (The wizard always asks project, site, name, date & medium regardless.)</p>
 			{/if}
@@ -152,6 +160,7 @@
 					<li class="rounded-lg border border-slate-800 p-2 space-y-1">
 						<div class="flex items-center gap-2">
 							<span class="text-sm text-slate-200 flex-1">{labelFor(p.key)}</span>
+							{#if !p.key.startsWith(MISC_PARAM_PREFIX) && getSlot(p.key)}<GlossaryDoc slot={p.key} iconOnly />{/if}
 							<button type="button" onclick={() => remove(p.key)} class="text-slate-600 hover:text-red-400 text-xs">✕</button>
 						</div>
 						{#if q.widget === 'select'}
@@ -190,8 +199,9 @@
 			</div>
 		</div>
 	</div>
+	</div>
 
-	<div class="fixed bottom-0 inset-x-0 border-t border-slate-800 bg-slate-950/95 backdrop-blur p-3">
+	<div class="shrink-0 border-t border-slate-800 bg-slate-950/95 backdrop-blur p-3">
 		<div class="max-w-xl mx-auto flex items-center gap-3">
 			<button type="button" onclick={oncancel} class="px-4 py-3 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800">Cancel</button>
 			<button type="button" onclick={save} disabled={saving || !name.trim()} class="flex-1 px-4 py-3 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 font-medium">

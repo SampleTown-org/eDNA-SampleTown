@@ -18,7 +18,7 @@
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
 	import { sanitizeMiscParamName, MISC_PARAM_PREFIX, type Picklists } from '$lib/mixs/sample-form';
 	import { getSlot } from '$lib/mixs/schema-index';
-	import { buildSampleQueue, isAnswered, isValid, availableSlots, questionForKey, SUGGESTED_EXTRA_KEYS, type WizardQuestion, type TemplateParam } from '$lib/wizard/queue';
+	import { buildSampleQueue, isAnswered, isValid, availableSlots, questionForKey, suggestedExtraKeys, type WizardQuestion, type TemplateParam } from '$lib/wizard/queue';
 	import { WizardMachine } from '$lib/wizard/machine.svelte';
 	import { enqueueSample, flush, genClientId, pendingCount } from '$lib/offline/outbox';
 	import { onMount } from 'svelte';
@@ -212,9 +212,7 @@
 		new Set<string>([...queue.map((q) => q.key), ...extraKeys, 'project_id', 'site_id', 'samp_name', 'collection_date', 'env_medium'])
 	);
 	const extraSlotChoices = $derived(availableSlots(checklist, extension || null, extraExclude));
-	const extraSuggestions = $derived(
-		SUGGESTED_EXTRA_KEYS.filter((k) => !extraExclude.has(k) && (k.startsWith(MISC_PARAM_PREFIX) || extraSlotChoices.includes(k)))
-	);
+	const extraSuggestions = $derived(suggestedExtraKeys(checklist, extension || null, extraExclude));
 	const extraQuestions = $derived(extraKeys.map((k) => questionForKey(k, picklists, { required: false, recommended: false })));
 
 	function addExtra(key: string) {

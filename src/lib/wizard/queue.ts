@@ -59,10 +59,10 @@ export const SYNTHETIC_KEYS = new Set([
 	'photos'
 ]);
 
-/** Quick-add suggestions for the "Add parameters" screen — common field context
- *  beyond the required-only default. Weather are real MIxS slots; secchi has no
- *  slot so it's a misc_param. */
-export const SUGGESTED_EXTRA_KEYS = [
+/** Aquatic field-context extras, suggested ONLY for the Water extension — they
+ *  make no sense for soil / host-associated / etc. Weather are real MIxS slots;
+ *  secchi has no slot so it's a misc_param. */
+const AQUATIC_EXTRAS = [
 	'air_temp',
 	'wind_speed',
 	'wind_direction',
@@ -84,6 +84,25 @@ export interface TemplateParam {
 /** Identity questions the wizard always asks first (also the keys never
  *  duplicated as template params). */
 const IDENTITY_KEYS = new Set(['project_id', 'site_id', 'samp_name', 'collection_date', 'env_medium']);
+
+/** Combo-appropriate quick-add suggestions for the "Add parameters" screen and
+ *  the template builder: the MIxS-recommended slots for this combination (always
+ *  apt), plus aquatic field-context extras only when the extension is Water.
+ *  Excludes identity keys and anything already present. */
+export function suggestedExtraKeys(checklist: string, extension: string | null, present: Set<string>): string[] {
+	const ext = extension ?? '';
+	const valid = new Set(allSlotsFor(checklist, ext));
+	const out: string[] = [];
+	for (const s of recommendedSlotsFor(checklist, ext)) {
+		if (valid.has(s) && slotTable(s) === 'samples' && !IDENTITY_KEYS.has(s)) out.push(s);
+	}
+	if (ext === 'Water') {
+		for (const k of AQUATIC_EXTRAS) {
+			if (k.startsWith(MISC_PARAM_PREFIX) || valid.has(k)) out.push(k);
+		}
+	}
+	return [...new Set(out)].filter((k) => !present.has(k));
+}
 
 function identityQuestions(picklists: Picklists): WizardQuestion[] {
 	return [
