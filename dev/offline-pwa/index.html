@@ -1319,7 +1319,7 @@ pending on-device verification + review. This document is the design of record
 for the offline, mobile-first sample-submission wizard. The schema has reserved
 sync columns since the multi-lab work (<code>client_id</code>, <code>local_created_at</code>,
 <code>sync_version</code>, <code>sync_log</code>); this is the plan that finally uses them.</p>
-<p>Implemented: the wizard route <code>/samples/wizard</code> (#4), the inline site
+<p>Implemented: the wizard route <code>/samples/quick</code> (#4), the inline site
 sub-wizard with GPS (#5), date+time / weather-conditions / photo-caption field
 additions (#6/#7/#8), the <code>src/service-worker.ts</code> app-shell cache (#2), and the
 <code>src/lib/offline/outbox.ts</code> IndexedDB queue + on-reconnect flush (#3). The
