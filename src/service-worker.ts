@@ -19,7 +19,7 @@ const ASSETS = [...build, ...files];
 const ASSET_SET = new Set(ASSETS);
 
 /** SSR routes worth caching for offline render (they embed their own data). */
-const CACHEABLE_ROUTES = new Set(['/samples/wizard']);
+const CACHEABLE_ROUTES = new Set(['/samples/quick']);
 
 sw.addEventListener('install', (event) => {
 	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => sw.skipWaiting()));

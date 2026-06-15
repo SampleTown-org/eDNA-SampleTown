@@ -146,7 +146,7 @@
 					     reachable on mobile where +New page buttons are hidden. -->
 					{#if user.role !== 'viewer'}
 						<a
-							href="/samples/wizard"
+							href="/samples/quick"
 							class="text-ocean-400 hover:text-ocean-300"
 							title="New sample"
 							aria-label="New sample"
@@ -235,7 +235,7 @@
 			<div class="md:hidden pb-3 border-t border-slate-800 mt-1 pt-2">
 				{#if user.role !== 'viewer'}
 					<a
-						href="/samples/wizard"
+						href="/samples/quick"
 						class="block px-3 py-2 text-sm text-ocean-400 hover:text-ocean-300 hover:bg-slate-800 rounded font-medium"
 						onclick={() => (mobileOpen = false)}
 					>

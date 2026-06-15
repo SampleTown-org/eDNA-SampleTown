@@ -6,7 +6,7 @@ for the offline, mobile-first sample-submission wizard. The schema has reserved
 sync columns since the multi-lab work (`client_id`, `local_created_at`,
 `sync_version`, `sync_log`); this is the plan that finally uses them.
 
-Implemented: the wizard route `/samples/wizard` (#4), the inline site
+Implemented: the wizard route `/samples/quick` (#4), the inline site
 sub-wizard with GPS (#5), date+time / weather-conditions / photo-caption field
 additions (#6/#7/#8), the `src/service-worker.ts` app-shell cache (#2), and the
 `src/lib/offline/outbox.ts` IndexedDB queue + on-reconnect flush (#3). The
