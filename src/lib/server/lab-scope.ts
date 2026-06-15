@@ -41,6 +41,7 @@ export const LAB_SCOPED_TABLES = new Set<string>([
 	'constrained_values',
 	'primer_sets',
 	'pcr_protocols',
+	'sample_templates',
 	'saved_carts',
 	'feedback',
 	'db_snapshots',

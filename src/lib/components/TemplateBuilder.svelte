@@ -68,6 +68,22 @@
 	function remove(key: string) {
 		params = params.filter((p) => p.key !== key);
 	}
+
+	// Reorder parameters — the stored order is what the wizard runs, so dragging
+	// overrides the default required→suggested→optional ordering. Drag handle for
+	// desktop; ↑/↓ buttons for touch/precision.
+	let dragIndex = $state<number | null>(null);
+	function moveParam(from: number, to: number) {
+		if (to < 0 || to >= params.length || from === to) return;
+		const next = [...params];
+		const [moved] = next.splice(from, 1);
+		next.splice(to, 0, moved);
+		params = next;
+	}
+	function onDrop(target: number) {
+		if (dragIndex !== null) moveParam(dragIndex, target);
+		dragIndex = null;
+	}
 	function seedRequired() {
 		const req = defaultTemplateParams(checklist, extension || null, picklists);
 		const before = params.length;
@@ -155,13 +171,23 @@
 				<p class="text-xs text-slate-500">No parameters yet. Seed the required set or add your own below. (The wizard always asks project, site, name, date & medium regardless.)</p>
 			{/if}
 			<ul class="space-y-2">
-				{#each params as p (p.key)}
+				{#each params as p, i (p.key)}
 					{@const q = questionForKey(p.key, picklists, { required: false, recommended: false })}
-					<li class="rounded-lg border border-slate-800 p-2 space-y-1">
+					<li
+						class="rounded-lg border border-slate-800 p-2 space-y-1 {dragIndex === i ? 'opacity-50' : ''}"
+						draggable="true"
+						ondragstart={() => (dragIndex = i)}
+						ondragover={(e) => e.preventDefault()}
+						ondrop={(e) => { e.preventDefault(); onDrop(i); }}
+						ondragend={() => (dragIndex = null)}
+					>
 						<div class="flex items-center gap-2">
+							<span class="cursor-grab text-slate-600 select-none" title="Drag to reorder" aria-hidden="true">⠿</span>
 							<span class="text-sm text-slate-200 flex-1">{labelFor(p.key)}</span>
 							{#if !p.key.startsWith(MISC_PARAM_PREFIX) && getSlot(p.key)}<GlossaryDoc slot={p.key} iconOnly />{/if}
-							<button type="button" onclick={() => remove(p.key)} class="text-slate-600 hover:text-red-400 text-xs">✕</button>
+							<button type="button" onclick={() => moveParam(i, i - 1)} disabled={i === 0} class="text-slate-500 hover:text-white disabled:opacity-30 text-xs" title="Move up" aria-label="Move up">↑</button>
+							<button type="button" onclick={() => moveParam(i, i + 1)} disabled={i === params.length - 1} class="text-slate-500 hover:text-white disabled:opacity-30 text-xs" title="Move down" aria-label="Move down">↓</button>
+							<button type="button" onclick={() => remove(p.key)} class="text-slate-600 hover:text-red-400 text-xs" title="Remove" aria-label="Remove">✕</button>
 						</div>
 						{#if q.widget === 'select'}
 							<select bind:value={p.value} class="{inputCls} text-sm">
