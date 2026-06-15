@@ -716,6 +716,31 @@ CREATE TABLE IF NOT EXISTS primer_sets (
 
 CREATE INDEX IF NOT EXISTS idx_primer_sets_lab ON primer_sets(lab_id);
 
+-- Sample-capture templates (lab-scoped). A template is a named, ordered list
+-- of sample parameters for the field-capture wizard, each optionally pre-filled
+-- with a default value. The built-in "default" template per MIxS combination
+-- (required slots only) is computed in code, NOT stored here — only custom
+-- templates live in this table. `params` is a JSON array of {key, value?}:
+-- key is a MIxS slot name or `misc_param:<tag>`; value is an optional pre-fill
+-- the wizard seeds (still editable). New table → self-creates on startup, no
+-- migration needed.
+CREATE TABLE IF NOT EXISTS sample_templates (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    lab_id TEXT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    mixs_checklist TEXT NOT NULL DEFAULT 'MimarksS',
+    extension TEXT,
+    params TEXT NOT NULL DEFAULT '[]',
+    sync_version INTEGER NOT NULL DEFAULT 1,
+    is_deleted INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_sample_templates_lab ON sample_templates(lab_id);
+
 -- PCR protocols (named cycling-conditions presets)
 CREATE TABLE IF NOT EXISTS pcr_protocols (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
