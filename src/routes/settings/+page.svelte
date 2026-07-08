@@ -1077,11 +1077,11 @@
 	<!-- Sample-capture templates -->
 	<div class="space-y-3">
 		<div class="flex items-center justify-between">
-			<p class="text-sm text-slate-400">Named parameter sets for the field-capture wizard. Each can pre-fill values. The wizard always asks project, site, name, date & medium plus its required fields.</p>
+			<p class="text-sm text-slate-400">Named parameter sets for Quick Capture. Each can pre-fill values. Quick Capture always asks project, site, name, date & medium plus its required fields.</p>
 			<button onclick={() => { editingTemplate = null; showTemplateBuilder = true; }} class="shrink-0 px-3 py-1.5 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 text-sm font-medium">+ New</button>
 		</div>
 		{#if templates.length === 0}
-			<p class="text-sm text-slate-500 italic">No custom templates yet. The built-in “Default — required only” is always available in the wizard.</p>
+			<p class="text-sm text-slate-500 italic">No custom templates yet. The built-in “Default — required only” is always available in Quick Capture.</p>
 		{:else}
 			<ul class="divide-y divide-slate-800 rounded-lg border border-slate-800">
 				{#each templates as t (t.id)}
