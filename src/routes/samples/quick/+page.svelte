@@ -1,8 +1,8 @@
 <!--
-  Offline field-capture wizard — one question per page (docs/dev/offline-pwa.md).
+  Offline field-capture quick — one question per page (docs/dev/offline-pwa.md).
 
   Traversal (Skip↔Next, skip-loop second pass, review) lives in the shared
-  WizardMachine (src/lib/wizard/machine.svelte.ts); this page owns answer state
+  QuickMachine (src/lib/quick/machine.svelte.ts); this page owns answer state
   and rendering. The action button reads "Skip" while the current answer is
   empty/invalid and flips to "Next" once it's valid; "Complete" is always
   present and enforces MIxS-required fields before finalizing.
@@ -13,13 +13,13 @@
 <script lang="ts">
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
-	import SiteWizard from '$lib/components/SiteWizard.svelte';
+	import SiteQuick from '$lib/components/SiteQuick.svelte';
 	import TemplateBuilder from '$lib/components/TemplateBuilder.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
 	import { sanitizeMiscParamName, MISC_PARAM_PREFIX, type Picklists } from '$lib/mixs/sample-form';
 	import { getSlot } from '$lib/mixs/schema-index';
-	import { buildSampleQueue, isAnswered, isValid, availableSlots, questionForKey, suggestedExtraKeys, type WizardQuestion, type TemplateParam } from '$lib/wizard/queue';
-	import { WizardMachine } from '$lib/wizard/machine.svelte';
+	import { buildSampleQueue, isAnswered, isValid, availableSlots, questionForKey, suggestedExtraKeys, type QuickQuestion, type TemplateParam } from '$lib/quick/queue';
+	import { QuickMachine } from '$lib/quick/machine.svelte';
 	import { enqueueSample, flush, genClientId, pendingCount } from '$lib/offline/outbox';
 	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
@@ -54,7 +54,7 @@
 	let people = $state<{ personnel_id: string; role?: string | null }[]>([]);
 	let photos = $state<{ file: File; caption: string }[]>([]);
 
-	const m = new WizardMachine(() => queue);
+	const m = new QuickMachine(() => queue);
 	let current = $derived(m.current);
 	let phase = $derived(m.phase);
 
@@ -67,8 +67,8 @@
 	let saving = $state(false);
 	let errorMsg = $state('');
 	let successMsg = $state('');
-	let missingRequired = $state<WizardQuestion[]>([]);
-	let showSiteWizard = $state(false);
+	let missingRequired = $state<QuickQuestion[]>([]);
+	let showSiteQuick = $state(false);
 	let pending = $state({ sites: 0, samples: 0 });
 	let syncing = $state(false);
 
@@ -104,7 +104,7 @@
 		return () => window.removeEventListener('online', onOnline);
 	});
 
-	function valueFor(q: WizardQuestion): unknown {
+	function valueFor(q: QuickQuestion): unknown {
 		if (q.widget === 'people') return people;
 		if (q.widget === 'photos') return photos;
 		return answers[q.key] ?? '';
@@ -190,7 +190,7 @@
 	const answeredCount = $derived(queue.filter((q) => isAnswered(q, valueFor(q))).length);
 
 	/** Second-pass skip → blank any partial value so review shows it empty. */
-	function clearAnswer(q: WizardQuestion) {
+	function clearAnswer(q: QuickQuestion) {
 		if (q.widget === 'people' || q.widget === 'photos') return;
 		const next = { ...answers };
 		delete next[q.key];
@@ -217,7 +217,7 @@
 		m.toReview();
 	}
 
-	function jumpTo(q: WizardQuestion) {
+	function jumpTo(q: QuickQuestion) {
 		m.jumpToIndex(queue.indexOf(q));
 	}
 
@@ -250,7 +250,7 @@
 		allSites = [...allSites, { ...site, latitude: site.latitude ?? null, longitude: site.longitude ?? null }];
 		answers.site_id = site.id;
 		if (pending) offlineSiteIds = new Set([...offlineSiteIds, site.id]);
-		showSiteWizard = false;
+		showSiteQuick = false;
 	}
 
 	// --- Template selection (Step 0) ---
@@ -493,15 +493,15 @@
 		'w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-lg focus:outline-none focus:border-ocean-500';
 </script>
 
-{#if showSiteWizard}
-	<SiteWizard
+{#if showSiteQuick}
+	<SiteQuick
 		projectId={answers.project_id}
 		projectName={projects.find((p) => p.id === answers.project_id)?.project_name ?? ''}
 		picklists={data.picklists as Picklists}
 		initialLat={userLat}
 		initialLon={userLon}
 		oncreated={onSiteCreated}
-		oncancel={() => (showSiteWizard = false)}
+		oncancel={() => (showSiteQuick = false)}
 	/>
 {/if}
 
@@ -709,7 +709,7 @@
 						<p class="text-sm text-slate-500">{siteFilter ? 'No sites match.' : 'No sites in this project yet.'}</p>
 					{/if}
 
-					<button type="button" onclick={() => (showSiteWizard = true)}
+					<button type="button" onclick={() => (showSiteQuick = true)}
 						class="mt-1 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-ocean-700 text-ocean-300 hover:bg-slate-800 text-sm">
 						+ New site here (capture GPS)
 					</button>

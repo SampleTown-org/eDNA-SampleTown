@@ -1,13 +1,13 @@
 <!--
   Template builder — create/edit a sample-capture template (docs/dev/offline-pwa.md).
   A template = name + MIxS combo + an ordered list of parameters, each with an
-  optional pre-fill value. Reused by the wizard's "+ New template" quick-add and
+  optional pre-fill value. Reused by the quick's "+ New template" quick-add and
   the Settings management tab. Saves via /api/settings/templates.
 -->
 <script lang="ts">
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
-	import { availableSlots, defaultTemplateParams, questionForKey, suggestedExtraKeys, type TemplateParam } from '$lib/wizard/queue';
+	import { availableSlots, defaultTemplateParams, questionForKey, suggestedExtraKeys, type TemplateParam } from '$lib/quick/queue';
 	import { sanitizeMiscParamName, MISC_PARAM_PREFIX, type Picklists } from '$lib/mixs/sample-form';
 	import { getSlot } from '$lib/mixs/schema-index';
 
@@ -69,7 +69,7 @@
 		params = params.filter((p) => p.key !== key);
 	}
 
-	// Reorder parameters — the stored order is what the wizard runs, so dragging
+	// Reorder parameters — the stored order is what the quick runs, so dragging
 	// overrides the default required→suggested→optional ordering. Drag handle for
 	// desktop; ↑/↓ buttons for touch/precision.
 	let dragIndex = $state<number | null>(null);
@@ -94,7 +94,7 @@
 		seedMsg =
 			added > 0
 				? `Added ${added} required parameter(s).`
-				: 'No sample-level required fields for this combination beyond the identity fields (project, site, name, date, medium) the wizard always asks.';
+				: 'No sample-level required fields for this combination beyond the identity fields (project, site, name, date, medium) the quick always asks.';
 	}
 
 	async function save() {
@@ -168,7 +168,7 @@
 			</div>
 			{#if seedMsg}<p class="text-xs text-ocean-300">{seedMsg}</p>{/if}
 			{#if params.length === 0}
-				<p class="text-xs text-slate-500">No parameters yet. Seed the required set or add your own below. (The wizard always asks project, site, name, date & medium regardless.)</p>
+				<p class="text-xs text-slate-500">No parameters yet. Seed the required set or add your own below. (The quick always asks project, site, name, date & medium regardless.)</p>
 			{/if}
 			<ul class="space-y-2">
 				{#each params as p, i (p.key)}

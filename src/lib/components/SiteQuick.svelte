@@ -1,7 +1,7 @@
 <!--
-  Inline site-creation sub-wizard (docs/dev/offline-pwa.md, #5).
+  Inline site-creation sub-quick (docs/dev/offline-pwa.md, #5).
 
-  Same one-question-per-page engine as the sample wizard (shared WizardMachine),
+  Same one-question-per-page engine as the sample quick (shared QuickMachine),
   shown as a full-screen overlay. Captures site identity + GPS (device
   geolocation with a map-pin confirm / manual fallback) and POSTs /api/sites,
   then hands the created row back to the parent so the sample flow can select
@@ -12,8 +12,8 @@
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import { formatLatLon } from '$lib/mixs/validators';
 	import type { Picklists } from '$lib/mixs/sample-form';
-	import { buildSiteQueue, isAnswered, isValid, type WizardQuestion } from '$lib/wizard/queue';
-	import { WizardMachine } from '$lib/wizard/machine.svelte';
+	import { buildSiteQueue, isAnswered, isValid, type QuickQuestion } from '$lib/quick/queue';
+	import { QuickMachine } from '$lib/quick/machine.svelte';
 	import { enqueueSite, genClientId } from '$lib/offline/outbox';
 
 	interface Props {
@@ -25,7 +25,7 @@
 		 *  flushes first) instead of POSTing the sample directly. */
 		oncreated: (site: { id: string; site_name: string; project_id: string; latitude?: number | null; longitude?: number | null }, pending: boolean) => void;
 		oncancel: () => void;
-		/** Pre-fill GPS from a location the parent already obtained (the wizard's
+		/** Pre-fill GPS from a location the parent already obtained (the quick's
 		 *  nearby-sites lookup), so creating a site here doesn't re-prompt. */
 		initialLat?: number | null;
 		initialLon?: number | null;
@@ -41,21 +41,21 @@
 	let geoErr = $state('');
 	let locating = $state(false);
 
-	const m = new WizardMachine(() => queue);
+	const m = new QuickMachine(() => queue);
 	let current = $derived(m.current);
 	let phase = $derived(m.phase);
 
 	let saving = $state(false);
 	let errorMsg = $state('');
 
-	function valueFor(q: WizardQuestion): unknown {
+	function valueFor(q: QuickQuestion): unknown {
 		if (q.widget === 'gps') return lat != null && lon != null ? 'set' : '';
 		return answers[q.key] ?? '';
 	}
 	let currentValid = $derived(current ? isValid(current, valueFor(current)) : false);
 	const answeredCount = $derived(queue.filter((q) => isAnswered(q, valueFor(q))).length);
 
-	function clearAnswer(q: WizardQuestion) {
+	function clearAnswer(q: QuickQuestion) {
 		if (q.widget === 'gps') {
 			lat = lon = accuracy = altitude = null;
 			return;

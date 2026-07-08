@@ -1,27 +1,27 @@
 /**
- * Shared wizard traversal engine (docs/dev/offline-pwa.md, #4/#5).
+ * Shared quick traversal engine (docs/dev/offline-pwa.md, #4/#5).
  *
  * Holds ONLY the navigation state machine — phase, cursor, the skipped FIFO,
  * and the back-history. Answer storage stays in each page/component because the
- * sample flow and the site sub-wizard keep different answer shapes. Both drive
+ * sample flow and the site sub-quick keep different answer shapes. Both drive
  * their UI through this one class so the Skip↔Next, skip-loop, and review
  * behaviour can never drift between them.
  *
  * Runes work in `.svelte.ts` modules, so the class fields are reactive when a
  * component reads `machine.current` / `machine.phase` in its template.
  */
-import type { WizardQuestion } from './queue';
+import type { QuickQuestion } from './queue';
 
-export type WizardPhase = 'main' | 'skips' | 'review';
+export type QuickPhase = 'main' | 'skips' | 'review';
 
 interface Snapshot {
-	phase: WizardPhase;
+	phase: QuickPhase;
 	mainIdx: number;
 	skipIdx: number;
 }
 
-export class WizardMachine {
-	phase = $state<WizardPhase>('main');
+export class QuickMachine {
+	phase = $state<QuickPhase>('main');
 	mainIdx = $state(0);
 	skipped = $state<string[]>([]);
 	skipList = $state<string[]>([]);
@@ -30,17 +30,17 @@ export class WizardMachine {
 
 	/** Queue is owned by the component (it's a `$derived` of checklist/picklists);
 	 *  the machine reads it through this thunk so it always sees the latest. */
-	#getQueue: () => WizardQuestion[];
+	#getQueue: () => QuickQuestion[];
 
-	constructor(getQueue: () => WizardQuestion[]) {
+	constructor(getQueue: () => QuickQuestion[]) {
 		this.#getQueue = getQueue;
 	}
 
-	get queue(): WizardQuestion[] {
+	get queue(): QuickQuestion[] {
 		return this.#getQueue();
 	}
 
-	get current(): WizardQuestion | null {
+	get current(): QuickQuestion | null {
 		if (this.phase === 'main') return this.queue[this.mainIdx] ?? null;
 		if (this.phase === 'skips') {
 			const key = this.skipList[this.skipIdx];
@@ -70,7 +70,7 @@ export class WizardMachine {
 	 * pass, so the component can blank any partial value (loop terminator —
 	 * second-pass skips are NOT requeued).
 	 */
-	advance(commit: boolean, onSecondPassSkip?: (q: WizardQuestion) => void) {
+	advance(commit: boolean, onSecondPassSkip?: (q: QuickQuestion) => void) {
 		const cur = this.current;
 		if (!cur) return;
 		this.history = [...this.history, this.#snapshot()];

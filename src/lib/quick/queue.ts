@@ -1,9 +1,9 @@
 /**
- * Wizard question queue — the data model behind the one-question-per-page
+ * Quick question queue — the data model behind the one-question-per-page
  * field-capture flow (docs/dev/offline-pwa.md, issue #4).
  *
  * Questions are derived from the active MIxS combination class via the same
- * `organizeForm()` the desktop batch grid uses, so the wizard inherits every
+ * `organizeForm()` the desktop batch grid uses, so the quick inherits every
  * slot, widget type, picklist binding, and required/recommended marker for
  * free. Synthetic questions (project / site / samp_name / collection_date /
  * env_medium / people / photos) bracket the MIxS-derived ones because they map
@@ -15,7 +15,7 @@ import { slotTable } from '$lib/mixs/slot-ownership';
 
 /** Widget kinds. The MIxS-derived ones mirror SlotConfig['type']; the rest are
  *  SampleTown-local widgets the route special-cases. */
-export type WizardWidget =
+export type QuickWidget =
 	| 'text'
 	| 'number'
 	| 'date'
@@ -30,7 +30,7 @@ export type WizardWidget =
 	| 'gps'
 	| 'add_params';
 
-export interface WizardQuestion {
+export interface QuickQuestion {
 	/** Field key — a MIxS slot name, a samples column, or a synthetic key
 	 *  ('project_id', 'site_id', 'people', 'photos'). */
 	key: string;
@@ -38,13 +38,13 @@ export interface WizardQuestion {
 	section: string;
 	required: boolean;
 	recommended: boolean;
-	widget: WizardWidget;
+	widget: QuickWidget;
 	options?: { value: string; label: string }[];
 	placeholder?: string;
 	/** MIxS slot name for the glossary doc icon, when one applies. */
 	slot?: string;
 	/** Carried across consecutive samples in a burst (site, date, people, …)
-	 *  so the wizard only re-asks per-sample deltas. */
+	 *  so the quick only re-asks per-sample deltas. */
 	carryForward: boolean;
 }
 
@@ -74,14 +74,14 @@ const AQUATIC_EXTRAS = [
 ];
 
 /** One template parameter: a MIxS slot or `misc_param:<tag>`, optionally
- *  pre-filled with a default the wizard seeds (still editable). Mirrors the
+ *  pre-filled with a default the quick seeds (still editable). Mirrors the
  *  server-side TemplateParam. */
 export interface TemplateParam {
 	key: string;
 	value?: string;
 }
 
-/** Identity questions the wizard always asks first (also the keys never
+/** Identity questions the quick always asks first (also the keys never
  *  duplicated as template params). */
 const IDENTITY_KEYS = new Set(['project_id', 'site_id', 'samp_name', 'collection_date', 'env_medium']);
 
@@ -104,7 +104,7 @@ export function suggestedExtraKeys(checklist: string, extension: string | null, 
 	return [...new Set(out)].filter((k) => !present.has(k));
 }
 
-function identityQuestions(picklists: Picklists): WizardQuestion[] {
+function identityQuestions(picklists: Picklists): QuickQuestion[] {
 	return [
 		{ key: 'project_id', label: 'Project', section: 'Identity', required: true, recommended: false, widget: 'project', carryForward: true },
 		{ key: 'site_id', label: 'Site', section: 'Identity', required: true, recommended: false, widget: 'site', carryForward: true },
@@ -114,13 +114,13 @@ function identityQuestions(picklists: Picklists): WizardQuestion[] {
 	];
 }
 
-/** Build a WizardQuestion for an arbitrary parameter key (MIxS slot or
+/** Build a QuickQuestion for an arbitrary parameter key (MIxS slot or
  *  misc_param tag), resolving the widget exactly as the sample form does. */
 export function questionForKey(
 	key: string,
 	picklists: Picklists,
 	tier: { required: boolean; recommended: boolean }
-): WizardQuestion {
+): QuickQuestion {
 	if (key.startsWith(MISC_PARAM_PREFIX)) {
 		return {
 			key,
@@ -167,7 +167,7 @@ export function availableSlots(checklist: string, extension: string | null, excl
 }
 
 /**
- * Build the wizard queue for one sample from a template (or the built-in
+ * Build the quick queue for one sample from a template (or the built-in
  * required-only default when `templateParams` is omitted). Order: identity →
  * the template's parameters → "Add parameters" → photos. Required/recommended
  * tiers come from the MIxS combination, so the chips stay accurate regardless
@@ -178,12 +178,12 @@ export function buildSampleQueue(
 	extension: string | null,
 	picklists: Picklists = {},
 	templateParams?: TemplateParam[]
-): WizardQuestion[] {
+): QuickQuestion[] {
 	const requiredSet = new Set(requiredSlotsFor(checklist, extension ?? ''));
 	const recommendedSet = recommendedSlotsFor(checklist, extension ?? '');
 	const params = templateParams ?? defaultTemplateParams(checklist, extension, picklists);
 
-	const q: WizardQuestion[] = identityQuestions(picklists);
+	const q: QuickQuestion[] = identityQuestions(picklists);
 	const seen = new Set(q.map((x) => x.key));
 	for (const p of params) {
 		if (IDENTITY_KEYS.has(p.key) || seen.has(p.key)) continue;
@@ -197,13 +197,13 @@ export function buildSampleQueue(
 }
 
 /**
- * Build the question queue for the inline site sub-wizard (#5). GPS is a
+ * Build the question queue for the inline site sub-quick (#5). GPS is a
  * dedicated widget (device geolocation + map pin); the rest map straight onto
  * `sites` columns. `site_name` is the only required field (matches the table's
  * sole NOT NULL beyond the lab/project keys).
  */
-export function buildSiteQueue(picklists: Picklists = {}): WizardQuestion[] {
-	const sel = (key: string): WizardWidget => (picklists[key]?.length ? 'select' : 'text');
+export function buildSiteQueue(picklists: Picklists = {}): QuickQuestion[] {
+	const sel = (key: string): QuickWidget => (picklists[key]?.length ? 'select' : 'text');
 	return [
 		{ key: 'site_name', label: 'Site name', section: 'Site', required: true, recommended: false, widget: 'text', placeholder: 'e.g. Chukchi Drift Station', carryForward: false },
 		{ key: 'gps', label: 'Location (GPS)', section: 'Site', required: false, recommended: true, widget: 'gps', carryForward: false },
@@ -217,7 +217,7 @@ export function buildSiteQueue(picklists: Picklists = {}): WizardQuestion[] {
 
 /** A value counts as "answered" when it's a non-empty trimmed string. People /
  *  photos arrays count when non-empty. */
-export function isAnswered(q: WizardQuestion, value: unknown): boolean {
+export function isAnswered(q: QuickQuestion, value: unknown): boolean {
 	if (q.widget === 'people' || q.widget === 'photos') {
 		return Array.isArray(value) && value.length > 0;
 	}
@@ -229,7 +229,7 @@ export function isAnswered(q: WizardQuestion, value: unknown): boolean {
  * stays on Skip). Non-empty must pass the widget's type check. Required-ness is
  * enforced separately at Complete time, not here.
  */
-export function isValid(q: WizardQuestion, value: unknown): boolean {
+export function isValid(q: QuickQuestion, value: unknown): boolean {
 	// The "Add parameters" step has nothing to answer — always proceedable.
 	if (q.widget === 'add_params') return true;
 	if (!isAnswered(q, value)) return false;
