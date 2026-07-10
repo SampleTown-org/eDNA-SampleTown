@@ -76,6 +76,10 @@
 		</div>
 	</div>
 
+	<p class="text-xs text-slate-500 text-center">
+		New to SampleTown? <a href="/tour" class="text-ocean-400 hover:text-ocean-300">Take the tour</a> to see how it works.
+	</p>
+
 	<p class="text-xs text-slate-500 text-center pt-4 border-t border-slate-800">
 		Free for academic and nonprofit use. <a href="mailto:hello@sampletown.org" class="text-ocean-400 hover:text-ocean-300">Contact us</a> for enterprise.
 	</p>

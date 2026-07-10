@@ -52,6 +52,7 @@
 	<FeedbackForm />
 	<footer class="py-4 text-center text-xs text-slate-600 flex items-center justify-center gap-3">
 		<span>SampleTown &middot; MIxS-compliant eDNA sample tracking</span>
+		<a href="/tour" class="hover:text-ocean-400 transition-colors">Tour</a>
 		<a href="/privacy" class="hover:text-ocean-400 transition-colors">Privacy</a>
 		<a
 			href="https://github.com/sampletown-org/edna-sampletown"

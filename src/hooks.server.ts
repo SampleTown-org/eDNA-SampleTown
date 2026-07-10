@@ -185,6 +185,7 @@ function isPublicPage(pathname: string): boolean {
 	if (pathname === '/favicon.ico' || pathname === '/favicon.png') return true;
 	if (pathname === '/privacy') return true;
 	if (pathname === '/principles') return true;
+	if (pathname === '/tour') return true;
 	return PUBLIC_PAGE_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
