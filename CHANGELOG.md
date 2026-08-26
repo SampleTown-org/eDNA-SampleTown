@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased
+
+### Import from SRA / ENA / GenBank
+- New `/api/import/insdc`: fetch sample metadata by accession (BioProject,
+  study, BioSample, experiment, run, or GenBank/EMBL sequence) and get back a
+  TSV in SampleTown's import columns. Nothing is inserted there — the TSV goes
+  to `/api/import/mixs`, so archive imports share the existing dry-run preview,
+  column mapper, MIxS validation, site clustering, and insert path.
+- `/export` → Import gains a **From accession** source alongside file upload.
+- Retrieval is the ENA Portal API (which mirrors all three archives) with NCBI
+  eutils as a BioSample fallback for records not yet mirrored. New dependency:
+  `fast-xml-parser`, for the NCBI BioSample XML.
+- INSDC maps onto the entity chain: BioProject → project, BioSample → sample
+  (+ site), Experiment → extract / PCR / library, Run → sequencing run.
+- The submitter's declared checklist is honoured, so MIMARKS records validate
+  as MIMARKS: NCBI `ncbi_reporting_standard` supplies checklist + extension,
+  ENA's GSC `ERC…` checklists supply the environmental package. Ambiguous ones
+  (`ERC000056`, `ERC000058`) are left to the form default rather than guessed.
+- Archive columns with no explicit mapping are matched against the importer's
+  full MIxS vocabulary; whatever it doesn't recognize is kept as a
+  `misc_param:` tag, so source accessions stay queryable on the sample.
+
+### Import pipeline
+- PCR reactions are now created on import. New `pcr_*` columns
+  (`pcr_name`, `pcr_date`, `pcr_cond`, `nucl_acid_amp`, `target_gene`,
+  `target_subfragment`, primer names/sequences, `annealing_temp_c`,
+  `num_cycles`, `pcr_notes`) create a `pcr_amplifications` row off the sample's
+  extract, and the row's library links to it as its source. A sheet with PCR
+  columns but no extract columns gets the extract that implies, since
+  `pcr_amplifications.extract_id` is NOT NULL.
+- Extracts accept `nucl_acid_ext`; libraries accept `library_source`,
+  `library_selection`, `library_type`, and `library_fragment_size_bp` — all
+  real columns that previously spilled into `sample_values` or were dropped.
+- Fixed: repeated imports duplicated library rows. Libraries now dedupe by
+  (extract, name) like samples, extracts, PCRs, and runs already did, and
+  `run_libraries` links refresh instead of colliding on their primary key.
+- Fixed: `mixs_checklist`, `extension`, and `collector_name` were offered as
+  column-mapper targets but could not resolve as headers, so a sheet declaring
+  its own checklist — or a SampleTown export round-tripped back in — silently
+  dropped them.
+- Fixed: dry-run MIxS validation stripped every slot without a SampleTown
+  column before validating, reporting supplied values as missing. Spilled slots
+  are now validated; SampleTown-local columns no longer trip
+  `additionalProperties`.
+
 ## v2.0.0 — 2026-04-15
 
 Multi-tenant rewrite + self-serve onboarding + per-lab GitHub backup &

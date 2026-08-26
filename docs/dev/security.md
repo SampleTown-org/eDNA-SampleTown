@@ -88,6 +88,7 @@ counter.
 | `POST /auth/login/local` | 5 attempts / minute / IP |
 | `POST /api/feedback` | 5 / minute / IP (anonymous) |
 | `POST /api/import/mixs` | 1 / second / IP (auth required) |
+| `POST /api/import/insdc` | 1 / 3 seconds / IP (auth required; fans out to EBI + NCBI) |
 | `POST /api/account/password` | 5 / minute / user |
 | `POST /api/auth/setup-lab` | 3 / day / IP |
 | `POST /api/auth/join` | 10 / hour / IP |

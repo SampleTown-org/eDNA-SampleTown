@@ -51,9 +51,20 @@
 	);
 
 	// --- Import ---
+	/** Where the rows come from: an uploaded sheet, or a fetch from the sequence
+	 *  archives. Both produce a TSV that goes through /api/import/mixs, so
+	 *  everything below this point — preview, mapper, validation — is shared. */
+	let importSource = $state<'file' | 'accession'>('file');
 	let importProject = $state('');
 	let importTsv = $state('');
 	let importFileName = $state('');
+
+	// --- Archive fetch (SRA / ENA / GenBank) ---
+	let accessions = $state('');
+	let fetching = $state(false);
+	type Resolved = { accession: string; kind: string; source: string; rows: number };
+	let fetchResult = $state<{ count: number; warnings: string[]; resolved: Resolved[] } | null>(null);
+	let fetchError = $state('');
 	let siteMatchKm = $state(1);
 	/** Default MIxS checklist + extension applied to rows whose TSV doesn't
 	 *  carry mixs_checklist / extension columns. Drives import-side validation
@@ -63,6 +74,15 @@
 	type SiteMatch = { samp_name: string; new_site: boolean; site: { id: string; site_name: string; distance_km: number } | null };
 	type NewSite = { id: string; site_name: string; lat_lon: string; geo_loc_name: string | null };
 	type NewProject = { id: string; project_name: string };
+	type PcrPreview = {
+		samp_name: string;
+		pcr_name: string;
+		pcr_date: string | null;
+		target_gene: string | null;
+		target_subfragment: string | null;
+		forward_primer_name: string | null;
+		reverse_primer_name: string | null;
+	};
 	type ExtractPreview = {
 		samp_name: string;
 		extract_name: string;
@@ -101,6 +121,7 @@
 		new_sites?: NewSite[];
 		new_projects?: NewProject[];
 		extracts?: ExtractPreview[];
+		pcrs?: PcrPreview[];
 		libraries?: LibraryPreview[];
 		new_runs?: NewRun[];
 		column_map?: Record<string, string>;
@@ -124,7 +145,7 @@
 		return targetTable.get(target) ?? 'sample (unknown — will spill)';
 	}
 	let importing = $state(false);
-	let importResult: { imported: number; errors: string[]; site_matches?: number; new_sites?: number; new_projects?: number; extracts_created?: number; libraries_created?: number; runs_created?: number; run_libraries_created?: number } | null = $state(null);
+	let importResult: { imported: number; errors: string[]; site_matches?: number; new_sites?: number; new_projects?: number; extracts_created?: number; pcrs_created?: number; libraries_created?: number; runs_created?: number; run_libraries_created?: number } | null = $state(null);
 
 	// Column mapper state — populated from the dry-run response and editable by the user.
 	let columnMap = $state<Record<string, string>>({});
@@ -175,17 +196,53 @@
 		}
 	}
 
+	/** Pull metadata for the pasted accessions and hand the resulting TSV to the
+	 *  same preview path an uploaded file takes. */
+	async function fetchAccessions() {
+		if (!accessions.trim()) return;
+		fetching = true;
+		fetchError = '';
+		fetchResult = null;
+		importPreview = null;
+		importResult = null;
+		importFile = null;
+		importTsv = '';
+
+		const res = await fetch('/api/import/insdc', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ accessions })
+		});
+		const body = await res.json().catch(() => null);
+
+		if (!res.ok) {
+			fetchError = body?.error || `Lookup failed (HTTP ${res.status})`;
+		} else if (!body.tsv) {
+			fetchError = 'No records found for those accessions.';
+			fetchResult = { count: 0, warnings: body.warnings ?? [], resolved: body.resolved ?? [] };
+		} else {
+			importTsv = body.tsv;
+			importFileName = `${body.count} record(s) from ${body.resolved.length} accession(s)`;
+			fetchResult = { count: body.count, warnings: body.warnings ?? [], resolved: body.resolved ?? [] };
+			await previewImport();
+		}
+		fetching = false;
+	}
+
+	/** True once there are rows to validate, whichever source produced them. */
+	let hasImportRows = $derived(importSource === 'file' ? !!importFile : !!importTsv);
+
 	async function sendImport(dryRun: boolean, useMapping: boolean = false) {
 		// importProject is optional: sheets with a project_name column auto-resolve
 		// per row (and can create new projects). The server 400s if neither source
 		// is present.
-		if (!importFile) return;
+		if (!hasImportRows) return;
 		importing = true;
 
 		const colMapJson = useMapping && Object.keys(columnMap).length > 0 ? JSON.stringify(columnMap) : null;
 
 		let res: Response;
-		if (importFile.name.endsWith('.xlsx') || importFile.name.endsWith('.xls')) {
+		if (importFile && (importFile.name.endsWith('.xlsx') || importFile.name.endsWith('.xls'))) {
 			const fd = new FormData();
 			fd.append('file', importFile);
 			if (importProject) fd.append('projectId', importProject);
@@ -320,7 +377,70 @@
 	{:else}
 	<!-- Import -->
 	<div class="space-y-4">
-		<p class="text-sm text-slate-400">Import samples from a MIxS-compliant TSV file. Sites are auto-created or matched by proximity.</p>
+		<p class="text-sm text-slate-400">Import samples from a MIxS-compliant sheet, or straight from SRA / ENA / GenBank by accession. Sites are auto-created or matched by proximity.</p>
+
+		<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
+			<button onclick={() => importSource = 'file'} class="px-3 py-1 rounded text-xs font-medium transition-colors {importSource === 'file' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}">Upload file</button>
+			<button onclick={() => importSource = 'accession'} class="px-3 py-1 rounded text-xs font-medium transition-colors {importSource === 'accession' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}">From accession</button>
+		</div>
+
+		{#if importSource === 'accession'}
+		<div class="space-y-2 rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+			<label for="accessions" class="block text-xs font-medium text-slate-400">
+				INSDC accessions
+			</label>
+			<textarea
+				id="accessions"
+				bind:value={accessions}
+				rows="2"
+				placeholder="PRJNA644656  SAMN15515801  ERR2683149  MZ477765"
+				class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm font-mono focus:outline-none focus:border-ocean-500"
+			></textarea>
+			<div class="flex items-center gap-3 flex-wrap">
+				<button onclick={fetchAccessions} disabled={fetching || !accessions.trim()}
+					class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
+					{fetching ? 'Fetching...' : 'Fetch metadata'}
+				</button>
+				<p class="text-[11px] text-slate-500">
+					BioProject → project · BioSample → sample · Experiment → extract, PCR, library · Run → sequencing run.
+					Separate accessions with spaces, commas, or newlines.
+				</p>
+			</div>
+
+			{#if fetchError}
+				<div class="px-3 py-2 rounded-lg text-sm bg-red-900/20 border border-red-800 text-red-300">{fetchError}</div>
+			{/if}
+
+			{#if fetchResult && fetchResult.resolved.length > 0}
+				<table class="w-full text-xs">
+					<thead>
+						<tr class="text-slate-400 border-b border-slate-800">
+							<th class="px-2 py-1 text-left font-medium">Accession</th>
+							<th class="px-2 py-1 text-left font-medium">Type</th>
+							<th class="px-2 py-1 text-left font-medium">Source</th>
+							<th class="px-2 py-1 text-right font-medium">Records</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each fetchResult.resolved as r (r.accession)}
+						<tr class="border-b border-slate-800/30">
+							<td class="px-2 py-1 font-mono text-slate-300">{r.accession}</td>
+							<td class="px-2 py-1 text-slate-400">{r.kind}</td>
+							<td class="px-2 py-1 text-slate-500">{r.source}</td>
+							<td class="px-2 py-1 text-right {r.rows > 0 ? 'text-slate-300' : 'text-yellow-400'}">{r.rows}</td>
+						</tr>
+						{/each}
+					</tbody>
+				</table>
+			{/if}
+
+			{#if fetchResult && fetchResult.warnings.length > 0}
+				<ul class="space-y-1 text-xs text-yellow-300/90">
+					{#each fetchResult.warnings as w}<li>· {w}</li>{/each}
+				</ul>
+			{/if}
+		</div>
+		{/if}
 
 		<div class="flex gap-4 items-end flex-wrap">
 			<div>
@@ -331,11 +451,13 @@
 				</select>
 				<p class="text-[10px] text-slate-500 mt-1">Optional if the sheet has a <code>project_name</code> column.</p>
 			</div>
+			{#if importSource === 'file'}
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">File (.xlsx, .tsv, .csv)</label>
 				<input type="file" accept=".xlsx,.xls,.tsv,.txt,.csv" onchange={handleFile}
 					class="text-sm text-slate-400 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-700 file:text-white file:text-sm file:cursor-pointer hover:file:bg-slate-600" />
 			</div>
+			{/if}
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
 				<select bind:value={importChecklist} class={selectCls}>
@@ -378,7 +500,7 @@
 			label="Apply people to all imported samples"
 		/>
 
-		{#if importFile}
+		{#if hasImportRows}
 		<div class="flex gap-3 items-start flex-wrap">
 			<button onclick={previewImport} disabled={importing} class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
 				{importing ? 'Parsing...' : 'Validate'}
@@ -398,6 +520,7 @@
 						{#if importResult.site_matches}· {importResult.site_matches} matched{/if}
 						{#if importResult.new_sites}· {importResult.new_sites} new sites{/if}
 						{#if importResult.extracts_created}· {importResult.extracts_created} extracts{/if}
+						{#if importResult.pcrs_created}· {importResult.pcrs_created} PCRs{/if}
 						{#if importResult.libraries_created}· {importResult.libraries_created} libraries{/if}
 						{#if importResult.runs_created}· {importResult.runs_created} runs{/if}
 						{#if importResult.errors.length > 0}· <span class="text-yellow-300">{importResult.errors.length} warnings</span>{/if}

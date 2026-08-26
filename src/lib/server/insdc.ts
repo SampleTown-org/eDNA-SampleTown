@@ -1,0 +1,753 @@
+/**
+ * INSDC metadata retrieval — SRA (NCBI), ENA (EBI), and GenBank.
+ *
+ * The three archives exchange records daily, so one client covers all of them:
+ * the ENA Portal API serves NCBI-submitted BioProjects, BioSamples, and
+ * GenBank sequence accessions under their original accessions. NCBI eutils is
+ * kept as a BioSample fallback for records too new to have been mirrored.
+ *
+ * Records are flattened to one row per SRA run (or per sample / per sequence
+ * when there are no reads) and emitted as a TSV whose headers are the column
+ * names SampleTown's importer already understands. That TSV goes to
+ * /api/import/mixs unchanged, so accession imports and spreadsheet uploads
+ * share one validation, column-mapper, site-clustering, and insert path.
+ *
+ * Entity mapping (INSDC → SampleTown):
+ *   BioProject  → project
+ *   BioSample   → sample (+ site, from lat/lon)
+ *   Experiment  → extract, pcr (amplicon only), library
+ *   Run         → sequencing run
+ */
+
+import { XMLParser } from 'fast-xml-parser';
+import { buildHeaderToFieldMap } from '$lib/server/mixs-io';
+import { SRA_PLATFORM_TO_SEQ_METH } from '$lib/mixs/sra-mapping';
+
+const ENA_PORTAL = 'https://www.ebi.ac.uk/ena/portal/api/filereport';
+const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
+
+/** Per-request network budget. ENA project queries with fields=all are slow. */
+const FETCH_TIMEOUT_MS = 60_000;
+
+/** Accessions accepted in one request. Each one is a separate archive query. */
+export const MAX_ACCESSIONS = 25;
+
+/** Rows returned across all accessions in one request. Matches the row cap the
+ *  MIxS importer enforces, so a fetch can't build a TSV the importer rejects. */
+export const MAX_ROWS = 10_000;
+
+/** ENA Portal result set to query. Picked from the accession's shape. */
+type EnaResult = 'read_run' | 'sample' | 'sequence';
+
+export type AccessionKind =
+	| 'bioproject'
+	| 'study'
+	| 'run'
+	| 'experiment'
+	| 'sample'
+	| 'sequence'
+	| 'unknown';
+
+export interface InsdcFetchResult {
+	/** One row per run / sample / sequence, keyed by SampleTown import column. */
+	rows: Record<string, string>[];
+	/** Column order for the emitted TSV. */
+	headers: string[];
+	/** Non-fatal problems: unmatched accessions, mirror lag, dropped rows. */
+	warnings: string[];
+	/** Per-accession account of what was queried and what came back. */
+	resolved: { accession: string; kind: AccessionKind; source: string; rows: number }[];
+}
+
+/**
+ * Classify an INSDC accession. The prefix determines which ENA result set can
+ * answer for it — querying the wrong one is a 400, not an empty result.
+ */
+export function classifyAccession(accession: string): AccessionKind {
+	const a = accession.trim().toUpperCase();
+	if (/^PRJ[EDN][A-Z][0-9]+$/.test(a)) return 'bioproject';
+	if (/^[EDS]RP[0-9]{6,}$/.test(a)) return 'study';
+	if (/^[EDS]RR[0-9]{6,}$/.test(a)) return 'run';
+	if (/^[EDS]RX[0-9]{6,}$/.test(a)) return 'experiment';
+	if (/^SAM[END][A-Z]?[0-9]+$/.test(a)) return 'sample';
+	if (/^[EDS]RS[0-9]{6,}$/.test(a)) return 'sample';
+	// INSDC sequence accessions: 1-2 letters + 5-6 digits (GenBank/EMBL/DDBJ),
+	// or the 4-letter + 2-digit + 6-8 digit WGS form. A version suffix (.1) is
+	// tolerated — ENA resolves both.
+	if (/^[A-Z]{1,2}[0-9]{5,6}(\.[0-9]+)?$/.test(a)) return 'sequence';
+	if (/^[A-Z]{4}[0-9]{2}[0-9]{6,8}(\.[0-9]+)?$/.test(a)) return 'sequence';
+	return 'unknown';
+}
+
+/** Result sets to try for a kind, in order. The first with rows wins. */
+function resultsFor(kind: AccessionKind): EnaResult[] {
+	switch (kind) {
+		case 'bioproject':
+		case 'study':
+			return ['read_run', 'sample'];
+		case 'run':
+		case 'experiment':
+			return ['read_run'];
+		case 'sample':
+			// Runs first: a BioSample with reads carries its whole experiment and
+			// run chain, which the sample result set does not have.
+			return ['read_run', 'sample'];
+		case 'sequence':
+			return ['sequence'];
+		default:
+			return ['read_run', 'sample', 'sequence'];
+	}
+}
+
+async function getWithTimeout(url: string): Promise<Response> {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+	try {
+		return await fetch(url, {
+			signal: controller.signal,
+			headers: { 'User-Agent': 'SampleTown/2.0 (https://github.com/SampleTown-org/eDNA-SampleTown)' }
+		});
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/**
+ * Query one ENA Portal result set. `fields=all` is deliberate — the archives
+ * carry checklist fields we cannot enumerate ahead of time, and empty columns
+ * are dropped per row on parse.
+ */
+async function enaQuery(accession: string, result: EnaResult): Promise<Record<string, string>[]> {
+	const params = new URLSearchParams({
+		accession,
+		result,
+		fields: 'all',
+		format: 'tsv',
+		limit: '0'
+	});
+	const res = await getWithTimeout(`${ENA_PORTAL}?${params}`);
+	if (res.status === 400) return []; // accession not valid for this result set
+	if (!res.ok) throw new Error(`ENA returned HTTP ${res.status} for ${accession}`);
+
+	const text = (await res.text()).trim();
+	if (!text || !text.includes('\t')) return [];
+
+	const lines = text.split('\n');
+	const headers = lines[0].split('\t').map((h) => h.trim());
+	const rows: Record<string, string>[] = [];
+	for (let i = 1; i < lines.length; i++) {
+		const cells = lines[i].split('\t');
+		const row: Record<string, string> = {};
+		headers.forEach((h, j) => {
+			const v = (cells[j] ?? '').trim();
+			if (v) row[h] = v;
+		});
+		if (Object.keys(row).length > 0) rows.push(row);
+	}
+	return rows;
+}
+
+/**
+ * NCBI BioSample fallback for records ENA has not mirrored yet. Returns rows
+ * in the same shape as the ENA sample result — harmonized attribute names are
+ * the BioSample equivalents of ENA's checklist columns.
+ */
+async function ncbiBioSampleQuery(accession: string): Promise<Record<string, string>[]> {
+	const searchRes = await getWithTimeout(
+		`${EUTILS}/esearch.fcgi?db=biosample&term=${encodeURIComponent(accession)}&retmode=json`
+	);
+	if (!searchRes.ok) throw new Error(`NCBI esearch returned HTTP ${searchRes.status}`);
+	const search = (await searchRes.json()) as { esearchresult?: { idlist?: string[] } };
+	const ids = search.esearchresult?.idlist ?? [];
+	if (ids.length === 0) return [];
+
+	const fetchRes = await getWithTimeout(
+		`${EUTILS}/efetch.fcgi?db=biosample&id=${ids.join(',')}&rettype=full&retmode=xml`
+	);
+	if (!fetchRes.ok) throw new Error(`NCBI efetch returned HTTP ${fetchRes.status}`);
+	return parseBioSampleXml(await fetchRes.text());
+}
+
+/** Flatten a BioSampleSet document into one row per BioSample. */
+export function parseBioSampleXml(xml: string): Record<string, string>[] {
+	const parser = new XMLParser({
+		ignoreAttributes: false,
+		attributeNamePrefix: '@',
+		textNodeName: '#text',
+		trimValues: true
+	});
+	const doc = parser.parse(xml) as Record<string, any>;
+	const set = doc?.BioSampleSet?.BioSample;
+	if (!set) return [];
+	const list = Array.isArray(set) ? set : [set];
+
+	return list.map((bs: Record<string, any>) => {
+		const row: Record<string, string> = {};
+		const put = (k: string, v: unknown) => {
+			const s = v == null ? '' : String(typeof v === 'object' ? ((v as any)['#text'] ?? '') : v).trim();
+			if (s) row[k] = s;
+		};
+
+		put('sample_accession', bs['@accession']);
+		put('sample_title', bs?.Description?.Title);
+		put('sample_description', bs?.Description?.Comment?.Paragraph);
+		put('scientific_name', bs?.Description?.Organism?.['@taxonomy_name']);
+		put('tax_id', bs?.Description?.Organism?.['@taxonomy_id']);
+		put('center_name', bs?.Owner?.Name);
+		put('ncbi_reporting_standard', bs?.Package?.['@display_name'] ?? bs?.Package);
+
+		// The submitter's own sample name, carried as a labelled Id.
+		const ids = bs?.Ids?.Id;
+		for (const id of Array.isArray(ids) ? ids : ids ? [ids] : []) {
+			if (id?.['@db_label'] === 'Sample name') put('sample_alias', id['#text'] ?? id);
+			if (id?.['@db'] === 'SRA') put('secondary_sample_accession', id['#text'] ?? id);
+		}
+
+		// Harmonized attributes are BioSample's checklist columns and share
+		// names with the ENA fields the normalizer maps.
+		const attrs = bs?.Attributes?.Attribute;
+		for (const a of Array.isArray(attrs) ? attrs : attrs ? [attrs] : []) {
+			const name = a?.['@harmonized_name'] || a?.['@attribute_name'];
+			if (name) put(String(name), a['#text'] ?? a);
+		}
+		return row;
+	});
+}
+
+/**
+ * INSDC column → SampleTown import column.
+ *
+ * Targets are the header names `buildHeaderToFieldMap()` already resolves, so
+ * the importer routes them without a hand-built column map. Where an archive
+ * offers several spellings of one concept they all point at the same target
+ * and `pick()` takes the first populated one.
+ */
+const FIELD_MAP: Record<string, string> = {
+	// Sample identity
+	sample_alias: 'samp_name',
+	sample_description: 'notes',
+
+	// Collection event
+	collection_date: 'collection_date',
+	collected_by: 'collector_name',
+	country: 'geo_loc_name',
+	geo_loc_name: 'geo_loc_name',
+	location: 'lat_lon',
+	lat_lon: 'lat_lon',
+	lat: 'latitude',
+	lon: 'longitude',
+	sampling_site: 'site_name',
+	sampling_platform: 'samp_collect_device',
+	specimen_voucher: 'source_mat_id',
+
+	// Environmental context — ENA carries both the MIxS names and its own
+	// checklist spellings depending on submission vintage.
+	environment_biome: 'env_broad_scale',
+	broad_scale_environmental_context: 'env_broad_scale',
+	env_broad_scale: 'env_broad_scale',
+	environment_feature: 'env_local_scale',
+	local_environmental_context: 'env_local_scale',
+	env_local_scale: 'env_local_scale',
+	environment_material: 'env_medium',
+	environmental_medium: 'env_medium',
+	env_medium: 'env_medium',
+	isolation_source: 'env_medium',
+
+	// Measurements
+	depth: 'depth',
+	elevation: 'elev',
+	altitude: 'elev',
+	temperature: 'temp',
+	salinity: 'salinity',
+	ph: 'ph',
+
+	// Host
+	host: 'specific_host',
+	host_scientific_name: 'specific_host',
+	host_tax_id: 'host_taxid',
+
+	// Extract (SRA experiment)
+	extraction_protocol: 'nucl_acid_ext',
+	scientific_name: 'samp_taxon_id',
+
+	// Library (SRA experiment)
+	library_name: 'library_name',
+	library_prep_date: 'library_prep_date',
+	library_source: 'library_source',
+	library_selection: 'library_selection',
+	library_construction_protocol: 'library_prep_kit',
+	nominal_length: 'library_fragment_size_bp',
+	// SampleTown's library_type is the SRA library strategy — the form labels it
+	// "Library Strategy (SRA)" and the column is NOT NULL.
+	library_strategy: 'library_type',
+	// MIxS lib_layout; no column on library_preps, so it spills to sample_values
+	// as a recognized slot rather than an opaque tag. Lower-cased below — the
+	// archives shout PAIRED, the MIxS enum is lowercase.
+	library_layout: 'lib_layout',
+
+	// Run
+	run_accession: 'run_name',
+	run_date: 'run_date',
+	instrument_platform: 'run_platform',
+	instrument_model: 'run_instrument_model',
+	read_count: 'run_read_count',
+	fastq_ftp: 'run_fastq_dir'
+};
+
+/**
+ * Archive columns that never reach the importer: download URLs, checksums,
+ * byte counts, and file-role flags. They are bulky, per-file rather than
+ * per-sample, and carry no scientific content.
+ */
+const SKIP_FIELDS = new Set([
+	'fastq_ftp', 'fastq_aspera', 'fastq_galaxy', 'fastq_md5', 'fastq_bytes', 'fastq_file_role',
+	'submitted_ftp', 'submitted_aspera', 'submitted_galaxy', 'submitted_md5', 'submitted_bytes',
+	'submitted_file_role', 'submitted_format', 'submitted_read_type',
+	'sra_ftp', 'sra_aspera', 'sra_galaxy', 'sra_md5', 'sra_bytes', 'sra_file_role',
+	'bam_ftp', 'bam_aspera', 'bam_galaxy', 'bam_md5', 'bam_bytes', 'bam_file_role',
+	'cram_index_ftp', 'cram_index_aspera', 'cram_index_galaxy',
+	'file_location', 'datahub', 'status', 'tag'
+]);
+
+/**
+ * Columns forced to `misc_param:` even though they resolve to a slot.
+ *
+ * `description` and `sample_title` are archive prose that would otherwise land
+ * in a MIxS field and read as curated data; `isolate` and `strain` name a
+ * culture rather than the environmental sample. They are worth keeping, but
+ * as tags, not as slot values.
+ */
+const FORCE_PROVENANCE = new Set([
+	'description', 'sample_title', 'isolate', 'strain', 'sample_description',
+	'experiment_title', 'study_title', 'run_alias', 'experiment_alias',
+	'sample_alias', 'study_alias', 'center_name', 'broker_name'
+]);
+
+/** Targets FIELD_MAP already claims — a pass-through column must not fight one. */
+const MAPPED_TARGETS = new Set(Object.values(FIELD_MAP));
+
+/** Resolved once: the importer's full header vocabulary (every MIxS slot,
+ *  its aliases, the SRA/BioSample translations, and SampleTown's own columns). */
+let headerMapCache: Record<string, string> | null = null;
+function headerMap(): Record<string, string> {
+	if (!headerMapCache) headerMapCache = buildHeaderToFieldMap();
+	return headerMapCache;
+}
+
+
+/**
+ * ENA checklist accession → SampleTown extension.
+ *
+ * ENA's GSC checklists are the MIxS environmental packages, so they name an
+ * extension and say nothing about survey-vs-specimen. Three of them are whole
+ * MIxS checklists instead, and those set the checklist directly.
+ *
+ * ERC000056 (the four food packages combined) and ERC000058 (hydrocarbon,
+ * which splits into cores and fluids/swabs) are deliberately absent — they do
+ * not resolve to one extension, and guessing would put samples under a
+ * checklist their fields were never validated against.
+ */
+const ENA_CHECKLIST_TO_MIXS: Record<string, { checklist?: string; extension?: string }> = {
+	ERC000012: { extension: 'Air' },
+	ERC000013: { extension: 'HostAssociated' },
+	ERC000014: { extension: 'HumanAssociated' },
+	ERC000015: { extension: 'HumanGut' },
+	ERC000016: { extension: 'HumanOral' },
+	ERC000017: { extension: 'HumanSkin' },
+	ERC000018: { extension: 'HumanVaginal' },
+	ERC000019: { extension: 'MicrobialMatBiofilm' },
+	ERC000020: { extension: 'PlantAssociated' },
+	ERC000021: { extension: 'Sediment' },
+	ERC000022: { extension: 'Soil' },
+	ERC000023: { extension: 'WastewaterSludge' },
+	ERC000024: { extension: 'Water' },
+	ERC000025: { extension: 'MiscellaneousNaturalOrArtificialEnvironment' },
+	ERC000031: { extension: 'BuiltEnvironment' },
+	ERC000047: { checklist: 'Mimag' },
+	ERC000048: { checklist: 'Misag' },
+	ERC000049: { checklist: 'Miuvig' },
+	ERC000055: { extension: 'Agriculture' },
+	ERC000057: { extension: 'SymbiontAssociated' }
+};
+
+/** NCBI BioSample package prefix → MIxS checklist. */
+const NCBI_PACKAGE_TO_CHECKLIST: Record<string, string> = {
+	'MIGS.BA': 'MigsBa',
+	'MIGS.EU': 'MigsEu',
+	'MIGS.VI': 'MigsVi',
+	'MIGS.PL': 'MigsPl',
+	'MIGS.ORG': 'MigsOrg',
+	'MIMARKS.SURVEY': 'MimarksS',
+	'MIMARKS.SPECIMEN': 'MimarksC',
+	'MIMS.ME': 'Mims',
+	MIMAG: 'Mimag',
+	MISAG: 'Misag',
+	MIUVIG: 'Miuvig'
+};
+
+/** NCBI BioSample environmental-package suffix → MIxS extension. */
+const NCBI_PACKAGE_TO_EXTENSION: Record<string, string> = {
+	AIR: 'Air',
+	AGRICULTURE: 'Agriculture',
+	BUILT: 'BuiltEnvironment',
+	'HOST-ASSOCIATED': 'HostAssociated',
+	'HUMAN-ASSOCIATED': 'HumanAssociated',
+	'HUMAN-GUT': 'HumanGut',
+	'HUMAN-ORAL': 'HumanOral',
+	'HUMAN-SKIN': 'HumanSkin',
+	'HUMAN-VAGINAL': 'HumanVaginal',
+	'HYDROCARBON-CORES': 'HydrocarbonResourcesCores',
+	'HYDROCARBON-FLUIDS-SWABS': 'HydrocarbonResourcesFluidsSwabs',
+	MICROBIAL: 'MicrobialMatBiofilm',
+	MISCELLANEOUS: 'MiscellaneousNaturalOrArtificialEnvironment',
+	'PLANT-ASSOCIATED': 'PlantAssociated',
+	SEDIMENT: 'Sediment',
+	SOIL: 'Soil',
+	'SYMBIONT-ASSOCIATED': 'SymbiontAssociated',
+	WASTEWATER: 'WastewaterSludge',
+	WATER: 'Water',
+	'FOOD-ANIMAL-AND-ANIMAL-FEED': 'FoodAnimalAndAnimalFeed',
+	'FOOD-FARM-ENVIRONMENT': 'FoodFarmEnvironment',
+	'FOOD-PRODUCTION-FACILITY': 'FoodFoodProductionFacility',
+	'FOOD-HUMAN-FOODS': 'FoodHumanFoods'
+};
+
+/**
+ * Read the MIxS checklist and environmental package the submitter declared.
+ *
+ * A record that says it is MIMARKS survey water should be validated as
+ * MIMARKS survey water, not as whatever the import form happened to be set to.
+ * Anything undeclared is left unset so the form default still applies.
+ */
+export function resolveChecklist(raw: Record<string, string>): {
+	checklist?: string;
+	extension?: string;
+} {
+	const out: { checklist?: string; extension?: string } = {};
+
+	// NCBI states both halves: "MIMARKS.survey.water.6.0" → MimarksS + Water.
+	const pkg = (raw.ncbi_reporting_standard || '').trim().toUpperCase();
+	if (pkg) {
+		// Strip the trailing version ("6.0") so the env package is the last part.
+		const parts = pkg.replace(/\.[0-9]+(\.[0-9]+)*$/, '').split('.');
+		for (let take = Math.min(2, parts.length); take >= 1; take--) {
+			const prefix = parts.slice(0, take).join('.');
+			const checklist = NCBI_PACKAGE_TO_CHECKLIST[prefix];
+			if (checklist) {
+				out.checklist = checklist;
+				const suffix = parts.slice(take).join('.');
+				if (suffix) out.extension = NCBI_PACKAGE_TO_EXTENSION[suffix];
+				break;
+			}
+		}
+	}
+
+	// ENA states the environmental package, and occasionally the checklist.
+	const erc = (raw.checklist || '').trim().toUpperCase();
+	if (erc) {
+		const hit = ENA_CHECKLIST_TO_MIXS[erc];
+		if (hit) {
+			if (hit.checklist && !out.checklist) out.checklist = hit.checklist;
+			if (hit.extension && !out.extension) out.extension = hit.extension;
+		}
+	}
+
+	return out;
+}
+
+/** First non-empty value among `keys`. */
+function pick(row: Record<string, string>, ...keys: string[]): string {
+	for (const k of keys) {
+		const v = row[k];
+		if (v && v.trim()) return v.trim();
+	}
+	return '';
+}
+
+/** Values must survive a tab-separated, newline-delimited round trip. */
+function clean(value: string): string {
+	return value.replace(/[\r\n]+/g, ' ').trim();
+}
+
+/**
+ * Turn one archive record into a SampleTown import row.
+ *
+ * `kind` decides how much of the downstream chain is materialized: a run
+ * record describes an experiment and a run, a bare sample or sequence record
+ * describes neither, and asking the importer to create empty extracts and
+ * libraries for those would fabricate lab work that never happened.
+ */
+function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<string, string> {
+	const out: Record<string, string> = {};
+	const set = (k: string, v: string) => {
+		const c = clean(v);
+		if (c) out[k] = c;
+	};
+
+	for (const [source, target] of Object.entries(FIELD_MAP)) {
+		if (out[target]) continue; // earlier spelling already won
+		const v = raw[source];
+		if (v) set(target, v);
+	}
+
+	// samp_name is the importer's row key and its uniqueness constraint. The
+	// submitter's alias is the most meaningful name; accessions are the
+	// guaranteed-unique fallback.
+	if (!out.samp_name) {
+		set('samp_name', pick(raw, 'sample_alias', 'sample_accession', 'run_accession', 'accession'));
+	}
+
+	// ENA reports a MIxS-shaped `location` only when the submitter gave one;
+	// otherwise lat/lon are separate and parseMixsTsv composes them.
+	if (!out.lat_lon) {
+		const loc = pick(raw, 'location_start', 'location_end');
+		if (loc) set('lat_lon', loc);
+	}
+
+	// A collection_date range collapses to its start — MIxS takes one value,
+	// and the range endpoints ride along as provenance.
+	if (!out.collection_date) {
+		set('collection_date', pick(raw, 'collection_date_start', 'collection_date_end'));
+	}
+
+	// samp_taxon_id wants the organism together with its NCBI taxid.
+	const taxName = pick(raw, 'scientific_name', 'organism');
+	const taxId = pick(raw, 'tax_id');
+	if (taxName && taxId) set('samp_taxon_id', `${taxName} (NCBI:txid${taxId})`);
+
+	// BioProject → project. The study title is the BioProject's human-readable
+	// name and the only field that reads as a project in the UI. ENA's own
+	// `project_name` column is a registration field submitters often fill with
+	// the organism, so it ranks below the title and above the bare accession.
+	if (!out.project_name) {
+		set(
+			'project_name',
+			pick(raw, 'study_title', 'project_name', 'study_accession', 'secondary_study_accession')
+		);
+	}
+
+	if (result === 'read_run') {
+		// Experiment → extract. SRA has no extraction record of its own, so one
+		// extract per sample stands in for the material the library was built
+		// from; the importer reuses it across a sample's several runs.
+		set('extract_name', `${out.samp_name}_ext`);
+
+		// Experiment → PCR, but only for amplicon libraries. Recording a PCR for
+		// a shotgun metagenome would assert an amplification that did not happen.
+		const strategy = pick(raw, 'library_strategy').toUpperCase();
+		const selection = pick(raw, 'library_selection').toUpperCase();
+		const targetGene = pick(raw, 'target_gene', 'taxonomic_identity_marker');
+		if (strategy === 'AMPLICON' || selection === 'PCR' || targetGene) {
+			set('pcr_name', `${out.samp_name}_pcr`);
+			set('pcr_cond', pick(raw, 'pcr_isolation_protocol', 'library_pcr_isolation_protocol'));
+			if (targetGene) set('target_gene', targetGene);
+			set('pcr_notes', pick(raw, 'library_construction_protocol'));
+		}
+
+		// Experiment → library. ENA writes "unspecified" when the submitter left
+		// library_name blank, which is not a name anyone can look a library up by.
+		if (!out.library_name || out.library_name.toLowerCase() === 'unspecified') {
+			const libName = pick(raw, 'experiment_alias', 'experiment_accession');
+			out.library_name = clean(libName) || `${out.samp_name}_lib`;
+		}
+		set('library_platform', pick(raw, 'instrument_platform'));
+		set('library_instrument_model', pick(raw, 'instrument_model'));
+
+		// MIxS seq_meth wants an OBI term; the archives report the coarse SRA
+		// platform enum. sra-mapping.ts already holds that translation for the
+		// export side, and MimarksS requires the slot.
+		const seqMeth = SRA_PLATFORM_TO_SEQ_METH[pick(raw, 'instrument_platform').toUpperCase()];
+		if (seqMeth) set('seq_meth', seqMeth);
+
+		if (out.lib_layout) out.lib_layout = out.lib_layout.toLowerCase();
+
+		// Run → sequencing run. One SRA run is one sequencing event, so each
+		// becomes its own run record; the importer dedupes them by name.
+		const bases = Number(pick(raw, 'base_count'));
+		if (Number.isFinite(bases) && bases > 0) {
+			set('run_total_bases_gb', String(bases / 1e9));
+		}
+		if (!out.run_date) set('run_date', pick(raw, 'first_created', 'first_public'));
+		// fastq_ftp is a semicolon-joined pair for paired runs; the link row
+		// stores the directory they share.
+		const fastq = pick(raw, 'fastq_ftp');
+		if (fastq) {
+			const first = fastq.split(';')[0];
+			const dir = first.includes('/') ? first.slice(0, first.lastIndexOf('/')) : first;
+			set('run_fastq_dir', dir);
+		}
+	}
+
+	// The declared checklist decides which MIxS combination class the row is
+	// validated against, so MIMARKS records arrive as MIMARKS.
+	const declared = resolveChecklist(raw);
+	if (declared.checklist) set('mixs_checklist', declared.checklist);
+	if (declared.extension) set('extension', declared.extension);
+
+	// Everything FIELD_MAP didn't claim. ENA returns whichever checklist fields
+	// the submitter filled, and we cannot enumerate them ahead of time — so each
+	// one is offered to the importer's own header vocabulary, which knows every
+	// MIxS slot and its aliases. Whatever that does not recognize is kept as a
+	// misc_param tag rather than dropped, and the column mapper gives the user
+	// the final say over both.
+	const map = headerMap();
+	const claimed = new Set(MAPPED_TARGETS);
+	for (const key of Object.keys(raw).sort()) {
+		if (key in FIELD_MAP || SKIP_FIELDS.has(key) || key in out) continue;
+		const value = raw[key];
+		if (!value) continue;
+
+		const target = map[key.toLowerCase()];
+		if (target && !claimed.has(target) && !FORCE_PROVENANCE.has(key)) {
+			// Emit under the archive's own column name so the mapper shows the
+			// user the field they'd recognize from the submission.
+			set(key, value);
+			claimed.add(target);
+		} else {
+			set(`misc_param:${key}`, value);
+		}
+	}
+
+	return out;
+}
+
+/** Escape one TSV cell. Blank stays blank — the importer reads it as null. */
+function tsvCell(value: string | undefined): string {
+	if (!value) return '';
+	const s = clean(value);
+	return /[\t"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * Render fetched rows as a TSV for /api/import/mixs. Column order puts the
+ * fields a reviewer checks first — name, date, place — ahead of the long tail.
+ */
+export function rowsToTsv(rows: Record<string, string>[], headers: string[]): string {
+	const lines = [headers.join('\t')];
+	for (const row of rows) {
+		lines.push(headers.map((h) => tsvCell(row[h])).join('\t'));
+	}
+	return lines.join('\n');
+}
+
+const HEADER_ORDER = [
+	'samp_name', 'project_name', 'mixs_checklist', 'extension',
+	'collection_date', 'site_name', 'lat_lon',
+	'latitude', 'longitude', 'geo_loc_name', 'env_broad_scale', 'env_local_scale',
+	'env_medium', 'depth', 'elev', 'temp', 'salinity', 'ph', 'specific_host',
+	'host_taxid', 'samp_taxon_id', 'samp_collect_device', 'source_mat_id',
+	'collector_name', 'notes',
+	'extract_name', 'nucl_acid_ext',
+	'pcr_name', 'pcr_cond', 'target_gene', 'pcr_notes',
+	'library_name', 'library_type', 'library_prep_date', 'library_prep_kit',
+	'library_platform', 'library_instrument_model', 'library_source',
+	'library_selection', 'lib_layout', 'library_fragment_size_bp',
+	'seq_meth', 'run_name', 'run_date', 'run_platform', 'run_instrument_model',
+	'run_read_count', 'run_total_bases_gb', 'run_fastq_dir'
+];
+
+/** Union of the columns present, in HEADER_ORDER first, then misc_param tags. */
+function collectHeaders(rows: Record<string, string>[]): string[] {
+	const present = new Set<string>();
+	for (const row of rows) for (const k of Object.keys(row)) present.add(k);
+
+	const headers = HEADER_ORDER.filter((h) => present.has(h));
+	const rest = Array.from(present).filter((h) => !HEADER_ORDER.includes(h)).sort();
+	return [...headers, ...rest];
+}
+
+/**
+ * Fetch metadata for a list of accessions and normalize it into importer rows.
+ *
+ * Accessions are queried one at a time: they resolve to different result sets,
+ * and one bad accession should cost a warning rather than the whole request.
+ */
+export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult> {
+	const warnings: string[] = [];
+	const resolved: InsdcFetchResult['resolved'] = [];
+	const rows: Record<string, string>[] = [];
+	let truncated = false;
+
+	for (const accession of accessions) {
+		const kind = classifyAccession(accession);
+		if (kind === 'unknown') {
+			warnings.push(`${accession}: not a recognized INSDC accession — skipped`);
+			resolved.push({ accession, kind, source: 'none', rows: 0 });
+			continue;
+		}
+
+		let raw: Record<string, string>[] = [];
+		let source = '';
+		try {
+			for (const result of resultsFor(kind)) {
+				raw = await enaQuery(accession, result);
+				if (raw.length > 0) {
+					source = `ENA ${result}`;
+					break;
+				}
+			}
+		} catch (err) {
+			warnings.push(`${accession}: ${err instanceof Error ? err.message : String(err)}`);
+			resolved.push({ accession, kind, source: 'error', rows: 0 });
+			continue;
+		}
+
+		// ENA mirrors NCBI on a daily cycle, so a BioSample submitted today is
+		// findable at NCBI and nowhere else. Only BioSamples have a fallback —
+		// it is the one record type NCBI serves without an SRA chain.
+		if (raw.length === 0 && kind === 'sample') {
+			try {
+				raw = await ncbiBioSampleQuery(accession);
+				if (raw.length > 0) source = 'NCBI biosample';
+			} catch (err) {
+				warnings.push(`${accession}: NCBI fallback failed (${err instanceof Error ? err.message : String(err)})`);
+			}
+		}
+
+		if (raw.length === 0) {
+			warnings.push(
+				`${accession}: no records found. Submissions can take a day to reach ENA — if this is a brand-new NCBI accession, try again tomorrow.`
+			);
+			resolved.push({ accession, kind, source: source || 'none', rows: 0 });
+			continue;
+		}
+
+		const result: EnaResult = source.endsWith('read_run')
+			? 'read_run'
+			: source.endsWith('sequence')
+				? 'sequence'
+				: 'sample';
+
+		let kept = 0;
+		for (const r of raw) {
+			if (rows.length >= MAX_ROWS) {
+				truncated = true;
+				break;
+			}
+			const normalized = normalizeRow(r, result);
+			if (normalized.samp_name) {
+				rows.push(normalized);
+				kept++;
+			}
+		}
+		resolved.push({ accession, kind, source, rows: kept });
+		if (truncated) break;
+	}
+
+	if (truncated) {
+		warnings.push(`Stopped at ${MAX_ROWS} rows — import these, then fetch the rest.`);
+	}
+
+	// The importer attaches every sample to a site and derives sites from
+	// coordinates, so a row without them cannot be inserted. Submitters often
+	// omit lat/lon, which makes this the most common reason an accession
+	// fetches cleanly and then imports nothing.
+	const noCoords = rows.filter((r) => !r.lat_lon && !(r.latitude && r.longitude)).length;
+	if (noCoords > 0) {
+		warnings.push(
+			`${noCoords} of ${rows.length} record(s) have no coordinates. Samples need a site, so these are skipped on import — add lat_lon in the preview, or import them into a project where you can place the site by hand.`
+		);
+	}
+
+	return { rows, headers: collectHeaders(rows), warnings, resolved };
+}

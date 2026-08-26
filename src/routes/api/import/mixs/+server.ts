@@ -11,6 +11,7 @@ import { findNearbySites, haversineKm } from '$lib/server/proximity';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { validateRow } from '$lib/server/mixs-validator';
 import { insertSampleValues } from '$lib/server/sample-body';
+import { MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 
 /** Extract-field keys that may live on sample._extract — used when building the
  *  insertExtract bind parameters. Keep in sync with EXTRACT_FIELDS in mixs-io.ts. */
@@ -21,6 +22,24 @@ type ExtractRow = {
 	storage_box?: string;
 	storage_location?: string;
 	extract_notes?: string;
+	nucl_acid_ext?: string;
+};
+
+/** PCR-field keys that may live on sample._pcr. Keep in sync with PCR_FIELDS. */
+type PcrRow = {
+	pcr_name?: string;
+	pcr_date?: string;
+	pcr_cond?: string;
+	nucl_acid_amp?: string;
+	target_gene?: string;
+	target_subfragment?: string;
+	forward_primer_name?: string;
+	forward_primer_seq?: string;
+	reverse_primer_name?: string;
+	reverse_primer_seq?: string;
+	annealing_temp_c?: number;
+	num_cycles?: number;
+	pcr_notes?: string;
 };
 
 /** Library-field keys on sample._library. Keep in sync with LIBRARY_FIELDS. */
@@ -33,6 +52,10 @@ type LibraryRow = {
 	library_instrument_model?: string;
 	library_concentration_ng_ul?: number;
 	library_notes?: string;
+	library_source?: string;
+	library_selection?: string;
+	library_type?: string;
+	library_fragment_size_bp?: number;
 };
 
 /** Run-field keys on sample._run. Run records are deduped per upload by
@@ -323,13 +346,29 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	// Strip SampleTown-internal side-cars (_values EAV spill, _extract columns,
 	// project_name lookup key) before validation — they aren't MIxS slots and
 	// would otherwise produce "must NOT have additional properties" noise.
-	const SIDECAR_KEYS = new Set(['_values', '_extract', '_library', '_run', 'project_name', 'site_name', 'site_code', 'latitude', 'longitude']);
+	const SIDECAR_KEYS = new Set([
+		'_values', '_extract', '_pcr', '_library', '_run',
+		'site_name', 'site_code', 'latitude', 'longitude',
+		// SampleTown-local columns that are not MIxS slots. They belong on the
+		// sample but the combination class has never heard of them, so leaving
+		// them in makes every row report "must NOT have additional properties".
+		// project_name is deliberately absent: it doubles as the project lookup
+		// key, but it is also a MIxS slot the checklist requires.
+		'mixs_checklist', 'extension', 'notes', 'collector_name', 'filter_type'
+	]);
 	const mixsValidation = matched.map((m) => {
 		const checklist = (m.sample.mixs_checklist as string) || defaultChecklist;
 		const extension = (m.sample.extension as string) || defaultExtension;
 		const forValidation: Record<string, unknown> = {};
 		for (const [k, v] of Object.entries(m.sample)) {
 			if (!SIDECAR_KEYS.has(k)) forValidation[k] = v;
+		}
+		// Slots without a SampleTown column spill into _values, which is most of
+		// MIxS. Validating without them reports every one of those as missing
+		// even when the sheet supplied it. misc_param:* tags stay out — they are
+		// off-schema by definition and would read as additional properties.
+		for (const [k, v] of Object.entries((m.sample._values as Record<string, unknown>) ?? {})) {
+			if (!k.startsWith(MISC_PARAM_PREFIX)) forValidation[k] = v;
 		}
 		const rowErrors = validateRow(forValidation, checklist, extension);
 		return {
@@ -352,6 +391,25 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				concentration_ng_ul: ex.concentration_ng_ul ?? null,
 				storage_box: ex.storage_box ?? null,
 				storage_location: ex.storage_location ?? null
+			};
+		})
+		.filter((x): x is NonNullable<typeof x> => x !== null);
+
+	// Per-row PCR preview. A reaction is created whenever the sheet carries any
+	// pcr_* column; it hangs off the row's extract, which is created for it if
+	// the sheet didn't supply one.
+	const pcrPreview = matched
+		.map((m) => {
+			const pcr = m.sample._pcr as PcrRow | undefined;
+			if (!pcr) return null;
+			return {
+				samp_name: m.sample.samp_name,
+				pcr_name: pcr.pcr_name ?? `${m.sample.samp_name}_pcr`,
+				pcr_date: pcr.pcr_date ?? null,
+				target_gene: pcr.target_gene ?? null,
+				target_subfragment: pcr.target_subfragment ?? null,
+				forward_primer_name: pcr.forward_primer_name ?? null,
+				reverse_primer_name: pcr.reverse_primer_name ?? null
 			};
 		})
 		.filter((x): x is NonNullable<typeof x> => x !== null);
@@ -420,6 +478,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				project_name: p.project_name
 			})),
 			extracts: extractsPreview,
+			pcrs: pcrPreview,
 			libraries: librariesPreview,
 			new_runs: Array.from(newRunsByName.values()).map((r) => ({
 				id: r.id,
@@ -441,6 +500,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	let newSiteCount = 0;
 	let newProjectCount = 0;
 	let extractsCreated = 0;
+	let pcrsCreated = 0;
 	let librariesCreated = 0;
 	let runsCreated = 0;
 	let runLibrariesCreated = 0;
@@ -458,8 +518,17 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
 	const insertExtractStmt = db.prepare(`
 		INSERT INTO extracts (id, lab_id, sample_id, extract_name, extraction_date,
-			concentration_ng_ul, storage_box, storage_location, notes, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			concentration_ng_ul, storage_box, storage_location, notes, nucl_acid_ext,
+			created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`);
+
+	const insertPcrStmt = db.prepare(`
+		INSERT INTO pcr_amplifications (id, lab_id, extract_id, pcr_name, pcr_date,
+			target_subfragment, forward_primer_name, forward_primer_seq,
+			reverse_primer_name, reverse_primer_seq, pcr_cond, annealing_temp_c,
+			num_cycles, notes, custom_fields, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	// Lookups for re-upload idempotency: when the same samp_name already
@@ -471,6 +540,18 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	);
 	const findExistingExtract = db.prepare(
 		'SELECT id FROM extracts WHERE sample_id = ? AND extract_name = ? AND is_deleted = 0'
+	);
+	const findExistingPcr = db.prepare(
+		'SELECT id FROM pcr_amplifications WHERE extract_id = ? AND pcr_name = ? AND is_deleted = 0'
+	);
+	// Libraries dedupe against their extract where there is one; a library with
+	// no extract falls back to the lab-wide name. Without this a second upload
+	// of the same sheet stacks a duplicate library on every sample.
+	const findExistingLibraryOnExtract = db.prepare(
+		'SELECT id FROM library_preps WHERE extract_id = ? AND library_name = ? AND is_deleted = 0'
+	);
+	const findExistingLibraryInLab = db.prepare(
+		'SELECT id FROM library_preps WHERE lab_id = ? AND library_name = ? AND extract_id IS NULL AND is_deleted = 0'
 	);
 
 	// Try to reuse an existing sequencing_runs row by run_name within the lab —
@@ -486,14 +567,15 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	`);
 
 	const insertLibraryStmt = db.prepare(`
-		INSERT INTO library_preps (id, lab_id, extract_id, library_name, library_type,
-			library_prep_kit, library_prep_date, platform, instrument_model, barcode,
+		INSERT INTO library_preps (id, lab_id, extract_id, pcr_id, library_name, library_type,
+			library_source, library_selection, library_prep_kit, library_prep_date,
+			platform, instrument_model, barcode, fragment_size_bp,
 			final_concentration_ng_ul, notes, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	const insertRunLibraryStmt = db.prepare(`
-		INSERT INTO run_libraries (run_id, library_id, fastq_single, read_count)
+		INSERT OR REPLACE INTO run_libraries (run_id, library_id, fastq_single, read_count)
 		VALUES (?, ?, ?, ?)
 	`);
 
@@ -739,9 +821,13 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				// re-uploads); else insert a new one.
 				let extractId: string | null = null;
 				const ex = sample._extract as ExtractRow | undefined;
-				if (ex) {
+				const pcr = sample._pcr as PcrRow | undefined;
+				// pcr_amplifications.extract_id is NOT NULL — a reaction has to have
+				// been amplified from something. A sheet carrying pcr_* columns but
+				// no extract_* ones still gets the extract that implies.
+				if (ex || pcr) {
 					try {
-						const extractName = ex.extract_name?.trim() || `${sample.samp_name}_ext`;
+						const extractName = ex?.extract_name?.trim() || `${sample.samp_name}_ext`;
 						const existingExtract = findExistingExtract.get(id, extractName) as { id: string } | undefined;
 						if (existingExtract) {
 							extractId = existingExtract.id;
@@ -753,11 +839,12 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 							labId,
 							id,
 							name,
-							ex.extraction_date ?? null,
-							ex.concentration_ng_ul ?? null,
-							ex.storage_box ?? null,
-							ex.storage_location ?? null,
-							ex.extract_notes ?? null,
+							ex?.extraction_date ?? null,
+							ex?.concentration_ng_ul ?? null,
+							ex?.storage_box ?? null,
+							ex?.storage_location ?? null,
+							ex?.extract_notes ?? null,
+							ex?.nucl_acid_ext ?? null,
 							userId
 						);
 						extractsCreated++;
@@ -770,6 +857,51 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 					}
 				}
 
+				// PCR reaction, if the sheet had any pcr_* columns filled. Reused
+				// by (extract, pcr_name) so a re-upload re-links rather than
+				// duplicating. target_gene and nucl_acid_amp have no column on
+				// pcr_amplifications — target_gene belongs to the primer set —
+				// so they ride in custom_fields until a primer set is linked.
+				let pcrId: string | null = null;
+				if (pcr && extractId) {
+					try {
+						const pcrName = pcr.pcr_name?.trim() || `${sample.samp_name}_pcr`;
+						const existingPcr = findExistingPcr.get(extractId, pcrName) as { id: string } | undefined;
+						if (existingPcr) {
+							pcrId = existingPcr.id;
+						} else {
+							pcrId = generateId();
+							const extras: Record<string, string> = {};
+							if (pcr.target_gene) extras.target_gene = String(pcr.target_gene);
+							if (pcr.nucl_acid_amp) extras.nucl_acid_amp = String(pcr.nucl_acid_amp);
+							insertPcrStmt.run(
+								pcrId,
+								labId,
+								extractId,
+								pcrName,
+								pcr.pcr_date ?? null,
+								pcr.target_subfragment ?? null,
+								pcr.forward_primer_name ?? null,
+								pcr.forward_primer_seq ?? null,
+								pcr.reverse_primer_name ?? null,
+								pcr.reverse_primer_seq ?? null,
+								pcr.pcr_cond ?? null,
+								pcr.annealing_temp_c ?? null,
+								pcr.num_cycles ?? null,
+								pcr.pcr_notes ?? null,
+								Object.keys(extras).length > 0 ? JSON.stringify(extras) : null,
+								userId
+							);
+							pcrsCreated++;
+						}
+					} catch (pcrErr: unknown) {
+						const raw = pcrErr instanceof Error ? pcrErr.message : String(pcrErr);
+						console.error('[import] pcr row failed', sample.samp_name, raw);
+						insertErrors.push(`${sample.samp_name}: PCR insert failed (${raw})`);
+						pcrId = null;
+					}
+				}
+
 				// Library row + run_libraries link, if the sheet had library_*
 				// or run_* columns filled. Library is FK'd to the row's extract;
 				// rows without an extract land the library with extract_id=NULL
@@ -779,25 +911,37 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				const runRow = sample._run as RunRow | undefined;
 				if (lib || runRow) {
 					try {
-						const libraryId = generateId();
 						const platform = normalizePlatform(lib?.library_platform || runRow?.run_platform);
 						const libraryName = lib?.library_name?.trim() || `${sample.samp_name}_lib`;
+						const existingLibrary = (extractId
+							? findExistingLibraryOnExtract.get(extractId, libraryName)
+							: findExistingLibraryInLab.get(labId, libraryName)) as { id: string } | undefined;
+						const libraryId = existingLibrary ? existingLibrary.id : generateId();
+						if (!existingLibrary) {
 						insertLibraryStmt.run(
 							libraryId,
 							labId,
 							extractId,
+							pcrId,
 							libraryName,
-							deriveLibraryType(lib?.library_platform || runRow?.run_platform),
+							lib?.library_type?.trim() ||
+								deriveLibraryType(lib?.library_platform || runRow?.run_platform),
+							lib?.library_source ?? null,
+							lib?.library_selection ?? null,
 							lib?.library_prep_kit ?? null,
 							lib?.library_prep_date ?? null,
 							platform,
 							lib?.library_instrument_model ?? runRow?.run_instrument_model ?? null,
 							lib?.library_barcode ?? null,
+							lib?.library_fragment_size_bp != null
+								? Math.round(Number(lib.library_fragment_size_bp))
+								: null,
 							lib?.library_concentration_ng_ul ?? null,
 							lib?.library_notes ?? null,
 							userId
 						);
 						librariesCreated++;
+						}
 
 						if (runRow?.run_name) {
 							const runId = runIdByName.get(String(runRow.run_name).trim());
@@ -865,6 +1009,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			new_sites: newSiteCount,
 			new_projects: newProjectCount,
 			extracts_created: extractsCreated,
+			pcrs_created: pcrsCreated,
 			libraries_created: librariesCreated,
 			runs_created: runsCreated,
 			run_libraries_created: runLibrariesCreated,

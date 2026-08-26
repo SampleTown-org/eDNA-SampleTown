@@ -115,6 +115,7 @@ Special cases:
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/api/import/mixs` | Multipart with `file` (xlsx or tsv), `projectId`, `dryRun`, `columnMap`, `siteMatchKm`, `people`, `defaultChecklist`, `defaultExtension`. See [MIxS pipeline](mixs.md). Rate-limited 1/sec/IP |
+| POST | `/api/import/insdc` | JSON `{ accessions }` (space/comma/newline separated, max 25). Fetches SRA / ENA / GenBank metadata and returns `{ tsv, headers, count, warnings, resolved }` for posting to `/api/import/mixs`. Rate-limited 1/3sec/IP |
 | GET | `/api/export/mixs` | Query: `project_id?`, `checklist?`, `extension?`, `format=tsv`. Returns TSV |
 
 ## Feedback

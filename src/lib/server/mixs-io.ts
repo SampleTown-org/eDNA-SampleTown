@@ -37,7 +37,26 @@ export const PROJECT_FIELDS = new Set(['project_name']);
  *  an extract record is created after the sample insert in the same txn. */
 export const EXTRACT_FIELDS = new Set([
 	'extract_name', 'extraction_date', 'concentration_ng_ul',
-	'storage_box', 'storage_location', 'extract_notes'
+	'storage_box', 'storage_location', 'extract_notes',
+	// MIxS nucl_acid_ext is owned by extracts (see slot-ownership.ts) and has
+	// a column there, so it lands on the extract rather than spilling into
+	// sample_values.
+	'nucl_acid_ext'
+]);
+
+/** Fields that get split off into a pcr_amplifications row when present.
+ *  pcr_amplifications.extract_id is NOT NULL, so a row carrying PCR columns
+ *  without extract columns still gets an extract — a PCR product has to have
+ *  been amplified from something. The MIxS slots here (pcr_cond, target_gene,
+ *  target_subfragment, nucl_acid_amp) are owned by pcr_plates per
+ *  slot-ownership.ts; target_gene lives on the primer set, so it is carried
+ *  in the reaction's custom_fields until one is linked. */
+export const PCR_FIELDS = new Set([
+	'pcr_name', 'pcr_date', 'pcr_cond', 'nucl_acid_amp',
+	'target_gene', 'target_subfragment',
+	'forward_primer_name', 'forward_primer_seq',
+	'reverse_primer_name', 'reverse_primer_seq',
+	'annealing_temp_c', 'num_cycles', 'pcr_notes'
 ]);
 
 /** Fields that get split off into a library_preps row when present. The
@@ -47,7 +66,10 @@ export const EXTRACT_FIELDS = new Set([
 export const LIBRARY_FIELDS = new Set([
 	'library_name', 'library_barcode', 'library_prep_kit', 'library_prep_date',
 	'library_platform', 'library_instrument_model', 'library_concentration_ng_ul',
-	'library_notes'
+	'library_notes',
+	// SRA library descriptors — real columns on library_preps, so an archive
+	// import round-trips them instead of losing the submission's own terms.
+	'library_source', 'library_selection', 'library_type', 'library_fragment_size_bp'
 ]);
 
 /** Fields that get split off into a sequencing_runs row when present. Runs
@@ -448,8 +470,16 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		code: 'site_code',
 		latitude: 'latitude',
 		longitude: 'longitude',
-		notes: 'notes',        // plain `notes` header → sample.notes (was unmapped before)
+		notes: 'notes',
 		description: 'notes',
+		// SRA spells it collected_by (mapped above); a SampleTown export emits
+		// the local name, so both have to resolve or a round trip loses it.
+		collector_name: 'collector_name',
+		// Routing columns: which MIxS combination class the row is validated
+		// against. getImportableFields() offers them as targets, so they have to
+		// resolve here too or a sheet that declares its own checklist loses it.
+		mixs_checklist: 'mixs_checklist',
+		extension: 'extension',
 		// Project auto-create (lookup key; other project metadata is edited post-import)
 		project_name: 'project_name',
 		// Extract auto-create columns
@@ -459,8 +489,27 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		storage_box: 'storage_box',
 		storage_location: 'storage_location',
 		extract_notes: 'extract_notes',
+		nucl_acid_ext: 'nucl_acid_ext',
+		// PCR auto-create columns (one reaction per row, off the row's extract)
+		pcr_name: 'pcr_name',
+		pcr_date: 'pcr_date',
+		pcr_cond: 'pcr_cond',
+		nucl_acid_amp: 'nucl_acid_amp',
+		target_gene: 'target_gene',
+		target_subfragment: 'target_subfragment',
+		forward_primer_name: 'forward_primer_name',
+		forward_primer_seq: 'forward_primer_seq',
+		reverse_primer_name: 'reverse_primer_name',
+		reverse_primer_seq: 'reverse_primer_seq',
+		annealing_temp_c: 'annealing_temp_c',
+		num_cycles: 'num_cycles',
+		pcr_notes: 'pcr_notes',
 		// Library auto-create columns
 		library_name: 'library_name',
+		library_source: 'library_source',
+		library_selection: 'library_selection',
+		library_type: 'library_type',
+		library_fragment_size_bp: 'library_fragment_size_bp',
 		library_barcode: 'library_barcode',
 		library_prep_kit: 'library_prep_kit',
 		library_prep_date: 'library_prep_date',
@@ -521,8 +570,27 @@ export function getImportableFields(): { value: string; table: string; title?: s
 	push('storage_box', 'extract');
 	push('storage_location', 'extract');
 	push('extract_notes', 'extract');
+	push('nucl_acid_ext', 'extract');
+	// PCR auto-create columns — one reaction per row, off the row's extract.
+	push('pcr_name', 'pcr');
+	push('pcr_date', 'pcr');
+	push('pcr_cond', 'pcr');
+	push('nucl_acid_amp', 'pcr');
+	push('target_gene', 'pcr');
+	push('target_subfragment', 'pcr');
+	push('forward_primer_name', 'pcr');
+	push('forward_primer_seq', 'pcr');
+	push('reverse_primer_name', 'pcr');
+	push('reverse_primer_seq', 'pcr');
+	push('annealing_temp_c', 'pcr');
+	push('num_cycles', 'pcr');
+	push('pcr_notes', 'pcr');
 	// Library auto-create columns
 	push('library_name', 'library');
+	push('library_source', 'library');
+	push('library_selection', 'library');
+	push('library_type', 'library');
+	push('library_fragment_size_bp', 'library');
 	push('library_barcode', 'library');
 	push('library_prep_kit', 'library');
 	push('library_prep_date', 'library');
@@ -681,11 +749,26 @@ export function parseMixsTsv(
 				}
 				continue;
 			}
+			// PCR-side field — endpoint creates a pcr_amplifications row off the
+			// row's extract, and links the row's library to it as its source.
+			if (PCR_FIELDS.has(field)) {
+				let pv: unknown = val;
+				if (field === 'annealing_temp_c' || field === 'num_cycles') {
+					const n = Number(val);
+					pv = isNaN(n) ? null : n;
+				}
+				if (pv != null && pv !== '') {
+					const pcr = (sample._pcr as Record<string, unknown>) ?? {};
+					pcr[field] = pv;
+					sample._pcr = pcr;
+				}
+				continue;
+			}
 			// Library-side field — endpoint creates a library_preps row linked
 			// to this sample's extract.
 			if (LIBRARY_FIELDS.has(field)) {
 				let lv: unknown = val;
-				if (field === 'library_concentration_ng_ul') {
+				if (field === 'library_concentration_ng_ul' || field === 'library_fragment_size_bp') {
 					const n = Number(val);
 					lv = isNaN(n) ? null : n;
 				}
