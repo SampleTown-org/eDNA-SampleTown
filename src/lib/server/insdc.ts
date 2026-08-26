@@ -147,26 +147,73 @@ async function enaQuery(accession: string, result: EnaResult): Promise<Record<st
 	return rows;
 }
 
-/**
- * NCBI BioSample fallback for records ENA has not mirrored yet. Returns rows
- * in the same shape as the ENA sample result — harmonized attribute names are
- * the BioSample equivalents of ENA's checklist columns.
- */
-async function ncbiBioSampleQuery(accession: string): Promise<Record<string, string>[]> {
-	const searchRes = await getWithTimeout(
-		`${EUTILS}/esearch.fcgi?db=biosample&term=${encodeURIComponent(accession)}&retmode=json`
-	);
-	if (!searchRes.ok) throw new Error(`NCBI esearch returned HTTP ${searchRes.status}`);
-	const search = (await searchRes.json()) as { esearchresult?: { idlist?: string[] } };
-	const ids = search.esearchresult?.idlist ?? [];
-	if (ids.length === 0) return [];
+/** BioSample accessions per efetch call. NCBI accepts them directly as ids. */
+const NCBI_BATCH = 100;
 
-	const fetchRes = await getWithTimeout(
-		`${EUTILS}/efetch.fcgi?db=biosample&id=${ids.join(',')}&rettype=full&retmode=xml`
-	);
-	if (!fetchRes.ok) throw new Error(`NCBI efetch returned HTTP ${fetchRes.status}`);
-	return parseBioSampleXml(await fetchRes.text());
+/** Samples enriched from NCBI in one request. Each batch is a round trip, and
+ *  the endpoint should answer in a reasonable time even for a large project. */
+const MAX_ENRICH = 2_000;
+
+/** Pause between NCBI calls. Without an API key NCBI asks for =< 3 requests
+ *  per second; NCBI_API_KEY raises that to 10, so the wait shortens. */
+function ncbiDelayMs(): number {
+	return process.env.NCBI_API_KEY ? 110 : 350;
 }
+
+function ncbiAuth(): string {
+	const key = process.env.NCBI_API_KEY;
+	const email = process.env.NCBI_EMAIL;
+	return (
+		`&tool=sampletown${key ? `&api_key=${encodeURIComponent(key)}` : ''}` +
+		`${email ? `&email=${encodeURIComponent(email)}` : ''}`
+	);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Fetch BioSample records from NCBI, keyed by accession.
+ *
+ * Rows come back in the same shape as the ENA sample result: BioSample's
+ * harmonized attribute names are the same vocabulary ENA reports its checklist
+ * fields under, so the caller can merge the two without translating.
+ */
+async function fetchNcbiBioSamples(
+	accessions: string[]
+): Promise<Map<string, Record<string, string>>> {
+	const byAccession = new Map<string, Record<string, string>>();
+
+	for (let i = 0; i < accessions.length; i += NCBI_BATCH) {
+		const batch = accessions.slice(i, i + NCBI_BATCH);
+		if (i > 0) await sleep(ncbiDelayMs());
+
+		const res = await getWithTimeout(
+			`${EUTILS}/efetch.fcgi?db=biosample&id=${batch.join(',')}&rettype=full&retmode=xml${ncbiAuth()}`
+		);
+		if (!res.ok) throw new Error(`NCBI efetch returned HTTP ${res.status}`);
+
+		for (const row of parseBioSampleXml(await res.text())) {
+			const acc = row.sample_accession;
+			if (acc) byAccession.set(acc, row);
+		}
+	}
+
+	return byAccession;
+}
+
+/**
+ * Sample-level fields, used to report how many records the NCBI lookup
+ * actually improved. A run row carrying none of them describes the sequencing
+ * and nothing about where the sample came from.
+ */
+const SAMPLE_METADATA_FIELDS = [
+	'collection_date', 'collection_date_start',
+	'lat', 'lon', 'lat_lon', 'location', 'location_start',
+	'country', 'geo_loc_name',
+	'environment_biome', 'environment_feature', 'environment_material',
+	'env_broad_scale', 'env_local_scale', 'env_medium',
+	'isolation_source', 'depth', 'elevation', 'host'
+];
 
 /** Flatten a BioSampleSet document into one row per BioSample. */
 export function parseBioSampleXml(xml: string): Record<string, string>[] {
@@ -455,6 +502,20 @@ export function resolveChecklist(raw: Record<string, string>): {
 	return out;
 }
 
+/**
+ * INSDC placeholders for "no value". Merging one of these over a blank would
+ * dress an absent field up as a recorded one in the preview; the importer
+ * nulls them at parse time either way.
+ */
+const NULL_PLACEHOLDERS = new Set([
+	'not collected', 'not applicable', 'not provided', 'missing',
+	'unknown', 'none', 'n/a', 'na', 'null', '-'
+]);
+
+function isPlaceholder(value: string): boolean {
+	return NULL_PLACEHOLDERS.has(value.trim().toLowerCase());
+}
+
 /** First non-empty value among `keys`. */
 function pick(row: Record<string, string>, ...keys: string[]): string {
 	for (const k of keys) {
@@ -678,11 +739,15 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 
 		let raw: Record<string, string>[] = [];
 		let source = '';
+		// Which result set answered. Kept separate from the human-readable
+		// `source` string, which gains suffixes as the record is enriched.
+		let answered: EnaResult | null = null;
 		try {
 			for (const result of resultsFor(kind)) {
 				raw = await enaQuery(accession, result);
 				if (raw.length > 0) {
 					source = `ENA ${result}`;
+					answered = result;
 					break;
 				}
 			}
@@ -693,14 +758,74 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		}
 
 		// ENA mirrors NCBI on a daily cycle, so a BioSample submitted today is
-		// findable at NCBI and nowhere else. Only BioSamples have a fallback —
-		// it is the one record type NCBI serves without an SRA chain.
-		if (raw.length === 0 && kind === 'sample') {
+		// findable at NCBI and nowhere else.
+		if (raw.length === 0 && (kind === 'sample' || kind === 'bioproject' || kind === 'study')) {
 			try {
-				raw = await ncbiBioSampleQuery(accession);
-				if (raw.length > 0) source = 'NCBI biosample';
+				const direct = await fetchNcbiBioSamples([accession]);
+				raw = Array.from(direct.values());
+				if (raw.length > 0) {
+					source = 'NCBI biosample';
+					answered = 'sample';
+				}
 			} catch (err) {
-				warnings.push(`${accession}: NCBI fallback failed (${err instanceof Error ? err.message : String(err)})`);
+				warnings.push(
+					`${accession}: NCBI fallback failed (${err instanceof Error ? err.message : String(err)})`
+				);
+			}
+		}
+
+		// BioSample is the authority on what a sample is; ENA holds a copy, and
+		// the copy is not always complete. ENA indexes a submission's runs before
+		// it ingests the BioSamples they point at — a gap that can outlast the
+		// daily mirror and leaves run rows carrying no date, coordinates, or
+		// environmental context at all. Short of that, ENA's row can simply omit
+		// fields BioSample records.
+		//
+		// So every run row is reconciled against its BioSample rather than only
+		// the visibly empty ones: one batched request per 100 samples buys
+		// metadata that is otherwise silently missing. ENA still wins every field
+		// it has a value for; NCBI only fills blanks.
+		if (raw.length > 0 && answered === 'read_run') {
+			const thin = raw.filter((r) => r.sample_accession);
+			const wanted = Array.from(
+				new Set(thin.map((r) => r.sample_accession).filter((a): a is string => !!a))
+			);
+
+			if (wanted.length > MAX_ENRICH) {
+				warnings.push(
+					`${accession}: ${wanted.length} records are missing sample metadata at ENA; filling the first ${MAX_ENRICH} from NCBI. Import these, then fetch the rest.`
+				);
+			}
+			const toFetch = wanted.slice(0, MAX_ENRICH);
+
+			if (toFetch.length > 0) {
+				try {
+					const biosamples = await fetchNcbiBioSamples(toFetch);
+					let filled = 0;
+					for (const row of thin) {
+						const bs = row.sample_accession ? biosamples.get(row.sample_accession) : undefined;
+						if (!bs) continue;
+						let added = false;
+						for (const [k, v] of Object.entries(bs)) {
+							// ENA's value wins where it has one; NCBI only fills blanks.
+							if (v && !isPlaceholder(v) && !row[k]) {
+								row[k] = v;
+								if (SAMPLE_METADATA_FIELDS.includes(k)) added = true;
+							}
+						}
+						if (added) filled++;
+					}
+					if (filled > 0) {
+						source += ' + NCBI biosample';
+						warnings.push(
+							`${accession}: filled missing sample metadata on ${filled} of ${thin.length} record(s) from NCBI BioSample.`
+						);
+					}
+				} catch (err) {
+					warnings.push(
+						`${accession}: could not fill missing sample metadata from NCBI (${err instanceof Error ? err.message : String(err)})`
+					);
+				}
 			}
 		}
 
@@ -712,11 +837,7 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 			continue;
 		}
 
-		const result: EnaResult = source.endsWith('read_run')
-			? 'read_run'
-			: source.endsWith('sequence')
-				? 'sequence'
-				: 'sample';
+		const result: EnaResult = answered ?? 'sample';
 
 		let kept = 0;
 		for (const r of raw) {

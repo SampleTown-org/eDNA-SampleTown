@@ -155,6 +155,26 @@ mirrored, which typically takes a day.
 fields apply, and there is no way to know the set ahead of time. Empty
 columns are dropped per row.
 
+### Filling gaps from NCBI
+
+ENA indexes a submission's runs before it ingests the BioSamples those runs
+point at, and the gap can outlast the daily mirror — `PRJNA1444909` sat that
+way for months. The symptom is quiet: the runs come back looking healthy, but
+carry no collection date, coordinates, or environmental context, so the rows
+fetch cleanly and then import nothing.
+
+So a run row missing both a date and a place is looked up at NCBI by its
+BioSample accession, and the archive's attributes fill the blanks. ENA's value
+always wins where it has one; NCBI only fills what is empty. BioSample's
+harmonized attribute names are the same vocabulary ENA reports its checklist
+fields under, so the two merge without translating. Enrichment is skipped
+entirely when ENA already has the metadata — the common case costs nothing.
+
+Batches are 100 accessions, capped at 2,000 samples per request. NCBI asks for
+no more than 3 requests/second, which the batch pacing respects; setting
+`NCBI_API_KEY` (and optionally `NCBI_EMAIL`) raises that to 10 and shortens the
+wait.
+
 ### Entity mapping
 
 | INSDC | SampleTown |

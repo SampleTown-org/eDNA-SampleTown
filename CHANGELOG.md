@@ -21,6 +21,13 @@
 - Archive columns with no explicit mapping are matched against the importer's
   full MIxS vocabulary; whatever it doesn't recognize is kept as a
   `misc_param:` tag, so source accessions stay queryable on the sample.
+- Run rows that come back from ENA without a collection date or coordinates are
+  filled in from their NCBI BioSample. ENA indexes a submission's runs before it
+  ingests the BioSamples they point at, and the gap can outlast the daily
+  mirror — `PRJNA1444909` fetched 81 runs carrying no sample metadata at all.
+  ENA's values always win; NCBI only fills blanks, and the lookup is skipped
+  when ENA already has the metadata. Optional `NCBI_API_KEY` / `NCBI_EMAIL`
+  raise the request rate for large projects.
 
 ### Import pipeline
 - PCR reactions are now created on import. New `pcr_*` columns
