@@ -2102,6 +2102,14 @@
   without one.</li>
 <li>The export also carries <code>accession</code> and <code>project_accession</code>, so a sheet says
   where its records came from and re-importing puts them back.</li>
+<li>The <strong>Export TSV</strong> button on the import tab labels its columns the same way.
+  It keeps the column order it fetched, since that sheet exists to be
+  hand-corrected and re-imported and reordering would make it harder to line up
+  against the archive it came from.</li>
+<li>Import / Export drops "MIxS" from its heading, and the project picker and
+  site-match radius line up: the row was bottom-aligned while the project
+  column carried helper text under its select, which pushed the radius control
+  below the select it sits beside.</li>
 </ul>
 <h3 id="fixed-archive-fields-landing-in-the-wrong-column">Fixed: archive fields landing in the wrong column<a class="headerlink" href="#fixed-archive-fields-landing-in-the-wrong-column" title="Permanent link">&para;</a></h3>
 <ul>
