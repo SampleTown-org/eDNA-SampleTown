@@ -1252,6 +1252,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#sites-and-samples-views" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1605,6 +1616,17 @@
     <span class="md-ellipsis">
       
         Import from SRA / ENA / GenBank
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tables
       
     </span>
   </a>
@@ -1971,6 +1993,17 @@
   a 2,000-sample project adds about 15 s — because capping by count silently
   dropped metadata that was cheap to fetch. Optional <code>NCBI_API_KEY</code> /
   <code>NCBI_EMAIL</code> raise the request rate for large projects.</li>
+</ul>
+<h3 id="tables">Tables<a class="headerlink" href="#tables" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A second horizontal scrollbar sits above the header. These tables are wider
+  than the viewport by design — MIxS gives every sample dozens of optional
+  parameters — and a scrollbar only at the bottom of a long table is off-screen
+  exactly when the reader is looking at the top rows.</li>
+<li>The right edge fades while there are more columns to reach, with a "more →"
+  marker level with the header. Without it the table looks like it simply ends.</li>
+<li>The first column wraps instead of sizing to its content. It is sticky, so one
+  long sample name pushed every other column off-screen and pinned it there.</li>
 </ul>
 <h3 id="sites-and-samples-views">Sites and samples views<a class="headerlink" href="#sites-and-samples-views" title="Permanent link">&para;</a></h3>
 <ul>
