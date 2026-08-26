@@ -33,8 +33,11 @@
 	}: Props = $props();
 
 	// --- Grid geometry ----------------------------------------------------
+	// An 8-well strip is one column of a plate, so its wells are A01..H01 —
+	// the orientation the strip physically sits in, and the order a multichannel
+	// pipette loads it.
 	const LAYOUTS = {
-		8: { rows: 1, cols: 8 },
+		8: { rows: 8, cols: 1 },
 		96: { rows: 8, cols: 12 },
 		384: { rows: 16, cols: 24 }
 	};

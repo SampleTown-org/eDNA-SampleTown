@@ -120,6 +120,30 @@ const NUMERIC_COLUMNS = new Set([
 	'latitude', 'longitude'
 ]);
 
+/** Columns parsed as dates on import. */
+const DATE_COLUMNS = new Set([
+	'collection_date', 'extraction_date', 'library_prep_date', 'run_date', 'pcr_date'
+]);
+
+/**
+ * Accept the compact spelling of a date. MIxS wants ISO-8601, but sheets
+ * exported from instruments and lab notebooks routinely carry `20180423`,
+ * which fails the slot's pattern and imports as an unusable string.
+ *
+ * Only the unambiguous 8-digit form is converted. `03/04/2018` is left alone —
+ * day-first and month-first are both common and indistinguishable, and
+ * guessing would move samples in time without telling anyone.
+ */
+export function normalizeDate(value: string): string {
+	const m = /^(\d{4})(\d{2})(\d{2})$/.exec(value.trim());
+	if (!m) return value;
+	const [, year, month, day] = m;
+	const mo = Number(month);
+	const d = Number(day);
+	if (mo < 1 || mo > 12 || d < 1 || d > 31) return value;
+	return `${year}-${month}-${day}`;
+}
+
 function escTsv(val: unknown): string {
 	if (val == null || val === '') return 'not collected';
 	const s = String(val);
@@ -720,6 +744,7 @@ export function parseMixsTsv(
 				}
 			}
 			if (val == null) continue;
+			if (typeof val === 'string' && DATE_COLUMNS.has(field)) val = normalizeDate(val);
 			// `misc_param:<key>` — truly off-schema tag from the column mapper
 			// UI or a prior SampleTown export. Sanitize the suffix to [a-z_]
 			// and store under the same prefixed key in custom_fields.

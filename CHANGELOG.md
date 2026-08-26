@@ -32,6 +32,23 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### From the feedback queue
+- 8-well strips fill A01–H01 instead of A01–A08 — a strip is one column of a
+  plate, which is the orientation it sits in and the order a multichannel
+  pipette loads it. Strips laid out before this read as 96-well plates with row
+  A filled; every well still renders in the right place, in a plate grid rather
+  than a strip.
+- `YYYYMMDD` dates are accepted on import and converted to ISO-8601, for
+  `collection_date`, `extraction_date`, `library_prep_date`, `run_date` and
+  `pcr_date`. Slash-separated dates are deliberately left alone: day-first and
+  month-first are indistinguishable, and guessing would move samples in time.
+- Samples with no coordinates now import by default (see
+  `allowSitesWithoutCoords` below). Collection date and coordinates remain
+  required when adding samples through the form.
+- A site's detail map shows a marker at the site. `MapPicker` drew the pin only
+  when interactive, so a read-only map centred on the location without marking
+  it.
+
 ### Import UI
 - Import gains a **Templates** tab beside *Upload file* and *From accession*,
   holding the MIxS template downloads.
@@ -42,8 +59,12 @@
   contribute a line per row, which pushed the import button off the page.
 - `allowSitesWithoutCoords` imports samples that have no coordinates by putting
   them on a site named for whatever locality the sheet carries, falling back to
-  one "Location not recorded" site per project. Off by default; the dry run now
-  says how many rows would otherwise be skipped.
+  one "Location not recorded" site per project. On by default — callers opt out
+  by sending it explicitly false. The dry run says how many rows are skipped
+  when it is off.
+- The archive fetch no longer warns about records it reconciled against NCBI or
+  about missing coordinates; the source column already reports the former and
+  the latter no longer costs the row its import.
 
 ### Permits
 - Permit coverage no longer warns about export. Nothing in the export path

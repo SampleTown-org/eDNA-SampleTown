@@ -10,13 +10,18 @@ export type PlateFormat = 8 | 96 | 384;
 
 const ROW_LETTERS = 'ABCDEFGHIJKLMNOP';
 const LAYOUTS: Record<PlateFormat, { rows: number; cols: number }> = {
-	8: { rows: 1, cols: 8 },
+	8: { rows: 8, cols: 1 },
 	96: { rows: 8, cols: 12 },
 	384: { rows: 16, cols: 24 }
 };
 
 /** Detect plate format from the largest occupied well — `H12` → 96, `P24`
- *  → 384, `A08` → 8. Falls back to 96 when no wells are placed. */
+ *  → 384, `H01` → 8. Falls back to 96 when no wells are placed.
+ *
+ *  A strip occupies a single column, so anything reaching past column 1 is a
+ *  plate. Strips laid out before the A01..A08 → A01..H01 change read as 96-well
+ *  plates with row A filled, which is what they are: every well still renders
+ *  in the right place, just in a plate grid rather than a strip. */
 export function detectPlateFormat(wellLabels: (string | null | undefined)[]): PlateFormat {
 	let maxRow = 0;
 	let maxCol = 0;
@@ -28,7 +33,7 @@ export function detectPlateFormat(wellLabels: (string | null | undefined)[]): Pl
 		if (!Number.isNaN(col) && col > maxCol) maxCol = col;
 	}
 	if (maxRow > 7 || maxCol > 12) return 384;
-	if (maxRow > 0 || maxCol > 8) return 96;
+	if (maxCol > 1) return 96;
 	return 8;
 }
 

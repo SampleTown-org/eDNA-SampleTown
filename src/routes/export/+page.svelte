@@ -69,10 +69,10 @@
 	let fetchError = $state('');
 	let siteMatchKm = $state(1);
 	/** Import samples that have no coordinates by putting them on a site named
-	 *  for whatever locality the sheet does carry. Off by default so a failed
-	 *  lat/lon mapping still shows up as skipped rows rather than silently
-	 *  becoming sites. */
-	let allowSitesWithoutCoords = $state(false);
+	 *  for whatever locality the sheet does carry. On by default — archives omit
+	 *  coordinates routinely, and dropping those rows loses the controls and
+	 *  blanks that make the rest of a run interpretable. */
+	let allowSitesWithoutCoords = $state(true);
 	/** Default MIxS checklist + extension applied to rows whose TSV doesn't
 	 *  carry mixs_checklist / extension columns. Drives import-side validation
 	 *  and the default combination class for required-slot resolution. */
@@ -528,7 +528,7 @@
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">Import into existing project</label>
 				<select bind:value={importProject} class={selectCls}>
-					<option value="">Select project...</option>
+					<option value="">New project</option>
 					{#each data.projects as p}<option value={p.id}>{p.project_name}</option>{/each}
 				</select>
 				<p class="text-[10px] text-slate-500 mt-1">Optional if the sheet has a <code>project_name</code> column.</p>
@@ -568,7 +568,7 @@
 				<span class="block text-slate-500">
 					Groups them by <code>site_name</code>, <code>site_code</code>, or
 					<code>geo_loc_name</code>, falling back to one “Location not recorded” site per
-					project. Without this they are skipped, since every sample needs a site.
+					project. Uncheck to skip those rows instead — every sample needs a site.
 				</span>
 			</span>
 		</label>

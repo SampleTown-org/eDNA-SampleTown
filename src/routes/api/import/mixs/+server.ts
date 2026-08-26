@@ -98,10 +98,14 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	let columnMap: Record<string, string> | undefined;
 	let siteMatchKm: number = DEFAULT_SITE_MATCH_KM;
 	let people: { personnel_id: string; role?: string | null }[] | undefined;
-	/** Create sites for samples that have no coordinates. Off by default: a
-	 *  sheet whose lat/lon columns failed to map looks exactly like a sheet
-	 *  that never had them, and silently inventing sites would bury that. */
-	let allowSitesWithoutCoords = false;
+	/** Create sites for samples that have no coordinates. On by default: an
+	 *  archive submission omits them routinely — controls, blanks, samples whose
+	 *  location was never recorded — and dropping those rows loses the negative
+	 *  controls that make the rest of a run interpretable. The dry run reports
+	 *  how many rows land this way, so a sheet whose lat/lon columns failed to
+	 *  map still shows up as an unusually large count rather than silence.
+	 *  Callers opt out by sending it explicitly false. */
+	let allowSitesWithoutCoords = true;
 	/** Fallback checklist/extension for rows that don't declare their own —
 	 *  used for per-row MIxS validation and as sample defaults on insert. */
 	let defaultChecklist = 'MimarksS';
@@ -127,7 +131,8 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				try { people = JSON.parse(peopleRaw); }
 				catch { return json({ error: 'Invalid people JSON' }, { status: 400 }); }
 			}
-			allowSitesWithoutCoords = formData.get('allowSitesWithoutCoords') === 'true';
+			// Absent means "default"; only an explicit false opts out.
+			allowSitesWithoutCoords = formData.get('allowSitesWithoutCoords') !== 'false';
 			const dcl = formData.get('defaultChecklist') as string | null;
 			if (dcl) defaultChecklist = dcl;
 			const dex = formData.get('defaultExtension') as string | null;
@@ -162,7 +167,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				if (!isNaN(km) && km > 0 && km <= 100) siteMatchKm = km;
 			}
 			if (Array.isArray(body.people)) people = body.people;
-			allowSitesWithoutCoords = body.allowSitesWithoutCoords === true;
+			allowSitesWithoutCoords = body.allowSitesWithoutCoords !== false;
 			if (typeof body.defaultChecklist === 'string') defaultChecklist = body.defaultChecklist;
 			if (typeof body.defaultExtension === 'string') defaultExtension = body.defaultExtension;
 			if (typeof tsv === 'string' && tsv.length > MAX_TSV_BYTES) {

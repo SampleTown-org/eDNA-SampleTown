@@ -118,22 +118,27 @@
 			maxZoom: 19
 		}).addTo(map);
 
-		// Single marker mode (picker)
-		if (!readonly && markers.length === 0) {
+		// Single marker mode. The pin is drawn whenever there is a coordinate to
+		// draw, readonly or not — a read-only map that centres on a location
+		// without marking it leaves the viewer guessing which point is the site.
+		// Only the click-to-move handler is withheld when readonly.
+		if (markers.length === 0) {
 			if (latitude != null && longitude != null) {
 				marker = L.marker([latitude, longitude]).addTo(map);
 			}
-			map.on('click', (e: any) => {
-				const { lat, lng } = e.latlng;
-				latitude = Math.round(lat * 10000) / 10000;
-				longitude = Math.round(lng * 10000) / 10000;
-				if (marker) {
-					marker.setLatLng([latitude, longitude]);
-				} else {
-					marker = L.marker([latitude, longitude]).addTo(map);
-				}
-				onchange?.(latitude, longitude);
-			});
+			if (!readonly) {
+				map.on('click', (e: any) => {
+					const { lat, lng } = e.latlng;
+					latitude = Math.round(lat * 10000) / 10000;
+					longitude = Math.round(lng * 10000) / 10000;
+					if (marker) {
+						marker.setLatLng([latitude, longitude]);
+					} else {
+						marker = L.marker([latitude, longitude]).addTo(map);
+					}
+					onchange?.(latitude, longitude);
+				});
+			}
 		}
 
 		// Multi-marker mode (dashboard / sites list)

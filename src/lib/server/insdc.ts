@@ -212,20 +212,6 @@ async function fetchNcbiBioSamples(
 	return { byAccession, unreached: 0 };
 }
 
-/**
- * Sample-level fields, used to report how many records the NCBI lookup
- * actually improved. A run row carrying none of them describes the sequencing
- * and nothing about where the sample came from.
- */
-const SAMPLE_METADATA_FIELDS = [
-	'collection_date', 'collection_date_start',
-	'lat', 'lon', 'lat_lon', 'location', 'location_start',
-	'country', 'geo_loc_name',
-	'environment_biome', 'environment_feature', 'environment_material',
-	'env_broad_scale', 'env_local_scale', 'env_medium',
-	'isolation_source', 'depth', 'elevation', 'host'
-];
-
 /** Flatten a BioSampleSet document into one row per BioSample. */
 export function parseBioSampleXml(xml: string): Record<string, string>[] {
 	const parser = new XMLParser({
@@ -809,38 +795,18 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 						Date.now() + ENRICH_BUDGET_MS
 					);
 
-					// `repaired` counts only rows that gained a field the importer
-					// actually gates on. Rows that merely gained an extra
-					// measurement are not worth reporting as a repair, and counting
-					// them made a healthy project look broken.
-					let repaired = 0;
 					for (const row of withBioSample) {
 						const bs = row.sample_accession ? byAccession.get(row.sample_accession) : undefined;
 						if (!bs) continue;
-
-						const hadDate = !!(row.collection_date || row.collection_date_start);
-						const hadPlace = !!(
-							row.lat || row.lon || row.location || row.location_start || row.lat_lon
-						);
-
 						for (const [k, v] of Object.entries(bs)) {
 							// ENA's value wins where it has one; NCBI only fills blanks.
 							if (v && !isPlaceholder(v) && !row[k]) row[k] = v;
 						}
-
-						const hasDate = !!(row.collection_date || row.collection_date_start);
-						const hasPlace = !!(
-							row.lat || row.lon || row.location || row.location_start || row.lat_lon
-						);
-						if ((!hadDate && hasDate) || (!hadPlace && hasPlace)) repaired++;
 					}
 
+					// The `resolved` table already reports NCBI as a source; a
+					// routine reconciliation needs no warning of its own.
 					if (byAccession.size > 0) source += ' + NCBI biosample';
-					if (repaired > 0) {
-						warnings.push(
-							`${accession}: ENA was missing a collection date or coordinates on ${repaired} of ${withBioSample.length} record(s); filled from NCBI BioSample.`
-						);
-					}
 					if (unreached > 0) {
 						warnings.push(
 							`${accession}: ran out of time reconciling against NCBI with ${unreached} of ${wanted.length} sample(s) left. Those records keep whatever ENA had, so some may be missing coordinates — re-run the fetch to pick them up.`
@@ -882,17 +848,6 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 
 	if (truncated) {
 		warnings.push(`Stopped at ${MAX_ROWS} rows — import these, then fetch the rest.`);
-	}
-
-	// The importer attaches every sample to a site and derives sites from
-	// coordinates, so a row without them cannot be inserted. Submitters often
-	// omit lat/lon, which makes this the most common reason an accession
-	// fetches cleanly and then imports nothing.
-	const noCoords = rows.filter((r) => !r.lat_lon && !(r.latitude && r.longitude)).length;
-	if (noCoords > 0) {
-		warnings.push(
-			`${noCoords} of ${rows.length} record(s) have no coordinates. Samples need a site, so these are skipped on import — add lat_lon in the preview, or import them into a project where you can place the site by hand.`
-		);
 	}
 
 	return { rows, headers: collectHeaders(rows), warnings, resolved };
