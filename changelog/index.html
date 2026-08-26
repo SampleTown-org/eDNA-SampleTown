@@ -1285,6 +1285,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#sample-naming-from-the-archives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sample naming from the archives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#fixed-biosamples-merged-on-import" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1700,6 +1711,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#sample-naming-from-the-archives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sample naming from the archives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#fixed-biosamples-merged-on-import" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2102,10 +2124,9 @@
   without one.</li>
 <li>The export also carries <code>accession</code> and <code>project_accession</code>, so a sheet says
   where its records came from and re-importing puts them back.</li>
-<li>The <strong>Export TSV</strong> button on the import tab labels its columns the same way.
-  It keeps the column order it fetched, since that sheet exists to be
-  hand-corrected and re-imported and reordering would make it harder to line up
-  against the archive it came from.</li>
+<li>The <strong>Export TSV</strong> button on the import tab produces the same shape: grouped
+  by vocabulary, labelled, <code>samp_name</code> first. The TSV mechanics behind both are
+  now one module rather than two implementations that had already drifted.</li>
 <li>Import / Export drops "MIxS" from its heading, and the project picker and
   site-match radius line up: the row was bottom-aligned while the project
   column carried helper text under its select, which pushed the radius control
@@ -2118,6 +2139,18 @@
   <code>temperature</code> and the GSC checklists a bare <code>temp</code>, both meaning the MIxS
   <code>temp</code> slot, so PRJNA421293 had 2681 temperatures in the slot and 144
   stranded in <code>misc_param:temp</code>. Same-concept columns now fill the slot.</li>
+</ul>
+<h3 id="sample-naming-from-the-archives">Sample naming from the archives<a class="headerlink" href="#sample-naming-from-the-archives" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A sample takes the submitter's title when they wrote one, their own sample
+  name when NCBI generated the title for them, and its accession only when it
+  has neither. NCBI writes titles of the form "MIMARKS Survey related sample
+  from marine metagenome" for submitters who leave one blank — it names the
+  package and the organism, not the sample, and every sample in the submission
+  gets the same one. Recognising it by shape rather than by whether it collides
+  with another record means a sample is named the same way whether it was
+  fetched alone or as part of its project. PRJNA421293's 2026 samples now all
+  carry meaningful names; previously 1806 of them fell back to accessions.</li>
 </ul>
 <h3 id="fixed-biosamples-merged-on-import">Fixed: BioSamples merged on import<a class="headerlink" href="#fixed-biosamples-merged-on-import" title="Permanent link">&para;</a></h3>
 <ul>
