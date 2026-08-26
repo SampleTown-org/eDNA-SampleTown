@@ -150,9 +150,16 @@ async function enaQuery(accession: string, result: EnaResult): Promise<Record<st
 /** BioSample accessions per efetch call. NCBI accepts them directly as ids. */
 const NCBI_BATCH = 100;
 
-/** Samples enriched from NCBI in one request. Each batch is a round trip, and
- *  the endpoint should answer in a reasonable time even for a large project. */
-const MAX_ENRICH = 2_000;
+/**
+ * Wall-clock backstop for the NCBI reconciliation pass.
+ *
+ * A batch of 100 costs roughly 0.4 s plus pacing, so even a MAX_ROWS project
+ * lands near a minute — comfortably inside nginx's 300 s proxy timeout. This
+ * budget exists only so a degraded NCBI cannot hang the request, not to ration
+ * a normal fetch: capping by sample count silently drops metadata that is
+ * cheaply available, which is the failure it replaces.
+ */
+const ENRICH_BUDGET_MS = 120_000;
 
 /** Pause between NCBI calls. Without an API key NCBI asks for =< 3 requests
  *  per second; NCBI_API_KEY raises that to 10, so the wait shortens. */
@@ -179,11 +186,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * fields under, so the caller can merge the two without translating.
  */
 async function fetchNcbiBioSamples(
-	accessions: string[]
-): Promise<Map<string, Record<string, string>>> {
+	accessions: string[],
+	deadline?: number
+): Promise<{ byAccession: Map<string, Record<string, string>>; unreached: number }> {
 	const byAccession = new Map<string, Record<string, string>>();
 
 	for (let i = 0; i < accessions.length; i += NCBI_BATCH) {
+		if (deadline != null && Date.now() > deadline) {
+			return { byAccession, unreached: accessions.length - i };
+		}
 		const batch = accessions.slice(i, i + NCBI_BATCH);
 		if (i > 0) await sleep(ncbiDelayMs());
 
@@ -198,7 +209,7 @@ async function fetchNcbiBioSamples(
 		}
 	}
 
-	return byAccession;
+	return { byAccession, unreached: 0 };
 }
 
 /**
@@ -762,7 +773,7 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		if (raw.length === 0 && (kind === 'sample' || kind === 'bioproject' || kind === 'study')) {
 			try {
 				const direct = await fetchNcbiBioSamples([accession]);
-				raw = Array.from(direct.values());
+				raw = Array.from(direct.byAccession.values());
 				if (raw.length > 0) {
 					source = 'NCBI biosample';
 					answered = 'sample';
@@ -786,44 +797,58 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		// metadata that is otherwise silently missing. ENA still wins every field
 		// it has a value for; NCBI only fills blanks.
 		if (raw.length > 0 && answered === 'read_run') {
-			const thin = raw.filter((r) => r.sample_accession);
+			const withBioSample = raw.filter((r) => r.sample_accession);
 			const wanted = Array.from(
-				new Set(thin.map((r) => r.sample_accession).filter((a): a is string => !!a))
+				new Set(withBioSample.map((r) => r.sample_accession).filter((a): a is string => !!a))
 			);
 
-			if (wanted.length > MAX_ENRICH) {
-				warnings.push(
-					`${accession}: ${wanted.length} records are missing sample metadata at ENA; filling the first ${MAX_ENRICH} from NCBI. Import these, then fetch the rest.`
-				);
-			}
-			const toFetch = wanted.slice(0, MAX_ENRICH);
-
-			if (toFetch.length > 0) {
+			if (wanted.length > 0) {
 				try {
-					const biosamples = await fetchNcbiBioSamples(toFetch);
-					let filled = 0;
-					for (const row of thin) {
-						const bs = row.sample_accession ? biosamples.get(row.sample_accession) : undefined;
+					const { byAccession, unreached } = await fetchNcbiBioSamples(
+						wanted,
+						Date.now() + ENRICH_BUDGET_MS
+					);
+
+					// `repaired` counts only rows that gained a field the importer
+					// actually gates on. Rows that merely gained an extra
+					// measurement are not worth reporting as a repair, and counting
+					// them made a healthy project look broken.
+					let repaired = 0;
+					for (const row of withBioSample) {
+						const bs = row.sample_accession ? byAccession.get(row.sample_accession) : undefined;
 						if (!bs) continue;
-						let added = false;
+
+						const hadDate = !!(row.collection_date || row.collection_date_start);
+						const hadPlace = !!(
+							row.lat || row.lon || row.location || row.location_start || row.lat_lon
+						);
+
 						for (const [k, v] of Object.entries(bs)) {
 							// ENA's value wins where it has one; NCBI only fills blanks.
-							if (v && !isPlaceholder(v) && !row[k]) {
-								row[k] = v;
-								if (SAMPLE_METADATA_FIELDS.includes(k)) added = true;
-							}
+							if (v && !isPlaceholder(v) && !row[k]) row[k] = v;
 						}
-						if (added) filled++;
+
+						const hasDate = !!(row.collection_date || row.collection_date_start);
+						const hasPlace = !!(
+							row.lat || row.lon || row.location || row.location_start || row.lat_lon
+						);
+						if ((!hadDate && hasDate) || (!hadPlace && hasPlace)) repaired++;
 					}
-					if (filled > 0) {
-						source += ' + NCBI biosample';
+
+					if (byAccession.size > 0) source += ' + NCBI biosample';
+					if (repaired > 0) {
 						warnings.push(
-							`${accession}: filled missing sample metadata on ${filled} of ${thin.length} record(s) from NCBI BioSample.`
+							`${accession}: ENA was missing a collection date or coordinates on ${repaired} of ${withBioSample.length} record(s); filled from NCBI BioSample.`
+						);
+					}
+					if (unreached > 0) {
+						warnings.push(
+							`${accession}: ran out of time reconciling against NCBI with ${unreached} of ${wanted.length} sample(s) left. Those records keep whatever ENA had, so some may be missing coordinates — re-run the fetch to pick them up.`
 						);
 					}
 				} catch (err) {
 					warnings.push(
-						`${accession}: could not fill missing sample metadata from NCBI (${err instanceof Error ? err.message : String(err)})`
+						`${accession}: could not reconcile against NCBI BioSample (${err instanceof Error ? err.message : String(err)}); keeping ENA's metadata.`
 					);
 				}
 			}

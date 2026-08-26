@@ -155,25 +155,39 @@ mirrored, which typically takes a day.
 fields apply, and there is no way to know the set ahead of time. Empty
 columns are dropped per row.
 
-### Filling gaps from NCBI
+### Reconciling against NCBI
 
-ENA indexes a submission's runs before it ingests the BioSamples those runs
-point at, and the gap can outlast the daily mirror — `PRJNA1444909` sat that
-way for months. The symptom is quiet: the runs come back looking healthy, but
-carry no collection date, coordinates, or environmental context, so the rows
-fetch cleanly and then import nothing.
+BioSample is the authority on what a sample is; ENA holds a copy, and the copy
+is not always complete. ENA indexes a submission's runs before it ingests the
+BioSamples those runs point at, and the gap can outlast the daily mirror —
+`PRJNA1444909` returned 81 runs carrying no collection date, coordinates, or
+environmental context at all. The symptom is quiet: the rows fetch cleanly and
+then import nothing, because samples need a site and sites come from
+coordinates. Short of that total gap, ENA's row can also simply omit fields
+BioSample records.
 
-So a run row missing both a date and a place is looked up at NCBI by its
-BioSample accession, and the archive's attributes fill the blanks. ENA's value
-always wins where it has one; NCBI only fills what is empty. BioSample's
-harmonized attribute names are the same vocabulary ENA reports its checklist
-fields under, so the two merge without translating. Enrichment is skipped
-entirely when ENA already has the metadata — the common case costs nothing.
+So every run row carrying a BioSample accession is reconciled against NCBI,
+not just the visibly empty ones. ENA wins every field it has a value for; NCBI
+only fills blanks, and INSDC null placeholders (`not collected`, `not
+applicable`, …) are skipped so an absent field is not dressed up as a recorded
+one. BioSample's harmonized attribute names are the same vocabulary ENA reports
+its checklist fields under, so the two merge without translating.
 
-Batches are 100 accessions, capped at 2,000 samples per request. NCBI asks for
-no more than 3 requests/second, which the batch pacing respects; setting
-`NCBI_API_KEY` (and optionally `NCBI_EMAIL`) raises that to 10 and shortens the
-wait.
+Reconciliation runs in batches of 100 accessions and is bounded by wall clock,
+not by a sample count: a batch costs about 0.4 s plus pacing, so a 2,000-sample
+project adds roughly 15 s and even a `MAX_ROWS` one stays near a minute — well
+inside nginx's 300 s proxy timeout. Capping by count instead would silently
+drop metadata that is cheap to fetch. If the budget is ever exhausted the fetch
+says how many samples went unreconciled rather than reporting success.
+
+NCBI asks for no more than 3 requests/second, which the batch pacing respects;
+setting `NCBI_API_KEY` (and optionally `NCBI_EMAIL`) raises that to 10 and
+shortens the wait.
+
+Only genuine repairs are reported. A row that merely gained an extra
+measurement is not worth flagging; the fetch warns when ENA was missing a
+collection date or coordinates and NCBI supplied them, and stays silent when
+ENA was already complete.
 
 ### Entity mapping
 
