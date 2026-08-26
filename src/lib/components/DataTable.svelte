@@ -197,9 +197,61 @@
 		})
 	);
 
+	let tableEl: HTMLDivElement | undefined = $state();
+
+	// --- Horizontal scroll -------------------------------------------------
+	//
+	// These tables are wider than the viewport by design: MIxS gives every
+	// sample dozens of optional parameters. A scrollbar only at the bottom of a
+	// long table is off-screen exactly when the reader is looking at the top
+	// rows, so a second one is mirrored above the header, and the right edge is
+	// faded while there is more to reach.
+	let topScrollEl: HTMLDivElement | undefined = $state();
+	let scrollWidth = $state(0);
+	let viewportWidth = $state(0);
+	let scrollLeft = $state(0);
+
+	const hasOverflow = $derived(scrollWidth - viewportWidth > 1);
+	const moreToTheRight = $derived(hasOverflow && scrollLeft + viewportWidth < scrollWidth - 1);
+
+	/** Guards the two scrollers against echoing each other's scroll events. */
+	let syncing = false;
+
+	function syncScroll(from: 'top' | 'table') {
+		if (syncing) return;
+		syncing = true;
+		const source = from === 'top' ? topScrollEl : tableEl;
+		const target = from === 'top' ? tableEl : topScrollEl;
+		if (source && target) target.scrollLeft = source.scrollLeft;
+		if (tableEl) scrollLeft = tableEl.scrollLeft;
+		// Released on the next frame: assigning scrollLeft fires the other
+		// element's scroll event asynchronously.
+		requestAnimationFrame(() => { syncing = false; });
+	}
+
+	/** Track the table's dimensions so the proxy scrollbar matches its width
+	 *  and the fade knows whether there is anything left to scroll to. */
+	$effect(() => {
+		if (!tableEl) return;
+		// Touch the rows so this re-runs when the table's contents change.
+		sortedRows.length;
+		columns.length;
+
+		const measure = () => {
+			if (!tableEl) return;
+			scrollWidth = tableEl.scrollWidth;
+			viewportWidth = tableEl.clientWidth;
+			scrollLeft = tableEl.scrollLeft;
+		};
+		measure();
+
+		const observer = new ResizeObserver(measure);
+		observer.observe(tableEl);
+		return () => observer.disconnect();
+	});
+
 	// Keyboard navigation: shift+up/down to move focus, spacebar to toggle selection
 	let focusedIndex = $state(-1);
-	let tableEl: HTMLDivElement | undefined = $state();
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (!selectable) return;
@@ -287,9 +339,26 @@
 	</div>
 {/if}
 
+<div>
+	<!-- Proxy scrollbar above the header, kept in step with the table below.
+	     Only rendered when the table actually overflows. Sits outside the
+	     wrapper that carries the edge fade so the fade cannot cover it. -->
+	{#if hasOverflow}
+		<div
+			bind:this={topScrollEl}
+			onscroll={() => syncScroll('top')}
+			class="overflow-x-auto overflow-y-hidden"
+			aria-hidden="true"
+		>
+			<div style="width: {scrollWidth}px; height: 1px;"></div>
+		</div>
+	{/if}
+
+<div class="relative">
 <div
 	class="overflow-x-auto rounded-lg border border-slate-800"
 	bind:this={tableEl}
+	onscroll={() => syncScroll('table')}
 	tabindex={selectable ? 0 : undefined}
 	onkeydown={selectable ? handleKeydown : undefined}
 	role={selectable ? 'grid' : undefined}
@@ -349,7 +418,7 @@
 				{/if}
 				{#each columns as col, colIdx}
 					<th
-						class="px-4 py-3 text-left font-medium text-slate-400 {col.class || ''} {colIdx === 0 ? 'sm:sticky sm:z-20 bg-slate-900' : ''}"
+						class="px-4 py-3 text-left font-medium text-slate-400 {col.class || ''} {colIdx === 0 ? 'sm:sticky sm:z-20 bg-slate-900 max-w-56' : ''}"
 						style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px;` : ''}
 						title="Shift+click to color rows by this column"
 					>
@@ -428,8 +497,11 @@
 						</td>
 					{/if}
 					{#each columns as col, colIdx}
+						<!-- The first column is sticky, so it cannot be allowed to size
+						     itself to its content: one long name would push every other
+						     column off-screen and pin it there. Wrap instead. -->
 						<td
-							class="px-4 py-3 {col.class || ''} {colIdx === 0 ? 'sm:sticky sm:z-10' : ''}"
+							class="px-4 py-3 {col.class || ''} {colIdx === 0 ? 'sm:sticky sm:z-10 max-w-56 break-words' : ''}"
 							style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px; background-color: ${stickyBg(row)};` : ''}
 						>
 							{#if href && col === columns[0]}
@@ -445,6 +517,24 @@
 			{/each}
 		</tbody>
 	</table>
+</div>
+
+	<!-- Right-edge affordance: the columns run past the viewport far more often
+	     than not, and without this the table looks like it simply ends. The
+	     label sits level with the header rather than centred, which on a long
+	     table would put it hundreds of pixels down the page. -->
+	{#if moreToTheRight}
+		<div
+			class="pointer-events-none absolute right-0 top-0 bottom-0 w-16 rounded-r-lg
+			       bg-gradient-to-l from-slate-950 via-slate-950/80 to-transparent"
+			aria-hidden="true"
+		></div>
+		<span
+			class="pointer-events-none absolute right-2 top-3 text-xs font-medium text-slate-400"
+			aria-hidden="true"
+		>more →</span>
+	{/if}
+</div>
 </div>
 
 <style>

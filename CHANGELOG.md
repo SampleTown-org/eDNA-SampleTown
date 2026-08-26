@@ -32,6 +32,16 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### Tables
+- A second horizontal scrollbar sits above the header. These tables are wider
+  than the viewport by design — MIxS gives every sample dozens of optional
+  parameters — and a scrollbar only at the bottom of a long table is off-screen
+  exactly when the reader is looking at the top rows.
+- The right edge fades while there are more columns to reach, with a "more →"
+  marker level with the header. Without it the table looks like it simply ends.
+- The first column wraps instead of sizing to its content. It is sticky, so one
+  long sample name pushed every other column off-screen and pinned it there.
+
 ### Sites and samples views
 - `/sites` colours pins by project and gains a project filter above the map.
 - `/samples` gains the same project filter, and choosing a `+ parameter` now
