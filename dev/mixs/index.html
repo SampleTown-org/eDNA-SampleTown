@@ -1238,6 +1238,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#completeness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completeness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#reconciling-against-ncbi" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1697,6 +1708,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#completeness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completeness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#reconciling-against-ncbi" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1979,6 +2001,17 @@ mirrored, which typically takes a day.</p>
 <p><code>fields=all</code> is requested deliberately: submitters fill whichever checklist
 fields apply, and there is no way to know the set ahead of time. Empty
 columns are dropped per row.</p>
+<h3 id="completeness">Completeness<a class="headerlink" href="#completeness" title="Permanent link">&para;</a></h3>
+<p>ENA occasionally returns a truncated body under a 200. <code>PRJNA421293</code> came back
+as 2907 of its 4411 runs with nothing in the response to distinguish that from
+a project which genuinely has 2907 — and two immediate retries returned the
+full set, so it is intermittent rather than a property of the project.</p>
+<p>Every result set is therefore counted first, with a query asking for a single
+accession column: same row count, a fraction of the bytes. A short answer is
+retried up to three times, and an accession that still comes back short
+contributes nothing at all. A partial project is worse than none — the rows
+that did arrive would import as a complete-looking project, and reconciling the
+remainder afterwards means picking apart which records already exist.</p>
 <h3 id="reconciling-against-ncbi">Reconciling against NCBI<a class="headerlink" href="#reconciling-against-ncbi" title="Permanent link">&para;</a></h3>
 <p>BioSample is the authority on what a sample is; ENA holds a copy, and the copy
 is not always complete. ENA indexes a submission's runs before it ingests the

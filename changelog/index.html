@@ -1252,6 +1252,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#archive-fetch-completeness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Archive fetch completeness
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#export-column-vocabulary" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1649,6 +1660,17 @@
     <span class="md-ellipsis">
       
         Import from SRA / ENA / GenBank
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#archive-fetch-completeness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Archive fetch completeness
       
     </span>
   </a>
@@ -2059,6 +2081,16 @@
   a 2,000-sample project adds about 15 s — because capping by count silently
   dropped metadata that was cheap to fetch. Optional <code>NCBI_API_KEY</code> /
   <code>NCBI_EMAIL</code> raise the request rate for large projects.</li>
+</ul>
+<h3 id="archive-fetch-completeness">Archive fetch completeness<a class="headerlink" href="#archive-fetch-completeness" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Every ENA result set is counted before it is pulled, and a short answer is
+  retried. ENA occasionally returns a truncated body under a 200 — PRJNA421293
+  came back as 2907 of 4411 runs, indistinguishable from a project that has
+  2907 — and importing that silently creates two thirds of a project with no
+  sign the rest is missing. An accession that still comes back short after
+  three attempts contributes nothing and says so. The count query asks for a
+  single accession column, so it costs a fraction of the full fetch.</li>
 </ul>
 <h3 id="export-column-vocabulary">Export column vocabulary<a class="headerlink" href="#export-column-vocabulary" title="Permanent link">&para;</a></h3>
 <ul>
