@@ -50,6 +50,14 @@
   without one.
 - The export also carries `accession` and `project_accession`, so a sheet says
   where its records came from and re-importing puts them back.
+- The **Export TSV** button on the import tab labels its columns the same way.
+  It keeps the column order it fetched, since that sheet exists to be
+  hand-corrected and re-imported and reordering would make it harder to line up
+  against the archive it came from.
+- Import / Export drops "MIxS" from its heading, and the project picker and
+  site-match radius line up: the row was bottom-aligned while the project
+  column carried helper text under its select, which pushed the radius control
+  below the select it sits beside.
 
 ### Fixed: archive fields landing in the wrong column
 - A raw archive column whose MIxS slot was already spoken for was demoted to a

@@ -12,7 +12,13 @@
 import { getDb } from './db';
 import { allSlotNames, getSlot, getClass, getCombinationClass } from '$lib/mixs/schema-index';
 import { slotTable } from '$lib/mixs/slot-ownership';
-import { SRA_TO_MIXS, INSDC_FIELDS } from '$lib/mixs/sra-mapping';
+import { SRA_TO_MIXS } from '$lib/mixs/sra-mapping';
+import {
+	columnVocabulary,
+	isVocabularyRow,
+	COLUMN_VOCABULARIES,
+	type ColumnVocabulary
+} from '$lib/mixs/vocabulary';
 import { sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 import * as XLSX from 'xlsx';
 import type { Permit } from '$lib/types';
@@ -123,15 +129,7 @@ const NUMERIC_COLUMNS = new Set([
 	'latitude', 'longitude'
 ]);
 
-/**
- * Which vocabulary a column belongs to.
- *
- * An exported sheet mixes three of them and they are not distinguishable by
- * name alone: `env_medium` is MIxS, `sample_accession` is INSDC, `site_code` is
- * SampleTown's own. The export labels each column so a reader — or a
- * submission tool — can tell which standard, if any, a value answers to.
- */
-export type ColumnVocabulary = 'sampletown' | 'insdc' | 'mixs';
+export { columnVocabulary, COLUMN_VOCABULARIES, type ColumnVocabulary };
 
 export interface ExportColumn {
 	header: string;
@@ -140,24 +138,6 @@ export interface ExportColumn {
 	/** Which standard the column answers to. Decided where the column is built,
 	 *  since the name alone cannot always tell. */
 	vocabulary: ColumnVocabulary;
-}
-
-export const COLUMN_VOCABULARIES: ColumnVocabulary[] = ['sampletown', 'insdc', 'mixs'];
-
-export function columnVocabulary(header: string): ColumnVocabulary {
-	// Headers carry a leading `*` for MIxS-required slots.
-	const name = header.replace(/^\*/, '');
-
-	// A misc_param tag is off-schema by definition, so it is classified by
-	// where the tag came from rather than by the schema.
-	if (name.startsWith(MISC_PARAM_PREFIX)) {
-		const tag = name.slice(MISC_PARAM_PREFIX.length);
-		return INSDC_FIELDS.has(tag) ? 'insdc' : 'sampletown';
-	}
-
-	if (getSlot(name)) return 'mixs';
-	if (INSDC_FIELDS.has(name)) return 'insdc';
-	return 'sampletown';
 }
 
 /** Columns parsed as dates on import. */
@@ -799,12 +779,7 @@ export function parseMixsTsv(
 	// way back in. Every populated cell has to be one of the three words for
 	// this to fire, which no real row would satisfy.
 	if (dataLines.length > 1) {
-		const cells = parseTsvLine(dataLines[1]).map((c) => c.trim().toLowerCase());
-		const populated = cells.filter((c) => c !== '');
-		const isVocabularyRow =
-			populated.length > 0 &&
-			populated.every((c) => (COLUMN_VOCABULARIES as string[]).includes(c));
-		if (isVocabularyRow) dataLines.splice(1, 1);
+		if (isVocabularyRow(parseTsvLine(dataLines[1]))) dataLines.splice(1, 1);
 	}
 	const errors: string[] = [];
 	const samples: Record<string, unknown>[] = [];
