@@ -80,6 +80,16 @@ Entities: `projects`, `sites`, `samples`, `extracts`, `pcr-plates`,
 
 Special cases:
 
+- **Projects**: `DELETE` is the one hard delete in the API — every other
+  entity sets `is_deleted=1`. It removes the project's sites, samples,
+  extracts, PCR reactions, and library preps, bottom-up rather than by
+  cascade (see `src/lib/server/project-delete.ts` for why the order matters).
+  Plates and sequencing runs belong to the lab and survive; a run left
+  holding nothing once the project's libraries are gone is removed.
+  `GET /api/projects/[id]/delete-preview` returns the counts a delete would
+  remove (`sites`, `samples`, `extracts`, `pcrs`, `libraries`, `runs`),
+  computed from the same SQL, so the confirmation cannot promise something
+  different from what happens.
 - **Samples**: also accepts arbitrary MIxS slot keys not on the
   samples table; routed into `sample_values` EAV. See
   `src/lib/server/sample-body.ts`

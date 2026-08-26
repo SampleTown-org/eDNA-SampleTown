@@ -42,6 +42,10 @@
   samples). Plates and sequencing runs are lab-scoped and survive; runs left
   holding nothing once the project's libraries are gone are cleared out, since
   an archive import creates one per submitted run.
+- The delete confirmation itemises what goes — sites, samples, DNA extracts,
+  PCR reactions, library preps, and sequencing runs — instead of quoting a
+  sample count alone. New `GET /api/projects/[id]/delete-preview` supplies the
+  numbers, counted from the same SQL the delete runs, so the two cannot drift.
 - The delete confirmation said sequencing runs are kept. They are kept only
   while they still hold another project's libraries; a run left holding nothing
   is removed, which for an archive-imported project is most of them.

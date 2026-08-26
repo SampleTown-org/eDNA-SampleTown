@@ -46,17 +46,46 @@
 	/** Plates and sequencing runs belong to the lab, not to any one project, so
 	 *  deleting a project takes its wells and libraries off them rather than
 	 *  removing the plate or run itself. A run left holding nothing at all is
-	 *  the exception — see the DELETE handler. */
-	const DELETE_SCOPE =
-		'This will also permanently delete all associated sites, samples, DNA extracts, '
-		+ 'PCR reactions, and library preps.\n\n'
-		+ 'Plates are kept. Sequencing runs are kept when they still hold libraries from '
-		+ 'other projects, and deleted when this project\'s libraries were all they held.';
+	 *  the exception — see src/lib/server/project-delete.ts. */
+	type DeleteCounts = {
+		sites: number; samples: number; extracts: number;
+		pcrs: number; libraries: number; runs: number;
+	};
+	const COUNT_LABELS: [keyof DeleteCounts, string, string][] = [
+		['sites', 'site', 'sites'],
+		['samples', 'sample', 'samples'],
+		['extracts', 'DNA extract', 'DNA extracts'],
+		['pcrs', 'PCR reaction', 'PCR reactions'],
+		['libraries', 'library prep', 'library preps'],
+		['runs', 'sequencing run', 'sequencing runs']
+	];
+
+	async function fetchDeleteCounts(id: string): Promise<DeleteCounts | null> {
+		const res = await fetch(`/api/projects/${id}/delete-preview`);
+		return res.ok ? ((await res.json()) as DeleteCounts) : null;
+	}
+
+	/** Itemise what goes, so the scale of a delete is visible before confirming.
+	 *  Rows that would delete nothing are left out rather than shown as zero. */
+	function describeCounts(c: DeleteCounts): string {
+		const lines = COUNT_LABELS
+			.filter(([key]) => c[key] > 0)
+			.map(([key, one, many]) => `  · ${c[key]} ${c[key] === 1 ? one : many}`);
+		return lines.length > 0 ? lines.join('\n') : '  · nothing — this project is empty';
+	}
+
+	const RUN_NOTE =
+		'Plates are kept. Sequencing runs are counted above only when this project\'s '
+		+ 'libraries were all they held; runs still holding other projects\' libraries are kept.';
 
 	async function deleteProject(row: Record<string, unknown>) {
-		const n = (row.sample_count as number | undefined) ?? 0;
-		const msg = `Delete project "${row.project_name}"?\n\n`
-			+ `${DELETE_SCOPE}${n > 0 ? ` (${n} samples)` : ''}\n\nThis cannot be undone.`;
+		const counts = await fetchDeleteCounts(row.id as string);
+		if (!counts) {
+			alert(`Could not check what "${row.project_name}" contains. Not deleted.`);
+			return;
+		}
+		const msg = `Delete project "${row.project_name}"?\n\nThis permanently deletes:\n`
+			+ `${describeCounts(counts)}\n\n${RUN_NOTE}\n\nThis cannot be undone.`;
 		if (!confirm(msg)) return;
 		const res = await fetch(`/api/projects/${row.id}`, { method: 'DELETE' });
 		if (!res.ok) {
@@ -77,12 +106,24 @@
 	}
 
 	async function bulkDeleteProjects(rs: Record<string, unknown>[]) {
-		const totalSamples = rs.reduce((acc, r) => acc + ((r.sample_count as number | undefined) ?? 0), 0);
-		const msg = `Delete ${rs.length} projects?\n\n`
-			+ `${DELETE_SCOPE}${totalSamples > 0 ? ` (${totalSamples} samples across these projects)` : ''}`
-			+ `\n\nThis cannot be undone.`;
-		if (!confirm(msg)) return;
 		const ids = rs.map((r) => r.id as string);
+		const each = await Promise.all(ids.map((id) => fetchDeleteCounts(id)));
+		if (each.some((c) => c === null)) {
+			alert('Could not check what these projects contain. Nothing was deleted.');
+			return;
+		}
+		const total = (each as DeleteCounts[]).reduce(
+			(acc, c) => {
+				for (const [key] of COUNT_LABELS) acc[key] += c[key];
+				return acc;
+			},
+			{ sites: 0, samples: 0, extracts: 0, pcrs: 0, libraries: 0, runs: 0 } as DeleteCounts
+		);
+
+		const msg = `Delete ${rs.length} projects?\n\nThis permanently deletes, across them:\n`
+			+ `${describeCounts(total)}\n\n${RUN_NOTE}\n\nThis cannot be undone.`;
+		if (!confirm(msg)) return;
+
 		const results = await Promise.all(
 			ids.map(async (id) => ({
 				id,
