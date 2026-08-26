@@ -1252,6 +1252,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#fixed-biosamples-merged-on-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed: BioSamples merged on import
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#tables" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1616,6 +1627,17 @@
     <span class="md-ellipsis">
       
         Import from SRA / ENA / GenBank
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed-biosamples-merged-on-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed: BioSamples merged on import
       
     </span>
   </a>
@@ -1994,6 +2016,19 @@
   dropped metadata that was cheap to fetch. Optional <code>NCBI_API_KEY</code> /
   <code>NCBI_EMAIL</code> raise the request rate for large projects.</li>
 </ul>
+<h3 id="fixed-biosamples-merged-on-import">Fixed: BioSamples merged on import<a class="headerlink" href="#fixed-biosamples-merged-on-import" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>samp_name</code> now identifies exactly one BioSample. Naming samples from
+  <code>sample_title</code> collapsed distinct BioSamples together, because NCBI writes a
+  title for submitters who left it blank and it is not unique: "MIMARKS Survey
+  related sample from marine metagenome" covers 472 BioSamples in PRJNA421293
+  alone. The importer keys samples on (project, samp_name), so those folded into
+  one another silently, taking their runs and extracts with them — PRJNA421293
+  produced 1404 samples for 2026 BioSamples and left 123 sites holding nothing.
+  Where a title spans more than one accession the sample is named by its
+  accession instead, and the title is kept as <code>misc_param:sample_title</code>.
+  <strong>Re-import any project imported between this release and the previous one.</strong></li>
+</ul>
 <h3 id="tables">Tables<a class="headerlink" href="#tables" title="Permanent link">&para;</a></h3>
 <ul>
 <li>A second horizontal scrollbar sits above the header. These tables are wider
@@ -2002,6 +2037,9 @@
   exactly when the reader is looking at the top rows.</li>
 <li>The right edge fades while there are more columns to reach, with a "more →"
   marker level with the header. Without it the table looks like it simply ends.</li>
+<li>The proxy scrollbar is drawn at a size worth aiming at and never fades or
+  resizes under the pointer; overlay scrollbars otherwise hide until scrolled
+  and some grow on hover, moving the target while it is being aimed at.</li>
 <li>The first column wraps instead of sizing to its content. It is sticky, so one
   long sample name pushed every other column off-screen and pinned it there.</li>
 </ul>
