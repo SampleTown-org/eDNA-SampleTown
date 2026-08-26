@@ -1895,6 +1895,9 @@
   samples). Plates and sequencing runs are lab-scoped and survive; runs left
   holding nothing once the project's libraries are gone are cleared out, since
   an archive import creates one per submitted run.</li>
+<li>The delete confirmation said sequencing runs are kept. They are kept only
+  while they still hold another project's libraries; a run left holding nothing
+  is removed, which for an archive-imported project is most of them.</li>
 <li>The projects list dropped a project from the screen whether or not the server
   actually deleted it, which is why the failure looked silent. It now reports
   the error and keeps the row, and a bulk delete removes only what succeeded.</li>
