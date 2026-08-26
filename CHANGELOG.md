@@ -50,10 +50,9 @@
   without one.
 - The export also carries `accession` and `project_accession`, so a sheet says
   where its records came from and re-importing puts them back.
-- The **Export TSV** button on the import tab labels its columns the same way.
-  It keeps the column order it fetched, since that sheet exists to be
-  hand-corrected and re-imported and reordering would make it harder to line up
-  against the archive it came from.
+- The **Export TSV** button on the import tab produces the same shape: grouped
+  by vocabulary, labelled, `samp_name` first. The TSV mechanics behind both are
+  now one module rather than two implementations that had already drifted.
 - Import / Export drops "MIxS" from its heading, and the project picker and
   site-match radius line up: the row was bottom-aligned while the project
   column carried helper text under its select, which pushed the radius control
@@ -65,6 +64,17 @@
   `temperature` and the GSC checklists a bare `temp`, both meaning the MIxS
   `temp` slot, so PRJNA421293 had 2681 temperatures in the slot and 144
   stranded in `misc_param:temp`. Same-concept columns now fill the slot.
+
+### Sample naming from the archives
+- A sample takes the submitter's title when they wrote one, their own sample
+  name when NCBI generated the title for them, and its accession only when it
+  has neither. NCBI writes titles of the form "MIMARKS Survey related sample
+  from marine metagenome" for submitters who leave one blank — it names the
+  package and the organism, not the sample, and every sample in the submission
+  gets the same one. Recognising it by shape rather than by whether it collides
+  with another record means a sample is named the same way whether it was
+  fetched alone or as part of its project. PRJNA421293's 2026 samples now all
+  carry meaningful names; previously 1806 of them fell back to accessions.
 
 ### Fixed: BioSamples merged on import
 - `samp_name` now identifies exactly one BioSample. Naming samples from

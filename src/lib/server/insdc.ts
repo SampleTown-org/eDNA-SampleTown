@@ -331,11 +331,9 @@ export function parseBioSampleXml(xml: string): Record<string, string>[] {
  * and `pick()` takes the first populated one.
  */
 const FIELD_MAP: Record<string, string> = {
-	// Sample identity. sample_title is the submitter's own name for the sample
-	// and the one a reader recognises; sample_alias is the submission-system
-	// handle, which is often a sequencer well like "S230_2".
-	sample_title: 'samp_name',
-	sample_alias: 'samp_name',
+	// Sample identity is resolved below rather than here: which of the title and
+	// the alias names the sample depends on whether the title is the submitter's
+	// or one NCBI generated for them.
 	sample_description: 'notes',
 
 	// Collection event
@@ -585,6 +583,25 @@ function isPlaceholder(value: string): boolean {
 	return NULL_PLACEHOLDERS.has(value.trim().toLowerCase());
 }
 
+/**
+ * NCBI writes a title for submitters who leave one blank, of the form
+ * "<package> [related] sample from <organism>" — "MIMARKS Survey related sample
+ * from marine metagenome", "MIGS Eukaryotic sample from Pelophylax plancyi".
+ * It names the package and the organism, not the sample, and every sample in a
+ * submission gets the same one.
+ *
+ * Matched by its shape rather than by whether it collides with another record,
+ * so a sample is named the same way whether it was fetched alone or as part of
+ * its project. Anchored on a package token so a real title that happens to
+ * read "Water sample from Lake Hazen" is left alone.
+ */
+const GENERATED_TITLE =
+	/^(MIMARKS|MIGS|MIMS|MIMAG|MISAG|MIUVIG|Metagenome|Microbe|Pathogen|Model organism|Invertebrate|Plant|Human|Virus|Beta-lactamase)\b.*\bsample from\b/i;
+
+export function isGeneratedTitle(title: string): boolean {
+	return GENERATED_TITLE.test(title.trim());
+}
+
 /** First non-empty value among `keys`. */
 function pick(row: Record<string, string>, ...keys: string[]): string {
 	for (const k of keys) {
@@ -623,12 +640,23 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 	// samp_name is the importer's row key and its uniqueness constraint. The
 	// submitter's alias is the most meaningful name; accessions are the
 	// guaranteed-unique fallback.
+	// The submitter's title names the sample when they wrote one. When NCBI
+	// generated it, the name they did give — BioSample's "Sample name" id, e.g.
+	// AMBON_2015_08_13_DBO3.2_35.2_A_deep — is the only meaningful label on the
+	// record, and the accession is the last resort.
+	const title = pick(raw, 'sample_title');
+	const alias = pick(raw, 'sample_alias');
 	if (!out.samp_name) {
+		const preferred = title && !isGeneratedTitle(title) ? title : alias || title;
 		set(
 			'samp_name',
-			pick(raw, 'sample_title', 'sample_alias', 'sample_accession', 'run_accession', 'accession')
+			preferred || pick(raw, 'sample_accession', 'run_accession', 'accession')
 		);
 	}
+	// Both candidates are kept whichever won, so nothing is lost and the
+	// uniqueness pass below has something to fall back to.
+	if (title && title !== out.samp_name) set('misc_param:sample_title', title);
+	if (alias && alias !== out.samp_name) set('misc_param:sample_alias', alias);
 
 	// ENA reports a MIxS-shaped `location` only when the submitter gave one;
 	// otherwise lat/lon are separate and parseMixsTsv composes them.
@@ -985,26 +1013,48 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 	// lost. Rows sharing an accession keep sharing a name — those are several
 	// runs of one sample, which is exactly the case the keying is meant to
 	// collapse.
-	const accessionsByName = new Map<string, Set<string>>();
-	for (const row of rows) {
-		const key = row.accession ?? row.samp_name;
-		if (!row.samp_name) continue;
-		const set = accessionsByName.get(row.samp_name) ?? new Set<string>();
-		set.add(key);
-		accessionsByName.set(row.samp_name, set);
-	}
+	const groupBy = (key: (row: Record<string, string>) => string | undefined) => {
+		const map = new Map<string, Set<string>>();
+		for (const row of rows) {
+			const value = key(row);
+			if (!value || !row.accession) continue;
+			const seen = map.get(value) ?? new Set<string>();
+			seen.add(row.accession);
+			map.set(value, seen);
+		}
+		return map;
+	};
 
-	let renamed = 0;
+	const accessionsByName = groupBy((row) => row.samp_name);
+	const accessionsByAlias = groupBy((row) => row['misc_param:sample_alias']);
+	/** Names that already identify exactly one sample; nothing may take them. */
+	const spokenFor = new Set(
+		Array.from(accessionsByName).filter(([, accs]) => accs.size === 1).map(([name]) => name)
+	);
+
+	let byAlias = 0;
+	let byAccession = 0;
 	for (const row of rows) {
 		const shared = accessionsByName.get(row.samp_name);
 		if (!shared || shared.size < 2 || !row.accession) continue;
+
 		if (!row['misc_param:sample_title']) row['misc_param:sample_title'] = row.samp_name;
-		row.samp_name = row.accession;
-		renamed++;
+
+		// The submitter's own name is the better label when it identifies one
+		// sample; the accession is the guaranteed-unique last resort.
+		const alias = row['misc_param:sample_alias'];
+		const aliasIdentifiesOne =
+			!!alias && accessionsByAlias.get(alias)?.size === 1 && !spokenFor.has(alias);
+		row.samp_name = aliasIdentifiesOne ? alias : row.accession;
+		if (aliasIdentifiesOne) byAlias++;
+		else byAccession++;
 	}
-	if (renamed > 0) {
+	if (byAlias + byAccession > 0) {
+		const parts: string[] = [];
+		if (byAlias > 0) parts.push(`${byAlias} by the submitter's sample name`);
+		if (byAccession > 0) parts.push(`${byAccession} by accession`);
 		warnings.push(
-			`${renamed} record(s) share a sample title with a different BioSample, so they are named by accession instead. The title is kept as misc_param:sample_title.`
+			`${byAlias + byAccession} record(s) share a sample title with a different BioSample, so they are named ${parts.join(' and ')} instead. The title is kept as misc_param:sample_title.`
 		);
 	}
 

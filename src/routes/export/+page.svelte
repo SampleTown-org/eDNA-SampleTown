@@ -3,7 +3,7 @@
 	import PeoplePicker from '$lib/components/PeoplePicker.svelte';
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
 	import { MIXS_ACTIVE_VERSION } from '$lib/mixs/schema-index';
-	import { columnVocabulary, isVocabularyRow } from '$lib/mixs/vocabulary';
+	import { sortAndLabelTsv } from '$lib/mixs/tsv';
 
 	let { data }: { data: PageData } = $props();
 
@@ -321,23 +321,11 @@
 	 *  The preview is read-only, so a bad cell is corrected by editing the sheet
 	 *  and importing it again. Rows fetched from an accession have no file on
 	 *  disk to edit, which otherwise leaves no way to fix them at all. */
-	/** Insert the vocabulary row under the header, so a sheet downloaded here
-	 *  carries the same column labelling as one exported from the Export tab.
-	 *  Rows keep the order they arrived in: this download exists to be
-	 *  hand-corrected and re-imported, and reordering its columns would make it
-	 *  harder to line up against the archive it came from. */
-	function withVocabularyRow(tsv: string): string {
-		const lines = tsv.replace(/\r\n/g, '\n').split('\n');
-		if (lines.length === 0 || !lines[0]) return tsv;
-		// Don't add a second one to a sheet that already has it.
-		if (lines.length > 1 && isVocabularyRow(lines[1].split('\t'))) return tsv;
-		const vocabularies = lines[0].split('\t').map((h) => columnVocabulary(h.trim()));
-		return [lines[0], vocabularies.join('\t'), ...lines.slice(1)].join('\n');
-	}
-
 	function downloadTsv() {
 		if (!importTsv) return;
-		const blob = new Blob([withVocabularyRow(importTsv)], {
+		// Grouped by vocabulary and labelled, the same shape the Export tab
+		// produces — one app should not hand out two differently-shaped sheets.
+		const blob = new Blob([sortAndLabelTsv(importTsv)], {
 			type: 'text/tab-separated-values'
 		});
 		const url = URL.createObjectURL(blob);

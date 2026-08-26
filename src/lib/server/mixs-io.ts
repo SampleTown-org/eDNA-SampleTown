@@ -13,6 +13,7 @@ import { getDb } from './db';
 import { allSlotNames, getSlot, getClass, getCombinationClass } from '$lib/mixs/schema-index';
 import { slotTable } from '$lib/mixs/slot-ownership';
 import { SRA_TO_MIXS } from '$lib/mixs/sra-mapping';
+import { parseTsvLine } from '$lib/mixs/tsv';
 import {
 	columnVocabulary,
 	isVocabularyRow,
@@ -1003,27 +1004,3 @@ export function parseMixsTsv(
 	return { samples, errors, headers, column_map };
 }
 
-function parseTsvLine(line: string): string[] {
-	const result: string[] = [];
-	let i = 0;
-	while (i <= line.length) {
-		if (i >= line.length) { result.push(''); break; }
-		if (line[i] === '"') {
-			let val = '';
-			i++;
-			while (i < line.length) {
-				if (line[i] === '"' && line[i + 1] === '"') { val += '"'; i += 2; }
-				else if (line[i] === '"') { i++; break; }
-				else { val += line[i]; i++; }
-			}
-			if (i < line.length && line[i] === '\t') i++;
-			result.push(val);
-		} else {
-			const tab = line.indexOf('\t', i);
-			if (tab === -1) { result.push(line.slice(i)); break; }
-			result.push(line.slice(i, tab));
-			i = tab + 1;
-		}
-	}
-	return result;
-}
