@@ -107,3 +107,33 @@ export function seqMethToSraPlatform(seqMeth: string | null | undefined): string
 	}
 	return null;
 }
+
+/**
+ * INSDC-specific column names: fields the archives report that are not MIxS
+ * slots and have no MIxS equivalent. Used to label a column's vocabulary on
+ * export, so a reader can tell at a glance whether a value came from the
+ * standard, from the archive, or from SampleTown's own bookkeeping.
+ *
+ * Deliberately not exhaustive over ENA's ~200 return fields — only the ones
+ * SampleTown actually emits as columns or carries as tags.
+ */
+export const INSDC_FIELDS = new Set([
+	// Accessions carried onto records
+	'accession', 'project_accession', 'extract_accession', 'pcr_accession',
+	'library_accession', 'run_accession_id',
+	// Archive identifiers
+	'sample_accession', 'secondary_sample_accession', 'study_accession',
+	'secondary_study_accession', 'experiment_accession', 'submission_accession',
+	'run_accession', 'sequence_accession', 'tax_id', 'tax_lineage', 'host_tax_id',
+	// Archive labels and bookkeeping
+	'sample_alias', 'sample_title', 'sample_description', 'study_alias',
+	'study_title', 'experiment_alias', 'experiment_title', 'run_alias',
+	'center_name', 'broker_name', 'checklist', 'ncbi_reporting_standard',
+	'first_public', 'first_created', 'last_updated', 'status',
+	// Library / run descriptors that live on SRA rather than in MIxS
+	'library_strategy', 'library_source', 'library_selection', 'library_layout',
+	'library_name', 'instrument_platform', 'instrument_model',
+	'read_count', 'base_count', 'nominal_length',
+	// Collection-date and location range endpoints ENA reports separately
+	'collection_date_start', 'collection_date_end', 'location_start', 'location_end'
+]);

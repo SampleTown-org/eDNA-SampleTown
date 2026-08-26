@@ -685,14 +685,26 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 		if (!value) continue;
 
 		const target = map[key.toLowerCase()];
-		if (target && !claimed.has(target) && !FORCE_PROVENANCE.has(key)) {
-			// Emit under the archive's own column name so the mapper shows the
-			// user the field they'd recognize from the submission.
-			set(key, value);
-			claimed.add(target);
-		} else {
-			set(`misc_param:${key}`, value);
+		if (target && !FORCE_PROVENANCE.has(key)) {
+			if (!claimed.has(target)) {
+				// Emit under the archive's own column name so the mapper shows the
+				// user the field they'd recognize from the submission.
+				set(key, value);
+				claimed.add(target);
+				continue;
+			}
+			// The target is spoken for but empty on this row, which means the two
+			// spellings are the same measurement reported different ways. ENA
+			// exposes `temperature` and the GSC checklists a bare `temp`, and both
+			// resolve to the MIxS `temp` slot; demoting the loser stranded 144 of
+			// PRJNA421293's temperatures in a misc_param tag while the rest sat in
+			// the slot. Fill the slot instead.
+			if (!out[target]) {
+				set(target, value);
+				continue;
+			}
 		}
+		set(`misc_param:${key}`, value);
 	}
 
 	return out;

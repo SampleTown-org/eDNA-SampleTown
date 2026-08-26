@@ -12,7 +12,7 @@
 import { getDb } from './db';
 import { allSlotNames, getSlot, getClass, getCombinationClass } from '$lib/mixs/schema-index';
 import { slotTable } from '$lib/mixs/slot-ownership';
-import { SRA_TO_MIXS } from '$lib/mixs/sra-mapping';
+import { SRA_TO_MIXS, INSDC_FIELDS } from '$lib/mixs/sra-mapping';
 import { sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 import * as XLSX from 'xlsx';
 import type { Permit } from '$lib/types';
@@ -123,6 +123,43 @@ const NUMERIC_COLUMNS = new Set([
 	'latitude', 'longitude'
 ]);
 
+/**
+ * Which vocabulary a column belongs to.
+ *
+ * An exported sheet mixes three of them and they are not distinguishable by
+ * name alone: `env_medium` is MIxS, `sample_accession` is INSDC, `site_code` is
+ * SampleTown's own. The export labels each column so a reader — or a
+ * submission tool — can tell which standard, if any, a value answers to.
+ */
+export type ColumnVocabulary = 'sampletown' | 'insdc' | 'mixs';
+
+export interface ExportColumn {
+	header: string;
+	source: string;
+	required: boolean;
+	/** Which standard the column answers to. Decided where the column is built,
+	 *  since the name alone cannot always tell. */
+	vocabulary: ColumnVocabulary;
+}
+
+export const COLUMN_VOCABULARIES: ColumnVocabulary[] = ['sampletown', 'insdc', 'mixs'];
+
+export function columnVocabulary(header: string): ColumnVocabulary {
+	// Headers carry a leading `*` for MIxS-required slots.
+	const name = header.replace(/^\*/, '');
+
+	// A misc_param tag is off-schema by definition, so it is classified by
+	// where the tag came from rather than by the schema.
+	if (name.startsWith(MISC_PARAM_PREFIX)) {
+		const tag = name.slice(MISC_PARAM_PREFIX.length);
+		return INSDC_FIELDS.has(tag) ? 'insdc' : 'sampletown';
+	}
+
+	if (getSlot(name)) return 'mixs';
+	if (INSDC_FIELDS.has(name)) return 'insdc';
+	return 'sampletown';
+}
+
 /** Columns parsed as dates on import. */
 const DATE_COLUMNS = new Set([
 	'collection_date', 'extraction_date', 'library_prep_date', 'run_date', 'pcr_date'
@@ -192,6 +229,7 @@ export function exportMixsTsv(options: {
 	// that belongs to this lab).
 	let query = `SELECT s.*, ${siteSelect},
 		p.project_name AS proj_project_name,
+		p.accession AS proj_accession,
 		(SELECT e.nucl_acid_ext FROM extracts e
 		  WHERE e.sample_id = s.id AND e.is_deleted = 0 AND e.nucl_acid_ext IS NOT NULL
 		  ORDER BY e.created_at DESC LIMIT 1) AS sample_nucl_acid_ext,
@@ -241,8 +279,15 @@ export function exportMixsTsv(options: {
 	// governance metadata rides along when data leaves us for SRA/GenBank.
 	const attributionBySample = buildAttributionMap(db, options.labId, rows);
 
-	const columns = chooseExportColumns(options.checklist, options.extension);
+	// Columns grouped by vocabulary, alphabetical within each group, with
+	// samp_name pulled to the front — it identifies the row, and burying it
+	// inside the MIxS block would make the sheet hard to read.
+	const columns = sortColumnsByVocabulary(
+		chooseExportColumns(options.checklist, options.extension)
+	);
 	const headers = columns.map((c) => c.header);
+	// Second header row: each column's vocabulary. The importer strips it.
+	const vocabularies = columns.map((c) => c.vocabulary);
 	const lines = rows.map((row) => {
 		const values = valuesBySample[row.id as string] ?? {};
 		// Per-row sensitive-location masking. When the sample flag is set, the
@@ -260,6 +305,7 @@ export function exportMixsTsv(options: {
 		return columns
 			.map((c) => {
 				if (c.source === '__project_name__') return escTsv(row.proj_project_name);
+				if (c.source === '__project_accession__') return escTsv(row.proj_accession);
 				if (c.source === '__nucl_acid_ext__') return escTsv(row.sample_nucl_acid_ext);
 				if (c.source === '__nucl_acid_amp__') return escTsv(row.sample_nucl_acid_amp);
 				if (c.source === '__samp_taxon_id__') return escTsv(row.sample_samp_taxon_id);
@@ -273,7 +319,7 @@ export function exportMixsTsv(options: {
 			})
 			.join('\t');
 	});
-	return [headers.join('\t'), ...lines].join('\n');
+	return [headers.join('\t'), vocabularies.join('\t'), ...lines].join('\n');
 }
 
 /**
@@ -371,15 +417,38 @@ function maskSensitiveLocation(row: Record<string, unknown>): Record<string, unk
 }
 
 /** Column selection logic extracted so import UI can preview the column list. */
+/**
+ * Group columns by vocabulary, then alphabetically within each group.
+ *
+ * This deliberately departs from the GSC template order (required slots first,
+ * in declared order). A SampleTown export is not a submission template — it is
+ * a working sheet that mixes three vocabularies, and grouping them keeps a
+ * reader from hunting for which columns belong to which standard.
+ */
+export function sortColumnsByVocabulary<T extends { header: string; vocabulary: ColumnVocabulary }>(
+	columns: T[]
+): T[] {
+	const rank = (c: T) => COLUMN_VOCABULARIES.indexOf(c.vocabulary);
+	const bare = (h: string) => h.replace(/^\*/, '');
+	const sorted = [...columns].sort((a, b) => {
+		const byVocab = rank(a) - rank(b);
+		if (byVocab !== 0) return byVocab;
+		return bare(a.header).localeCompare(bare(b.header));
+	});
+	const nameIdx = sorted.findIndex((c) => bare(c.header) === 'samp_name');
+	if (nameIdx > 0) sorted.unshift(...sorted.splice(nameIdx, 1));
+	return sorted;
+}
+
 export function chooseExportColumns(
 	checklist?: string,
 	extension?: string
-): { header: string; source: string; required: boolean }[] {
+): ExportColumn[] {
 	// Prefer the combination class when available.
 	let cls = checklist && extension ? getCombinationClass(checklist, extension) : undefined;
 	if (!cls && checklist) cls = getClass(checklist);
 
-	const baseColumns: { header: string; source: string; required: boolean }[] = [];
+	const baseColumns: ExportColumn[] = [];
 
 	if (cls) {
 		const required = new Set(cls.required ?? []);
@@ -404,7 +473,11 @@ export function chooseExportColumns(
 			baseColumns.push({
 				header: (isRequired ? '*' : '') + slot,
 				source,
-				required: isRequired
+				required: isRequired,
+				// It came out of the MIxS class, so it answers to MIxS — whether or
+				// not the release ships a slot definition for it. A handful of class
+				// properties have none.
+				vocabulary: 'mixs'
 			});
 		}
 		// Ensure samp_name is always first (MIxS convention — it's the row identifier)
@@ -416,12 +489,23 @@ export function chooseExportColumns(
 		// project_name: some checklists don't list it in properties but the GSC
 		// templates always include it. Append as optional if not already there.
 		if (!baseColumns.some((c) => c.source === 'project_name' || c.source === 'site_project_name')) {
-			baseColumns.push({ header: 'project_name', source: '__project_name__', required: false });
+			baseColumns.push({
+				header: 'project_name',
+				source: '__project_name__',
+				required: false,
+				vocabulary: 'mixs'
+			});
 		}
 		// SampleTown metadata that aren't MIxS slots per se but carry across imports.
 		baseColumns.push(
-			{ header: 'mixs_checklist', source: 'mixs_checklist', required: false },
-			{ header: 'extension', source: 'extension', required: false }
+			{ header: 'mixs_checklist', source: 'mixs_checklist', required: false, vocabulary: 'sampletown' },
+			{ header: 'extension', source: 'extension', required: false, vocabulary: 'sampletown' }
+		);
+		// Accessions, so an exported sheet still says where its records came from
+		// and re-importing it puts them back.
+		baseColumns.push(
+			{ header: 'accession', source: 'accession', required: false, vocabulary: 'insdc' },
+			{ header: 'project_accession', source: '__project_accession__', required: false, vocabulary: 'insdc' }
 		);
 		return baseColumns;
 	}
@@ -444,7 +528,9 @@ export function chooseExportColumns(
 		const isMandatory = getSlot(slot)?.required ?? false;
 		legacy.push({ header: (isMandatory ? '*' : '') + slot, source: slot, required: isMandatory });
 	}
-	return legacy;
+	// The fallback list is hand-written, so its names are reliable enough to
+	// classify from.
+	return legacy.map((c) => ({ ...c, vocabulary: columnVocabulary(c.header) }));
 }
 
 /** Parse xlsx file buffer into TSV string. */
@@ -706,6 +792,20 @@ export function parseMixsTsv(
 	}
 
 	const headers = dataLines[0].split('\t').map((h) => h.trim().replace(/^\*/, '').toLowerCase());
+
+	// A SampleTown export carries a vocabulary row under the header, saying
+	// whether each column is a MIxS slot, an INSDC field, or SampleTown's own.
+	// It is metadata about the columns, not a sample, so it is dropped on the
+	// way back in. Every populated cell has to be one of the three words for
+	// this to fire, which no real row would satisfy.
+	if (dataLines.length > 1) {
+		const cells = parseTsvLine(dataLines[1]).map((c) => c.trim().toLowerCase());
+		const populated = cells.filter((c) => c !== '');
+		const isVocabularyRow =
+			populated.length > 0 &&
+			populated.every((c) => (COLUMN_VOCABULARIES as string[]).includes(c));
+		if (isVocabularyRow) dataLines.splice(1, 1);
+	}
 	const errors: string[] = [];
 	const samples: Record<string, unknown>[] = [];
 	const autoMap = buildHeaderToFieldMap();

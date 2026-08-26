@@ -32,6 +32,23 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### Export column vocabulary
+- The MIxS TSV export carries a second header row naming each column's
+  vocabulary — `sampletown`, `insdc`, or `mixs` — and groups the columns by it,
+  alphabetically within each group, with `samp_name` first. An exported sheet
+  mixes three vocabularies and they are not distinguishable by name alone.
+  The importer strips the row when it is present, and still accepts a sheet
+  without one.
+- The export also carries `accession` and `project_accession`, so a sheet says
+  where its records came from and re-importing puts them back.
+
+### Fixed: archive fields landing in the wrong column
+- A raw archive column whose MIxS slot was already spoken for was demoted to a
+  `misc_param:` tag even when the slot was empty on that row. ENA exposes
+  `temperature` and the GSC checklists a bare `temp`, both meaning the MIxS
+  `temp` slot, so PRJNA421293 had 2681 temperatures in the slot and 144
+  stranded in `misc_param:temp`. Same-concept columns now fill the slot.
+
 ### Fixed: BioSamples merged on import
 - `samp_name` now identifies exactly one BioSample. Naming samples from
   `sample_title` collapsed distinct BioSamples together, because NCBI writes a
