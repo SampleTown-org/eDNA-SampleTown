@@ -44,12 +44,12 @@
 	];
 
 	/** Plates and sequencing runs belong to the lab, not to any one project, so
-	 *  deleting a project takes its wells and libraries off them rather than
-	 *  removing the plate or run itself. A run left holding nothing at all is
-	 *  the exception — see src/lib/server/project-delete.ts. */
+	 *  one holding another project's work keeps it and only this project's wells
+	 *  and libraries come off. One this delete empties completely is removed —
+	 *  see src/lib/server/project-delete.ts. */
 	type DeleteCounts = {
 		sites: number; samples: number; extracts: number;
-		pcrs: number; libraries: number; runs: number;
+		pcrs: number; libraries: number; runs: number; plates: number;
 	};
 	const COUNT_LABELS: [keyof DeleteCounts, string, string][] = [
 		['sites', 'site', 'sites'],
@@ -57,7 +57,8 @@
 		['extracts', 'DNA extract', 'DNA extracts'],
 		['pcrs', 'PCR reaction', 'PCR reactions'],
 		['libraries', 'library prep', 'library preps'],
-		['runs', 'sequencing run', 'sequencing runs']
+		['runs', 'sequencing run', 'sequencing runs'],
+		['plates', 'plate', 'plates']
 	];
 
 	async function fetchDeleteCounts(id: string): Promise<DeleteCounts | null> {
@@ -74,9 +75,10 @@
 		return lines.length > 0 ? lines.join('\n') : '  · nothing — this project is empty';
 	}
 
-	const RUN_NOTE =
-		'Plates are kept. Sequencing runs are counted above only when this project\'s '
-		+ 'libraries were all they held; runs still holding other projects\' libraries are kept.';
+	const CONTAINER_NOTE =
+		'Plates and sequencing runs are counted above only when this project\'s work was all '
+		+ 'they held. Any still holding another project\'s wells or libraries are kept, and so '
+		+ 'are plates and runs that were already empty.';
 
 	async function deleteProject(row: Record<string, unknown>) {
 		const counts = await fetchDeleteCounts(row.id as string);
@@ -85,7 +87,7 @@
 			return;
 		}
 		const msg = `Delete project "${row.project_name}"?\n\nThis permanently deletes:\n`
-			+ `${describeCounts(counts)}\n\n${RUN_NOTE}\n\nThis cannot be undone.`;
+			+ `${describeCounts(counts)}\n\n${CONTAINER_NOTE}\n\nThis cannot be undone.`;
 		if (!confirm(msg)) return;
 		const res = await fetch(`/api/projects/${row.id}`, { method: 'DELETE' });
 		if (!res.ok) {
@@ -117,11 +119,11 @@
 				for (const [key] of COUNT_LABELS) acc[key] += c[key];
 				return acc;
 			},
-			{ sites: 0, samples: 0, extracts: 0, pcrs: 0, libraries: 0, runs: 0 } as DeleteCounts
+			{ sites: 0, samples: 0, extracts: 0, pcrs: 0, libraries: 0, runs: 0, plates: 0 } as DeleteCounts
 		);
 
 		const msg = `Delete ${rs.length} projects?\n\nThis permanently deletes, across them:\n`
-			+ `${describeCounts(total)}\n\n${RUN_NOTE}\n\nThis cannot be undone.`;
+			+ `${describeCounts(total)}\n\n${CONTAINER_NOTE}\n\nThis cannot be undone.`;
 		if (!confirm(msg)) return;
 
 		const results = await Promise.all(

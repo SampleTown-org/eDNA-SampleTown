@@ -42,9 +42,18 @@
   samples). Plates and sequencing runs are lab-scoped and survive; runs left
   holding nothing once the project's libraries are gone are cleared out, since
   an archive import creates one per submitted run.
+- Plates emptied by a project delete are removed too, on the same rule as
+  sequencing runs: a plate still holding another project's wells is kept, and
+  so is one that was already empty before the delete. Deleting a PCR plate that
+  a library plate cites (`library_plates.pcr_plate_id`, which has no ON DELETE
+  action) would abort the transaction, so such a plate goes only when the
+  library plate citing it goes too.
+- The delete response reports what was actually removed rather than what was
+  predicted. Extracts and reactions still come from the pre-count, since SQLite
+  reports no row count for cascaded deletes.
 - The delete confirmation itemises what goes — sites, samples, DNA extracts,
-  PCR reactions, library preps, and sequencing runs — instead of quoting a
-  sample count alone. New `GET /api/projects/[id]/delete-preview` supplies the
+  PCR reactions, library preps, sequencing runs, and plates — instead of
+  quoting a sample count alone. New `GET /api/projects/[id]/delete-preview` supplies the
   numbers, counted from the same SQL the delete runs, so the two cannot drift.
 - The delete confirmation said sequencing runs are kept. They are kept only
   while they still hold another project's libraries; a run left holding nothing
