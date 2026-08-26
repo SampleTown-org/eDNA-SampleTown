@@ -1252,6 +1252,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#import-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#import-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1517,6 +1539,28 @@
     <span class="md-ellipsis">
       
         Import from SRA / ENA / GenBank
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#import-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Import UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#permits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permits
       
     </span>
   </a>
@@ -1795,6 +1839,27 @@
   a 2,000-sample project adds about 15 s — because capping by count silently
   dropped metadata that was cheap to fetch. Optional <code>NCBI_API_KEY</code> /
   <code>NCBI_EMAIL</code> raise the request rate for large projects.</li>
+</ul>
+<h3 id="import-ui">Import UI<a class="headerlink" href="#import-ui" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Import gains a <strong>Templates</strong> tab beside <em>Upload file</em> and <em>From accession</em>,
+  holding the MIxS template downloads.</li>
+<li><strong>Export TSV</strong> beside <em>Validate</em> and <em>Import</em>: the preview is read-only, so
+  correcting a value means editing the sheet and importing it again — and rows
+  fetched from an accession had no file on disk to edit.</li>
+<li>Warning lists scroll instead of growing without bound. A large project can
+  contribute a line per row, which pushed the import button off the page.</li>
+<li><code>allowSitesWithoutCoords</code> imports samples that have no coordinates by putting
+  them on a site named for whatever locality the sheet carries, falling back to
+  one "Location not recorded" site per project. Off by default; the dry run now
+  says how many rows would otherwise be skipped.</li>
+</ul>
+<h3 id="permits">Permits<a class="headerlink" href="#permits" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Permit coverage no longer warns about export. Nothing in the export path
+  depends on a permit — identifiers are carried into the MIxS attribution field
+  when present — so the amber "will not be covered on export" notices on the
+  project and site pages are now neutral "no permits linked" text.</li>
 </ul>
 <h3 id="import-pipeline">Import pipeline<a class="headerlink" href="#import-pipeline" title="Permanent link">&para;</a></h3>
 <ul>

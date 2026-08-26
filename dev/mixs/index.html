@@ -1188,6 +1188,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#samples-without-coordinates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Samples without coordinates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#coercion-rules" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1636,6 +1647,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#samples-without-coordinates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Samples without coordinates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#coercion-rules" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1915,6 +1937,21 @@ UI as structured per-row messages:</p>
 the LinkML-generated JSON Schema marks <code>collection_date</code> as <code>date-time</code>
 even though MIxS explicitly allows right-truncated values like <code>2008-01-23</code>
 or <code>2008</code>. Pattern validation still runs and catches real format errors.</p>
+<h3 id="samples-without-coordinates">Samples without coordinates<a class="headerlink" href="#samples-without-coordinates" title="Permanent link">&para;</a></h3>
+<p>Every sample belongs to a site, and sites are derived from coordinates, so a
+row with no lat/lon has nowhere to go and is skipped. Archive submissions omit
+coordinates routinely — controls, blanks, and samples whose location was never
+recorded — and dropping those silently loses the negative controls that make
+the rest of a run interpretable.</p>
+<p><code>allowSitesWithoutCoords</code> creates sites for them instead. Proximity cannot
+group these, so they are grouped by whatever name the sheet does carry:
+<code>site_name</code>, else <code>site_code</code>, else the INSDC locality (<code>geo_loc_name</code>), else a
+single "Location not recorded" site per project. A cluster reuses a located
+site of the same name rather than colliding with it.</p>
+<p>It is off by default. A sheet whose lat/lon columns failed to map looks exactly
+like a sheet that never had them, and inventing sites for that case would bury
+a mapping error. The dry run reports how many rows would be skipped so the
+choice is visible before committing.</p>
 <h3 id="coercion-rules">Coercion rules<a class="headerlink" href="#coercion-rules" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>not collected</code>, <code>missing</code>, <code>not applicable</code>, <code>not provided</code>, and empty
