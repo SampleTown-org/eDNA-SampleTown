@@ -24,6 +24,9 @@ import { buildHeaderToFieldMap } from '$lib/server/mixs-io';
 import { SRA_PLATFORM_TO_SEQ_METH } from '$lib/mixs/sra-mapping';
 
 const ENA_PORTAL = 'https://www.ebi.ac.uk/ena/portal/api/filereport';
+
+/** Prefix marking a column the importer routes to sample_values as a tag. */
+const MISC_PARAM_TAG = 'misc_param:';
 const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
 
 /** Per-request network budget. ENA project queries with fields=all are slow. */
@@ -437,6 +440,17 @@ const FORCE_PROVENANCE = new Set([
 	'sample_alias', 'study_alias', 'center_name', 'broker_name'
 ]);
 
+/**
+ * Consumed by name resolution above, so the pass-through must leave them be.
+ *
+ * Both are candidates for samp_name and neither is in FIELD_MAP, since which
+ * one wins depends on the shape of the title. Left to the pass-through,
+ * `sample_title` resolves through the SRA mapping to samp_name and lands
+ * beside the samp_name column that was already emitted — two columns claiming
+ * one target, which the column mapper refuses to import.
+ */
+const NAME_CANDIDATES = new Set(['sample_title', 'sample_alias']);
+
 /** Targets FIELD_MAP already claims — a pass-through column must not fight one. */
 const MAPPED_TARGETS = new Set(Object.values(FIELD_MAP));
 
@@ -772,7 +786,8 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 	const map = headerMap();
 	const claimed = new Set(MAPPED_TARGETS);
 	for (const key of Object.keys(raw).sort()) {
-		if (key in FIELD_MAP || SKIP_FIELDS.has(key) || key in out) continue;
+		if (key in FIELD_MAP || SKIP_FIELDS.has(key) || NAME_CANDIDATES.has(key) || key in out)
+			continue;
 		const value = raw[key];
 		if (!value) continue;
 
@@ -1056,6 +1071,46 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		warnings.push(
 			`${byAlias + byAccession} record(s) share a sample title with a different BioSample, so they are named ${parts.join(' and ')} instead. The title is kept as misc_param:sample_title.`
 		);
+	}
+
+	// No sheet this produces should be one the importer then refuses. Two
+	// columns resolving to a single field is exactly what the column mapper
+	// blocks on, and it is easy to reintroduce: a field dropped from FIELD_MAP
+	// falls through to the pass-through, where the SRA mapping can resolve it
+	// onto a target another column already fills. A collision that reaches here
+	// is demoted to a tag rather than shipped.
+	{
+		const map = headerMap();
+		const present = new Set<string>();
+		for (const row of rows) for (const key of Object.keys(row)) present.add(key);
+
+		// A column named exactly for its target owns it; otherwise first
+		// alphabetically, so the outcome does not depend on row order.
+		const candidates = Array.from(present)
+			.filter((h) => !h.startsWith(MISC_PARAM_TAG))
+			.sort((a, b) => {
+				const aExact = (map[a.toLowerCase()] ?? a) === a ? 0 : 1;
+				const bExact = (map[b.toLowerCase()] ?? b) === b ? 0 : 1;
+				return aExact - bExact || a.localeCompare(b);
+			});
+
+		const owner = new Map<string, string>();
+		for (const header of candidates) {
+			const target = map[header.toLowerCase()] ?? header;
+			const held = owner.get(target);
+			if (!held) {
+				owner.set(target, header);
+				continue;
+			}
+			for (const row of rows) {
+				if (row[header] === undefined) continue;
+				row[`${MISC_PARAM_TAG}${header}`] = row[header];
+				delete row[header];
+			}
+			warnings.push(
+				`Both "${held}" and "${header}" mean ${target}; "${header}" is kept as a tag so the sheet imports.`
+			);
+		}
 	}
 
 	return { rows, headers: collectHeaders(rows), warnings, resolved };

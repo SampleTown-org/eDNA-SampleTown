@@ -65,6 +65,16 @@
   `temp` slot, so PRJNA421293 had 2681 temperatures in the slot and 144
   stranded in `misc_param:temp`. Same-concept columns now fill the slot.
 
+### Fixed: two columns claiming one field
+- An archive fetch emitted both `samp_name` and a bare `sample_title` column,
+  which the SRA mapping also resolves to `samp_name`, so the column mapper
+  refused the sheet with "Multiple columns mapped to the same target field".
+  Both candidates for the sample's name are now kept as tags rather than raw
+  columns, and a collision that reaches the end of a fetch is demoted to a tag
+  rather than shipped — a field dropped from the explicit map otherwise falls
+  through to the pass-through, where the SRA mapping can land it on a target
+  another column already fills.
+
 ### Sample naming from the archives
 - A sample takes the submitter's title when they wrote one, their own sample
   name when NCBI generated the title for them, and its accession only when it
