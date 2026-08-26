@@ -147,6 +147,72 @@ async function enaQuery(accession: string, result: EnaResult): Promise<Record<st
 	return rows;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * One cheap field per result set, used to count rows without pulling them.
+ *
+ * `fields=all` on a large project is several megabytes; the same query asking
+ * for a single accession column is a fraction of that and returns the same
+ * number of rows.
+ */
+const COUNT_FIELD: Record<EnaResult, string> = {
+	read_run: 'run_accession',
+	sample: 'sample_accession',
+	sequence: 'accession'
+};
+
+/** Rows ENA says it holds, or null when the question cannot be answered. */
+async function enaRowCount(accession: string, result: EnaResult): Promise<number | null> {
+	const params = new URLSearchParams({
+		accession,
+		result,
+		fields: COUNT_FIELD[result],
+		format: 'tsv',
+		limit: '0'
+	});
+	try {
+		const res = await getWithTimeout(`${ENA_PORTAL}?${params}`);
+		if (!res.ok) return null;
+		const text = (await res.text()).trim();
+		if (!text) return 0;
+		return Math.max(0, text.split('\n').length - 1);
+	} catch {
+		// The check failing is not the same as the fetch failing; fall through
+		// and let the main query stand on its own.
+		return null;
+	}
+}
+
+/** Attempts at a short response before giving up on an accession. */
+const FETCH_ATTEMPTS = 3;
+
+/**
+ * Query a result set and check that all of it arrived.
+ *
+ * ENA occasionally returns a truncated body under a 200: a project of 4411
+ * runs came back as 2907 rows, with nothing in the response to distinguish it
+ * from a project that genuinely has 2907. Importing that silently creates two
+ * thirds of a project and no sign the rest is missing, so the row count is
+ * verified against a cheap count query and a short answer is retried.
+ */
+async function enaQueryVerified(
+	accession: string,
+	result: EnaResult
+): Promise<{ rows: Record<string, string>[]; expected: number | null; complete: boolean }> {
+	const expected = await enaRowCount(accession, result);
+	let rows: Record<string, string>[] = [];
+
+	for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
+		rows = await enaQuery(accession, result);
+		if (expected == null || rows.length >= expected) {
+			return { rows, expected, complete: true };
+		}
+		if (attempt < FETCH_ATTEMPTS) await sleep(500 * attempt);
+	}
+	return { rows, expected, complete: false };
+}
+
 /** BioSample accessions per efetch call. NCBI accepts them directly as ids. */
 const NCBI_BATCH = 100;
 
@@ -175,8 +241,6 @@ function ncbiAuth(): string {
 		`${email ? `&email=${encodeURIComponent(email)}` : ''}`
 	);
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Fetch BioSample records from NCBI, keyed by accession.
@@ -782,12 +846,17 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		// Which result set answered. Kept separate from the human-readable
 		// `source` string, which gains suffixes as the record is enriched.
 		let answered: EnaResult | null = null;
+		let incomplete: { got: number; expected: number } | null = null;
 		try {
 			for (const result of resultsFor(kind)) {
-				raw = await enaQuery(accession, result);
+				const attempt = await enaQueryVerified(accession, result);
+				raw = attempt.rows;
 				if (raw.length > 0) {
 					source = `ENA ${result}`;
 					answered = result;
+					if (!attempt.complete && attempt.expected != null) {
+						incomplete = { got: raw.length, expected: attempt.expected };
+					}
 					break;
 				}
 			}
@@ -861,6 +930,17 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 					);
 				}
 			}
+		}
+
+		// A partial project is worse than none: the rows that did arrive would
+		// import as a complete-looking project, and reconciling the remainder
+		// afterwards means picking apart which records already exist.
+		if (incomplete) {
+			warnings.push(
+				`${accession}: ENA returned ${incomplete.got} of ${incomplete.expected} records after ${FETCH_ATTEMPTS} attempts, so nothing was taken from it. This is an intermittent fault at ENA — try the fetch again.`
+			);
+			resolved.push({ accession, kind, source: 'incomplete', rows: 0 });
+			continue;
 		}
 
 		if (raw.length === 0) {

@@ -174,6 +174,20 @@ mirrored, which typically takes a day.
 fields apply, and there is no way to know the set ahead of time. Empty
 columns are dropped per row.
 
+### Completeness
+
+ENA occasionally returns a truncated body under a 200. `PRJNA421293` came back
+as 2907 of its 4411 runs with nothing in the response to distinguish that from
+a project which genuinely has 2907 — and two immediate retries returned the
+full set, so it is intermittent rather than a property of the project.
+
+Every result set is therefore counted first, with a query asking for a single
+accession column: same row count, a fraction of the bytes. A short answer is
+retried up to three times, and an accession that still comes back short
+contributes nothing at all. A partial project is worse than none — the rows
+that did arrive would import as a complete-looking project, and reconciling the
+remainder afterwards means picking apart which records already exist.
+
 ### Reconciling against NCBI
 
 BioSample is the authority on what a sample is; ENA holds a copy, and the copy

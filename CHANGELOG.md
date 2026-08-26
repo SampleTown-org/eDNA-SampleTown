@@ -32,6 +32,15 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### Archive fetch completeness
+- Every ENA result set is counted before it is pulled, and a short answer is
+  retried. ENA occasionally returns a truncated body under a 200 — PRJNA421293
+  came back as 2907 of 4411 runs, indistinguishable from a project that has
+  2907 — and importing that silently creates two thirds of a project with no
+  sign the rest is missing. An accession that still comes back short after
+  three attempts contributes nothing and says so. The count query asks for a
+  single accession column, so it costs a fraction of the full fetch.
+
 ### Export column vocabulary
 - The MIxS TSV export carries a second header row naming each column's
   vocabulary — `sampletown`, `insdc`, or `mixs` — and groups the columns by it,
