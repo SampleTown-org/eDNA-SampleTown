@@ -1252,6 +1252,50 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#sites-and-samples-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sites and samples views
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sensitive-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensitive locations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#accessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accessions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sra-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SRA import
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#fixes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1561,6 +1605,50 @@
     <span class="md-ellipsis">
       
         Import from SRA / ENA / GenBank
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sites-and-samples-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sites and samples views
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sensitive-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensitive locations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#accessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accessions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sra-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SRA import
       
     </span>
   </a>
@@ -1883,6 +1971,49 @@
   a 2,000-sample project adds about 15 s — because capping by count silently
   dropped metadata that was cheap to fetch. Optional <code>NCBI_API_KEY</code> /
   <code>NCBI_EMAIL</code> raise the request rate for large projects.</li>
+</ul>
+<h3 id="sites-and-samples-views">Sites and samples views<a class="headerlink" href="#sites-and-samples-views" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>/sites</code> colours pins by project and gains a project filter above the map.</li>
+<li><code>/samples</code> gains the same project filter, and choosing a <code>+ parameter</code> now
+  focuses the whole view on it: the table and map narrow to the samples
+  carrying it, its column appears, and the pins colour by its value. Adding a
+  column on its own mostly rendered blanks, since a parameter is only populated
+  on some samples.</li>
+</ul>
+<h3 id="sensitive-locations">Sensitive locations<a class="headerlink" href="#sensitive-locations" title="Permanent link">&para;</a></h3>
+<ul>
+<li>"Sensitive location" moved from samples to sites. Sensitivity is a property
+  of the place, not of one sample taken there, so every sample at the site
+  inherits it. <code>samples.is_location_sensitive</code> is retained as legacy and unread;
+  no lab had set it.</li>
+<li>Fixed: coordinate coarsening never happened. The mask needs the site's raw
+  latitude and longitude, and the export query selected neither, so a record
+  flagged sensitive still exported its precise position.</li>
+</ul>
+<h3 id="accessions">Accessions<a class="headerlink" href="#accessions" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Records imported from an archive carry the accession they came from, on a new
+  nullable <code>accession</code> column on projects, samples, extracts, PCR reactions,
+  library preps, and sequencing runs. Applied to existing databases by an
+  additive migration at startup, since <code>schema.sql</code> runs as CREATE TABLE IF NOT
+  EXISTS and never reaches a table that already exists.</li>
+<li>Every list view shows it: the <code>ID</code> column becomes <code>Accession</code> when any row
+  has one, falling back to the internal id for records entered by hand. Detail
+  pages link the accession to its ENA browser page.</li>
+</ul>
+<h3 id="sra-import">SRA import<a class="headerlink" href="#sra-import" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>sample_title</code> names the sample, ahead of <code>sample_alias</code> — the alias is the
+  submission-system handle and is often a sequencer well like "S230_2".</li>
+<li>PCR reactions and library preps are named by their SRA experiment accession.
+  An experiment is one library prep sequenced in one or more runs, so runs
+  sharing an experiment now resolve to a single library instead of one apiece.</li>
+<li>Reactions and preps are laid out on plates named for the submission they
+  arrived in (<code>&lt;submission_accession&gt;_pcr</code> / <code>_lib</code>). Plate creation is new to
+  the import pathway generally: <code>pcr_plate_name</code> and <code>library_plate_name</code>
+  columns create or reuse a lab-scoped plate by name, so spreadsheet imports
+  can place work on plates too.</li>
 </ul>
 <h3 id="fixes">Fixes<a class="headerlink" href="#fixes" title="Permanent link">&para;</a></h3>
 <ul>
