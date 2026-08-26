@@ -1252,6 +1252,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#export-column-vocabulary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export column vocabulary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed-archive-fields-landing-in-the-wrong-column" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed: archive fields landing in the wrong column
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#fixed-biosamples-merged-on-import" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1627,6 +1649,28 @@
     <span class="md-ellipsis">
       
         Import from SRA / ENA / GenBank
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-column-vocabulary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Export column vocabulary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed-archive-fields-landing-in-the-wrong-column" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed: archive fields landing in the wrong column
       
     </span>
   </a>
@@ -2015,6 +2059,25 @@
   a 2,000-sample project adds about 15 s — because capping by count silently
   dropped metadata that was cheap to fetch. Optional <code>NCBI_API_KEY</code> /
   <code>NCBI_EMAIL</code> raise the request rate for large projects.</li>
+</ul>
+<h3 id="export-column-vocabulary">Export column vocabulary<a class="headerlink" href="#export-column-vocabulary" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The MIxS TSV export carries a second header row naming each column's
+  vocabulary — <code>sampletown</code>, <code>insdc</code>, or <code>mixs</code> — and groups the columns by it,
+  alphabetically within each group, with <code>samp_name</code> first. An exported sheet
+  mixes three vocabularies and they are not distinguishable by name alone.
+  The importer strips the row when it is present, and still accepts a sheet
+  without one.</li>
+<li>The export also carries <code>accession</code> and <code>project_accession</code>, so a sheet says
+  where its records came from and re-importing puts them back.</li>
+</ul>
+<h3 id="fixed-archive-fields-landing-in-the-wrong-column">Fixed: archive fields landing in the wrong column<a class="headerlink" href="#fixed-archive-fields-landing-in-the-wrong-column" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A raw archive column whose MIxS slot was already spoken for was demoted to a
+  <code>misc_param:</code> tag even when the slot was empty on that row. ENA exposes
+  <code>temperature</code> and the GSC checklists a bare <code>temp</code>, both meaning the MIxS
+  <code>temp</code> slot, so PRJNA421293 had 2681 temperatures in the slot and 144
+  stranded in <code>misc_param:temp</code>. Same-concept columns now fill the slot.</li>
 </ul>
 <h3 id="fixed-biosamples-merged-on-import">Fixed: BioSamples merged on import<a class="headerlink" href="#fixed-biosamples-merged-on-import" title="Permanent link">&para;</a></h3>
 <ul>
