@@ -1252,6 +1252,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#from-the-feedback-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the feedback queue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#import-ui" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1539,6 +1550,17 @@
     <span class="md-ellipsis">
       
         Import from SRA / ENA / GenBank
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#from-the-feedback-queue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the feedback queue
       
     </span>
   </a>
@@ -1840,6 +1862,24 @@
   dropped metadata that was cheap to fetch. Optional <code>NCBI_API_KEY</code> /
   <code>NCBI_EMAIL</code> raise the request rate for large projects.</li>
 </ul>
+<h3 id="from-the-feedback-queue">From the feedback queue<a class="headerlink" href="#from-the-feedback-queue" title="Permanent link">&para;</a></h3>
+<ul>
+<li>8-well strips fill A01–H01 instead of A01–A08 — a strip is one column of a
+  plate, which is the orientation it sits in and the order a multichannel
+  pipette loads it. Strips laid out before this read as 96-well plates with row
+  A filled; every well still renders in the right place, in a plate grid rather
+  than a strip.</li>
+<li><code>YYYYMMDD</code> dates are accepted on import and converted to ISO-8601, for
+  <code>collection_date</code>, <code>extraction_date</code>, <code>library_prep_date</code>, <code>run_date</code> and
+  <code>pcr_date</code>. Slash-separated dates are deliberately left alone: day-first and
+  month-first are indistinguishable, and guessing would move samples in time.</li>
+<li>Samples with no coordinates now import by default (see
+  <code>allowSitesWithoutCoords</code> below). Collection date and coordinates remain
+  required when adding samples through the form.</li>
+<li>A site's detail map shows a marker at the site. <code>MapPicker</code> drew the pin only
+  when interactive, so a read-only map centred on the location without marking
+  it.</li>
+</ul>
 <h3 id="import-ui">Import UI<a class="headerlink" href="#import-ui" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Import gains a <strong>Templates</strong> tab beside <em>Upload file</em> and <em>From accession</em>,
@@ -1851,8 +1891,12 @@
   contribute a line per row, which pushed the import button off the page.</li>
 <li><code>allowSitesWithoutCoords</code> imports samples that have no coordinates by putting
   them on a site named for whatever locality the sheet carries, falling back to
-  one "Location not recorded" site per project. Off by default; the dry run now
-  says how many rows would otherwise be skipped.</li>
+  one "Location not recorded" site per project. On by default — callers opt out
+  by sending it explicitly false. The dry run says how many rows are skipped
+  when it is off.</li>
+<li>The archive fetch no longer warns about records it reconciled against NCBI or
+  about missing coordinates; the source column already reports the former and
+  the latter no longer costs the row its import.</li>
 </ul>
 <h3 id="permits">Permits<a class="headerlink" href="#permits" title="Permanent link">&para;</a></h3>
 <ul>
