@@ -53,8 +53,10 @@
 	// --- Import ---
 	/** Where the rows come from: an uploaded sheet, or a fetch from the sequence
 	 *  archives. Both produce a TSV that goes through /api/import/mixs, so
-	 *  everything below this point — preview, mapper, validation — is shared. */
-	let importSource = $state<'file' | 'accession'>('file');
+	 *  everything below this point — preview, mapper, validation — is shared.
+	 *  'template' is the odd one out: a download-only view for starting a sheet
+	 *  from an empty MIxS checklist. */
+	let importSource = $state<'file' | 'accession' | 'template'>('file');
 	let importProject = $state('');
 	let importTsv = $state('');
 	let importFileName = $state('');
@@ -66,6 +68,11 @@
 	let fetchResult = $state<{ count: number; warnings: string[]; resolved: Resolved[] } | null>(null);
 	let fetchError = $state('');
 	let siteMatchKm = $state(1);
+	/** Import samples that have no coordinates by putting them on a site named
+	 *  for whatever locality the sheet does carry. Off by default so a failed
+	 *  lat/lon mapping still shows up as skipped rows rather than silently
+	 *  becoming sites. */
+	let allowSitesWithoutCoords = $state(false);
 	/** Default MIxS checklist + extension applied to rows whose TSV doesn't
 	 *  carry mixs_checklist / extension columns. Drives import-side validation
 	 *  and the default combination class for required-slot resolution. */
@@ -248,6 +255,7 @@
 			if (importProject) fd.append('projectId', importProject);
 			fd.append('dryRun', String(dryRun));
 			fd.append('siteMatchKm', String(siteMatchKm));
+			fd.append('allowSitesWithoutCoords', String(allowSitesWithoutCoords));
 			fd.append('defaultChecklist', importChecklist);
 			if (importExtension) fd.append('defaultExtension', importExtension);
 			if (colMapJson) fd.append('columnMap', colMapJson);
@@ -262,6 +270,7 @@
 					projectId: importProject || undefined,
 					dryRun,
 					siteMatchKm,
+					allowSitesWithoutCoords,
 					defaultChecklist: importChecklist,
 					defaultExtension: importExtension || undefined,
 					columnMap: colMapJson ? JSON.parse(colMapJson) : undefined,
@@ -294,6 +303,34 @@
 			}
 		}
 		importing = false;
+	}
+
+	/** Filename for the exported TSV, named after wherever the rows came from. */
+	function tsvFileName(): string {
+		if (importSource === 'accession') {
+			const first = accessions.trim().split(/[\s,;]+/)[0];
+			return first ? `sampletown_${first}.tsv` : 'sampletown_import.tsv';
+		}
+		const base = importFileName.replace(/\.(xlsx|xls|csv|tsv|txt)$/i, '');
+		return base ? `${base}.tsv` : 'sampletown_import.tsv';
+	}
+
+	/** Download the rows as they stand.
+	 *
+	 *  The preview is read-only, so a bad cell is corrected by editing the sheet
+	 *  and importing it again. Rows fetched from an accession have no file on
+	 *  disk to edit, which otherwise leaves no way to fix them at all. */
+	function downloadTsv() {
+		if (!importTsv) return;
+		const blob = new Blob([importTsv], { type: 'text/tab-separated-values' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = tsvFileName();
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		URL.revokeObjectURL(url);
 	}
 
 	async function previewImport() { await sendImport(true, false); }
@@ -382,6 +419,7 @@
 		<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
 			<button onclick={() => importSource = 'file'} class="px-3 py-1 rounded text-xs font-medium transition-colors {importSource === 'file' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}">Upload file</button>
 			<button onclick={() => importSource = 'accession'} class="px-3 py-1 rounded text-xs font-medium transition-colors {importSource === 'accession' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}">From accession</button>
+			<button onclick={() => importSource = 'template'} class="px-3 py-1 rounded text-xs font-medium transition-colors {importSource === 'template' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}">Templates</button>
 		</div>
 
 		{#if importSource === 'accession'}
@@ -435,29 +473,79 @@
 			{/if}
 
 			{#if fetchResult && fetchResult.warnings.length > 0}
-				<ul class="space-y-1 text-xs text-yellow-300/90">
+				<ul class="space-y-1 text-xs text-yellow-300/90 max-h-40 overflow-y-auto pr-1">
 					{#each fetchResult.warnings as w}<li>· {w}</li>{/each}
 				</ul>
 			{/if}
 		</div>
 		{/if}
 
+		{#if importSource === 'template'}
+		<!-- MIxS v6.3 templates — generated from SampleTown's bundled LinkML
+		     schema, so column headers exactly match what the import parser
+		     recognizes. NCBI BioSample's public templates still lag at v6.0;
+		     using our own generation keeps everything in sync. -->
+		<div class="p-4 rounded-lg border border-slate-800 bg-slate-900/50 space-y-3">
+			<h3 class="text-sm font-medium text-slate-300">MIxS v{MIXS_ACTIVE_VERSION} templates</h3>
+			<p class="text-xs text-slate-500">
+				Pick a checklist and extension to download an empty TSV with the exact columns that combination requires and recommends.
+				Required parameters are prefixed with <code class="text-rose-400">*</code>. Fill in the file, save as TSV, and import above.
+			</p>
+			<div class="flex flex-wrap gap-2 items-end">
+				<div>
+					<label for="tmpl_checklist" class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
+					<select id="tmpl_checklist" bind:value={templateChecklist} class={selectCls}>
+						{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
+					</select>
+				</div>
+				<div>
+					<label for="tmpl_extension" class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
+					<select id="tmpl_extension" bind:value={templateExtension} class={selectCls}>
+						<option value="">(none)</option>
+						{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
+					</select>
+				</div>
+				<a href={templateUrl} download
+					class="px-3 py-2 bg-ocean-700 hover:bg-ocean-600 text-white rounded-lg text-sm font-medium">
+					Download TSV template
+				</a>
+			</div>
+		</div>
+		{/if}
+
+		<!-- The templates tab is a download-only view; none of the import
+		     controls below apply to it. -->
+		{#if importSource !== 'template'}
+		{#if importSource === 'file'}
+		<div class="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+			<label for="import_file" class="block text-xs font-medium text-slate-400 mb-1">File (.xlsx, .tsv, .csv)</label>
+			<input id="import_file" type="file" accept=".xlsx,.xls,.tsv,.txt,.csv" onchange={handleFile}
+				class="text-sm text-slate-400 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-700 file:text-white file:text-sm file:cursor-pointer hover:file:bg-slate-600" />
+		</div>
+		{/if}
+
 		<div class="flex gap-4 items-end flex-wrap">
 			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1">Fallback Project</label>
+				<label class="block text-xs font-medium text-slate-400 mb-1">Import into existing project</label>
 				<select bind:value={importProject} class={selectCls}>
 					<option value="">Select project...</option>
 					{#each data.projects as p}<option value={p.id}>{p.project_name}</option>{/each}
 				</select>
 				<p class="text-[10px] text-slate-500 mt-1">Optional if the sheet has a <code>project_name</code> column.</p>
 			</div>
-			{#if importSource === 'file'}
 			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1">File (.xlsx, .tsv, .csv)</label>
-				<input type="file" accept=".xlsx,.xls,.tsv,.txt,.csv" onchange={handleFile}
-					class="text-sm text-slate-400 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-700 file:text-white file:text-sm file:cursor-pointer hover:file:bg-slate-600" />
+				<label class="block text-xs font-medium text-slate-400 mb-1">Site match radius</label>
+				<div class="flex items-center gap-2">
+					<input type="range" min="0.001" max="10" step="0.001" bind:value={siteMatchKm}
+						class="w-24 accent-ocean-500" />
+					<input type="number" min="0.001" max="100" step="0.001" bind:value={siteMatchKm}
+						class="w-20 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500" />
+					<span class="text-xs text-slate-500">km</span>
+				</div>
 			</div>
-			{/if}
+		</div>
+
+		<div class="flex gap-4 items-end flex-wrap">
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
 				<select bind:value={importChecklist} class={selectCls}>
@@ -471,17 +559,20 @@
 					{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
 				</select>
 			</div>
-			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1">Site match radius</label>
-				<div class="flex items-center gap-2">
-					<input type="range" min="0.001" max="10" step="0.001" bind:value={siteMatchKm}
-						class="w-24 accent-ocean-500" />
-					<input type="number" min="0.001" max="100" step="0.001" bind:value={siteMatchKm}
-						class="w-20 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-ocean-500" />
-					<span class="text-xs text-slate-500">km</span>
-				</div>
-			</div>
 		</div>
+		<label class="flex items-start gap-2 text-xs text-slate-400 cursor-pointer w-fit">
+			<input type="checkbox" bind:checked={allowSitesWithoutCoords}
+				class="mt-0.5 accent-ocean-500" />
+			<span>
+				Create sites for samples without coordinates
+				<span class="block text-slate-500">
+					Groups them by <code>site_name</code>, <code>site_code</code>, or
+					<code>geo_loc_name</code>, falling back to one “Location not recorded” site per
+					project. Without this they are skipped, since every sample needs a site.
+				</span>
+			</span>
+		</label>
+
 		<p class="text-xs text-slate-500">
 			Rows without <code>mixs_checklist</code> / <code>extension</code> columns default to
 			<code class="text-ocean-400">{importChecklist}{importExtension ? ' + ' + importExtension : ''}</code> for required-parameter validation.
@@ -508,6 +599,13 @@
 			{#if importPreview && importPreview.samples.length > 0}
 			<button onclick={runImport} disabled={importing || hasDuplicates} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
 				{importing ? 'Importing...' : `Import ${importPreview.count} Samples`}
+			</button>
+			{/if}
+			{#if importTsv}
+			<button onclick={downloadTsv} disabled={importing}
+				title="Download these rows as a TSV, correct them in a spreadsheet, then re-import from Upload file"
+				class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
+				Export TSV
 			</button>
 			{/if}
 
@@ -636,11 +734,19 @@
 				</div>
 			{/if}
 
+			<!-- Warning count scales with the upload: a project can contribute a
+			     line per row, so the list scrolls instead of pushing the import
+			     button off the page. -->
 			{#if importPreview.errors.length > 0}
-			<div class="p-3 rounded-lg bg-yellow-900/20 border border-yellow-800 text-yellow-300 text-sm space-y-1">
-				{#each importPreview.errors as err}
-					<div>{err}</div>
-				{/each}
+			<div class="p-3 rounded-lg bg-yellow-900/20 border border-yellow-800 text-yellow-300 text-sm">
+				<div class="font-medium mb-1">
+					{importPreview.errors.length} warning{importPreview.errors.length === 1 ? '' : 's'}
+				</div>
+				<div class="max-h-56 overflow-y-auto space-y-1 pr-1">
+					{#each importPreview.errors as err}
+						<div>{err}</div>
+					{/each}
+				</div>
 			</div>
 			{/if}
 
@@ -850,42 +956,17 @@
 		{/if}
 
 		{#if importResult && importResult.errors.length > 0}
-			<div class="p-3 rounded-lg bg-yellow-900/20 border border-yellow-800 text-sm space-y-1 text-yellow-300">
-				<div class="font-medium">Warnings:</div>
-				{#each importResult.errors as err}<div>{err}</div>{/each}
+			<div class="p-3 rounded-lg bg-yellow-900/20 border border-yellow-800 text-sm text-yellow-300">
+				<div class="font-medium mb-1">
+					{importResult.errors.length} warning{importResult.errors.length === 1 ? '' : 's'}
+				</div>
+				<div class="max-h-56 overflow-y-auto space-y-1 pr-1">
+					{#each importResult.errors as err}<div>{err}</div>{/each}
+				</div>
 			</div>
 		{/if}
+		{/if}
 
-		<!-- MIxS v6.3 templates — generated from SampleTown's bundled LinkML
-		     schema, so column headers exactly match what the import parser
-		     recognizes. NCBI BioSample's public templates still lag at v6.0;
-		     using our own generation keeps everything in sync. -->
-		<div class="p-4 rounded-lg border border-slate-800 bg-slate-900/50 space-y-3">
-			<h3 class="text-sm font-medium text-slate-300">MIxS v{MIXS_ACTIVE_VERSION} templates</h3>
-			<p class="text-xs text-slate-500">
-				Pick a checklist and extension to download an empty TSV with the exact columns that combination requires and recommends.
-				Required parameters are prefixed with <code class="text-rose-400">*</code>. Fill in the file, save as TSV, and import above.
-			</p>
-			<div class="flex flex-wrap gap-2 items-end">
-				<div>
-					<label for="tmpl_checklist" class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
-					<select id="tmpl_checklist" bind:value={templateChecklist} class={selectCls}>
-						{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
-					</select>
-				</div>
-				<div>
-					<label for="tmpl_extension" class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
-					<select id="tmpl_extension" bind:value={templateExtension} class={selectCls}>
-						<option value="">(none)</option>
-						{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
-					</select>
-				</div>
-				<a href={templateUrl} download
-					class="px-3 py-2 bg-ocean-700 hover:bg-ocean-600 text-white rounded-lg text-sm font-medium">
-					Download TSV template
-				</a>
-			</div>
-		</div>
 	</div>
 	{/if}
 </div>

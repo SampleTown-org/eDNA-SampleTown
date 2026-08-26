@@ -32,6 +32,25 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### Import UI
+- Import gains a **Templates** tab beside *Upload file* and *From accession*,
+  holding the MIxS template downloads.
+- **Export TSV** beside *Validate* and *Import*: the preview is read-only, so
+  correcting a value means editing the sheet and importing it again — and rows
+  fetched from an accession had no file on disk to edit.
+- Warning lists scroll instead of growing without bound. A large project can
+  contribute a line per row, which pushed the import button off the page.
+- `allowSitesWithoutCoords` imports samples that have no coordinates by putting
+  them on a site named for whatever locality the sheet carries, falling back to
+  one "Location not recorded" site per project. Off by default; the dry run now
+  says how many rows would otherwise be skipped.
+
+### Permits
+- Permit coverage no longer warns about export. Nothing in the export path
+  depends on a permit — identifiers are carried into the MIxS attribution field
+  when present — so the amber "will not be covered on export" notices on the
+  project and site pages are now neutral "no permits linked" text.
+
 ### Import pipeline
 - PCR reactions are now created on import. New `pcr_*` columns
   (`pcr_name`, `pcr_date`, `pcr_cond`, `nucl_acid_amp`, `target_gene`,

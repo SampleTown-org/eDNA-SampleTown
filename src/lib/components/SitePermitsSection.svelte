@@ -239,9 +239,7 @@
 	{/if}
 
 	{#if linked.length === 0}
-		<p class="text-sm text-amber-400">
-			No permits cover this site. Samples collected here will show as uncovered on export.
-		</p>
+		<p class="text-sm text-slate-500">No permits linked to this site.</p>
 	{:else}
 		<ul class="text-sm text-slate-300 space-y-2">
 			{#each linked as p}

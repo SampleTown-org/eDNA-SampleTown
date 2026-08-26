@@ -123,6 +123,25 @@ the LinkML-generated JSON Schema marks `collection_date` as `date-time`
 even though MIxS explicitly allows right-truncated values like `2008-01-23`
 or `2008`. Pattern validation still runs and catches real format errors.
 
+### Samples without coordinates
+
+Every sample belongs to a site, and sites are derived from coordinates, so a
+row with no lat/lon has nowhere to go and is skipped. Archive submissions omit
+coordinates routinely — controls, blanks, and samples whose location was never
+recorded — and dropping those silently loses the negative controls that make
+the rest of a run interpretable.
+
+`allowSitesWithoutCoords` creates sites for them instead. Proximity cannot
+group these, so they are grouped by whatever name the sheet does carry:
+`site_name`, else `site_code`, else the INSDC locality (`geo_loc_name`), else a
+single "Location not recorded" site per project. A cluster reuses a located
+site of the same name rather than colliding with it.
+
+It is off by default. A sheet whose lat/lon columns failed to map looks exactly
+like a sheet that never had them, and inventing sites for that case would bury
+a mapping error. The dry run reports how many rows would be skipped so the
+choice is visible before committing.
+
 ### Coercion rules
 
 - `not collected`, `missing`, `not applicable`, `not provided`, and empty

@@ -98,6 +98,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	let columnMap: Record<string, string> | undefined;
 	let siteMatchKm: number = DEFAULT_SITE_MATCH_KM;
 	let people: { personnel_id: string; role?: string | null }[] | undefined;
+	/** Create sites for samples that have no coordinates. Off by default: a
+	 *  sheet whose lat/lon columns failed to map looks exactly like a sheet
+	 *  that never had them, and silently inventing sites would bury that. */
+	let allowSitesWithoutCoords = false;
 	/** Fallback checklist/extension for rows that don't declare their own —
 	 *  used for per-row MIxS validation and as sample defaults on insert. */
 	let defaultChecklist = 'MimarksS';
@@ -123,6 +127,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				try { people = JSON.parse(peopleRaw); }
 				catch { return json({ error: 'Invalid people JSON' }, { status: 400 }); }
 			}
+			allowSitesWithoutCoords = formData.get('allowSitesWithoutCoords') === 'true';
 			const dcl = formData.get('defaultChecklist') as string | null;
 			if (dcl) defaultChecklist = dcl;
 			const dex = formData.get('defaultExtension') as string | null;
@@ -157,6 +162,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				if (!isNaN(km) && km > 0 && km <= 100) siteMatchKm = km;
 			}
 			if (Array.isArray(body.people)) people = body.people;
+			allowSitesWithoutCoords = body.allowSitesWithoutCoords === true;
 			if (typeof body.defaultChecklist === 'string') defaultChecklist = body.defaultChecklist;
 			if (typeof body.defaultExtension === 'string') defaultExtension = body.defaultExtension;
 			if (typeof tsv === 'string' && tsv.length > MAX_TSV_BYTES) {
@@ -249,7 +255,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
 	// Auto-create sites for unmatched samples, clustered by proximity.
 	// Samples within siteMatchKm of each other AND sharing a project share a site.
-	type NewSite = { id: string; project_id: string; site_name: string; site_code: string | null; lat: number; lon: number; lat_lon: string; geo_loc_name: string | null; env_broad_scale: string | null; env_local_scale: string | null; name_votes: Map<string, number>; code_votes: Map<string, number> };
+	type NewSite = { id: string; project_id: string; site_name: string; site_code: string | null; lat: number | null; lon: number | null; lat_lon: string | null; geo_loc_name: string | null; env_broad_scale: string | null; env_local_scale: string | null; name_votes: Map<string, number>; code_votes: Map<string, number> };
 	const newSites: NewSite[] = [];
 
 	for (const row of matched) {
@@ -261,6 +267,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		let cluster: NewSite | null = null;
 		for (const site of newSites) {
 			if (site.project_id !== row.project_id) continue;
+			if (site.lat == null || site.lon == null) continue; // unlocated: nothing to measure
 			if (haversineKm(row.lat, row.lon, site.lat, site.lon) <= siteMatchKm) {
 				cluster = site;
 				break;
@@ -336,6 +343,74 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			if (row.matched_site?.id === site.id) {
 				row.matched_site.site_name = site.site_name;
 			}
+		}
+	}
+
+	// Runs after the vote resolution above so located site names are final: an
+	// unlocated cluster reuses a located site of the same name rather than
+	// racing it to UNIQUE(project_id, site_name).
+	//
+	// Samples with no coordinates. Proximity cannot group these, so they are
+	// grouped by whatever name the sheet does carry: an explicit site_name or
+	// site_code, else the INSDC locality (geo_loc_name), else a single
+	// per-project bucket. Archive submissions routinely omit lat/lon on
+	// controls and blanks, and dropping those loses the negative controls that
+	// make the rest of the run interpretable.
+	const UNLOCATED_SITE_NAME = 'Location not recorded';
+	let unlocatedSiteCount = 0;
+	if (allowSitesWithoutCoords) {
+		for (const row of matched) {
+			if (row.matched_site || !row.project_id) continue;
+			if (row.lat != null && row.lon != null) continue;
+
+			const sample = row.sample;
+			const name =
+				(sample.site_name as string)?.trim() ||
+				(sample.site_code as string)?.trim() ||
+				(sample.geo_loc_name as string)?.trim() ||
+				UNLOCATED_SITE_NAME;
+
+			// Reuse a site already queued for this project under the same name,
+			// located or not — two rows naming the same place are the same site,
+			// and UNIQUE(project_id, site_name) would reject a second one anyway.
+			let cluster = newSites.find(
+				(site) => site.project_id === row.project_id && site.site_name === name
+			);
+			if (!cluster) {
+				cluster = {
+					id: generateId(),
+					project_id: row.project_id,
+					site_name: name,
+					site_code: (sample.site_code as string)?.trim() || null,
+					lat: null,
+					lon: null,
+					lat_lon: null,
+					geo_loc_name: (sample.geo_loc_name as string) || null,
+					env_broad_scale: (sample.env_broad_scale as string) || null,
+					env_local_scale: (sample.env_local_scale as string) || null,
+					name_votes: new Map(),
+					code_votes: new Map()
+				};
+				newSites.push(cluster);
+				unlocatedSiteCount++;
+			}
+
+			row.matched_site = { id: cluster.id, site_name: cluster.site_name, distance_km: 0 };
+			row.new_site = true;
+		}
+	}
+
+
+	// Tell the dry run what the insert would drop. Without this the preview
+	// reports a clean parse and the row count only falls at commit time, which
+	// is the wrong moment to discover that a third of the sheet has no
+	// coordinates.
+	{
+		const unplaceable = matched.filter((m) => !m.matched_site && m.project_id).length;
+		if (unplaceable > 0) {
+			errors.push(
+				`${unplaceable} row(s) have no coordinates and match no existing site, so they will be skipped. Enable "create sites for samples without coordinates" to import them anyway.`
+			);
 		}
 	}
 
@@ -473,6 +548,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				lat_lon: s.lat_lon,
 				geo_loc_name: s.geo_loc_name
 			})),
+			unlocated_sites: unlocatedSiteCount,
 			new_projects: Array.from(newProjectsByName.values()).map((p) => ({
 				id: p.id,
 				project_name: p.project_name
@@ -744,7 +820,9 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				continue;
 			}
 			if (!siteId) {
-				insertErrors.push(`${sample.samp_name}: no site match and no coordinates — skipped`);
+				insertErrors.push(
+					`${sample.samp_name}: no coordinates and no matching site — skipped. Enable "create sites for samples without coordinates" to import it anyway.`
+				);
 				continue;
 			}
 			try {

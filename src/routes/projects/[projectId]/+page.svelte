@@ -100,15 +100,16 @@
 		</div>
 	{/if}
 
-	<!-- Permits linked to this project. A project with no permits still runs fine
-	     but its samples won't be covered — flag it early. -->
+	<!-- Permits linked to this project. Listing only: permits are recorded here
+	     and carried into the MIxS export's attribution field, but nothing about
+	     the export depends on them. -->
 	<div class="rounded-lg border border-slate-800 p-5 space-y-2">
 		<div class="flex items-center justify-between">
 			<h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Permits ({data.permits.length})</h2>
 			<a href="/settings?tab=permits" class="text-xs text-ocean-400 hover:text-ocean-300">Manage →</a>
 		</div>
 		{#if data.permits.length === 0}
-			<p class="text-sm text-amber-400">No permits linked to this project. Samples collected under this project will not be covered on export.</p>
+			<p class="text-sm text-slate-500">No permits linked to this project.</p>
 		{:else}
 			<ul class="text-sm text-slate-300 space-y-2">
 				{#each data.permits as p (p.id)}
