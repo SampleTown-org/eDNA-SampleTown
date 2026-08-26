@@ -43,14 +43,24 @@
 		{ key: 'created_at', label: 'Created', sortable: true }
 	];
 
+	/** Sequencing runs and plates are lab-scoped and can hold other projects'
+	 *  work, so they survive; only this project's libraries and reactions go. */
+	const DELETE_SCOPE =
+		'This will also permanently delete all associated sites, samples, DNA extracts, '
+		+ 'PCR reactions, and library preps. Sequencing runs and plates are kept, since '
+		+ 'they can hold other projects\' work.';
+
 	async function deleteProject(row: Record<string, unknown>) {
 		const n = (row.sample_count as number | undefined) ?? 0;
 		const msg = `Delete project "${row.project_name}"?\n\n`
-			+ `This will also permanently delete all associated sites, samples, DNA extracts, `
-			+ `PCR records, libraries, sequencing runs, and analyses${n > 0 ? ` (${n} samples)` : ''}. `
-			+ `This cannot be undone.`;
+			+ `${DELETE_SCOPE}${n > 0 ? ` (${n} samples)` : ''}\n\nThis cannot be undone.`;
 		if (!confirm(msg)) return;
-		await fetch(`/api/projects/${row.id}`, { method: 'DELETE' });
+		const res = await fetch(`/api/projects/${row.id}`, { method: 'DELETE' });
+		if (!res.ok) {
+			const err = await res.json().catch(() => null);
+			alert(`Could not delete "${row.project_name}": ${err?.error ?? `HTTP ${res.status}`}`);
+			return;
+		}
 		allProjects = allProjects.filter(p => p.id !== row.id);
 	}
 
@@ -66,13 +76,21 @@
 	async function bulkDeleteProjects(rs: Record<string, unknown>[]) {
 		const totalSamples = rs.reduce((acc, r) => acc + ((r.sample_count as number | undefined) ?? 0), 0);
 		const msg = `Delete ${rs.length} projects?\n\n`
-			+ `This will also permanently delete all associated sites, samples, DNA extracts, `
-			+ `PCR records, libraries, sequencing runs, and analyses${totalSamples > 0 ? ` (${totalSamples} samples across these projects)` : ''}. `
-			+ `This cannot be undone.`;
+			+ `${DELETE_SCOPE}${totalSamples > 0 ? ` (${totalSamples} samples across these projects)` : ''}`
+			+ `\n\nThis cannot be undone.`;
 		if (!confirm(msg)) return;
 		const ids = rs.map((r) => r.id as string);
-		await Promise.all(ids.map((id) => fetch(`/api/projects/${id}`, { method: 'DELETE' })));
-		const removed = new Set(ids);
+		const results = await Promise.all(
+			ids.map(async (id) => ({
+				id,
+				res: await fetch(`/api/projects/${id}`, { method: 'DELETE' })
+			}))
+		);
+		// Drop only what the server actually deleted, so a partial failure leaves
+		// the surviving projects on screen instead of hiding them until reload.
+		const removed = new Set(results.filter((r) => r.res.ok).map((r) => r.id));
+		const failed = results.filter((r) => !r.res.ok).length;
+		if (failed > 0) alert(`${failed} of ${ids.length} projects could not be deleted.`);
 		allProjects = allProjects.filter((p) => !removed.has(p.id));
 		selectedIds = new Set([...selectedIds].filter((id) => !removed.has(id)));
 	}

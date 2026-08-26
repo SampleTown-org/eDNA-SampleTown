@@ -32,6 +32,20 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### Fixes
+- Deleting a project works again. `library_preps` forgets a deleted source via
+  ON DELETE SET NULL, but a row left with no pcr, extract, or plate violates its
+  own CHECK, which aborted the whole statement — so any project holding
+  libraries returned 400. The subtree is now removed explicitly, bottom-up,
+  rather than relying on an ON DELETE cascade order SQLite does not promise
+  (`samples.site_id` is ON DELETE RESTRICT, so sites cannot go before their
+  samples). Plates and sequencing runs are lab-scoped and survive; runs left
+  holding nothing once the project's libraries are gone are cleared out, since
+  an archive import creates one per submitted run.
+- The projects list dropped a project from the screen whether or not the server
+  actually deleted it, which is why the failure looked silent. It now reports
+  the error and keeps the row, and a bulk delete removes only what succeeded.
+
 ### From the feedback queue
 - 8-well strips fill A01–H01 instead of A01–A08 — a strip is one column of a
   plate, which is the orientation it sits in and the order a multichannel
