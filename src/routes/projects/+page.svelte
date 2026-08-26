@@ -43,12 +43,15 @@
 		{ key: 'created_at', label: 'Created', sortable: true }
 	];
 
-	/** Sequencing runs and plates are lab-scoped and can hold other projects'
-	 *  work, so they survive; only this project's libraries and reactions go. */
+	/** Plates and sequencing runs belong to the lab, not to any one project, so
+	 *  deleting a project takes its wells and libraries off them rather than
+	 *  removing the plate or run itself. A run left holding nothing at all is
+	 *  the exception — see the DELETE handler. */
 	const DELETE_SCOPE =
 		'This will also permanently delete all associated sites, samples, DNA extracts, '
-		+ 'PCR reactions, and library preps. Sequencing runs and plates are kept, since '
-		+ 'they can hold other projects\' work.';
+		+ 'PCR reactions, and library preps.\n\n'
+		+ 'Plates are kept. Sequencing runs are kept when they still hold libraries from '
+		+ 'other projects, and deleted when this project\'s libraries were all they held.';
 
 	async function deleteProject(row: Record<string, unknown>) {
 		const n = (row.sample_count as number | undefined) ?? 0;
