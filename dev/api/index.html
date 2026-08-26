@@ -1734,6 +1734,16 @@ require the caller to have a non-null <code>lab_id</code>.</p>
 <code>pcr</code> (amplifications), <code>library-plates</code>, <code>libraries</code>, <code>runs</code>.</p>
 <p>Special cases:</p>
 <ul>
+<li><strong>Projects</strong>: <code>DELETE</code> is the one hard delete in the API — every other
+  entity sets <code>is_deleted=1</code>. It removes the project's sites, samples,
+  extracts, PCR reactions, and library preps, bottom-up rather than by
+  cascade (see <code>src/lib/server/project-delete.ts</code> for why the order matters).
+  Plates and sequencing runs belong to the lab and survive; a run left
+  holding nothing once the project's libraries are gone is removed.
+  <code>GET /api/projects/[id]/delete-preview</code> returns the counts a delete would
+  remove (<code>sites</code>, <code>samples</code>, <code>extracts</code>, <code>pcrs</code>, <code>libraries</code>, <code>runs</code>),
+  computed from the same SQL, so the confirmation cannot promise something
+  different from what happens.</li>
 <li><strong>Samples</strong>: also accepts arbitrary MIxS slot keys not on the
   samples table; routed into <code>sample_values</code> EAV. See
   <code>src/lib/server/sample-body.ts</code></li>
