@@ -127,7 +127,7 @@
 		const o = { checkbox: 0, actions: 0, id: 0, firstCol: 0 };
 		if (selectable && !isViewer) { o.checkbox = x; x += 32; }
 		if (hasActions && !isViewer) { o.actions = x; x += 112; }
-		if (showId && !isViewer) { o.id = x; x += 80; }
+		if (showId && !isViewer) { o.id = x; x += 120; }
 		o.firstCol = x;
 		return o;
 	});
@@ -176,10 +176,26 @@
 
 	let hasActions = $derived(!!actions || !!editHref || !!ondelete || !!onduplicate);
 
-	function shortId(row: Record<string, unknown>): string {
+	/**
+	 * The row's identity as a person would cite it: its INSDC accession when
+	 * the record came from an archive, otherwise the leading bytes of the
+	 * internal id. Records entered by hand have never been submitted anywhere
+	 * and have no accession to show.
+	 */
+	function rowIdentity(row: Record<string, unknown>): string {
+		const accession = row.accession as string | null | undefined;
+		if (accession && String(accession).trim()) return String(accession).trim();
 		const id = row.id as string;
 		return id ? id.slice(0, 8) : '';
 	}
+
+	/** True once any row carries an accession — retitles the column. */
+	const hasAccessions = $derived(
+		rows.some((r) => {
+			const a = (r as Record<string, unknown>).accession;
+			return a != null && String(a).trim() !== '';
+		})
+	);
 
 	// Keyboard navigation: shift+up/down to move focus, spacebar to toggle selection
 	let focusedIndex = $state(-1);
@@ -328,8 +344,8 @@
 				{#if showId}
 					<th
 						class="hidden sm:table-cell write-only px-3 py-3 text-left font-medium text-slate-500 sm:sticky sm:z-20 bg-slate-900"
-						style="left: {stickyOffsets.id}px; width: 80px; min-width: 80px; max-width: 80px;"
-					>ID</th>
+						style="left: {stickyOffsets.id}px; width: 120px; min-width: 120px; max-width: 120px;"
+					>{hasAccessions ? 'Accession' : 'ID'}</th>
 				{/if}
 				{#each columns as col, colIdx}
 					<th
@@ -404,8 +420,11 @@
 						</td>
 					{/if}
 					{#if showId}
-						<td class="hidden sm:table-cell write-only px-3 py-3 sm:sticky sm:z-10" style="left: {stickyOffsets.id}px; width: 80px; min-width: 80px; max-width: 80px; background-color: {stickyBg(row)};">
-							<span class="font-mono text-xs text-slate-600" title={row.id as string}>{shortId(row)}</span>
+						<td class="hidden sm:table-cell write-only px-3 py-3 sm:sticky sm:z-10" style="left: {stickyOffsets.id}px; width: 120px; min-width: 120px; max-width: 120px; background-color: {stickyBg(row)};">
+							<span
+								class="font-mono text-xs {row.accession ? 'text-slate-400' : 'text-slate-600'}"
+								title={row.id as string}
+							>{rowIdentity(row)}</span>
 						</td>
 					{/if}
 					{#each columns as col, colIdx}

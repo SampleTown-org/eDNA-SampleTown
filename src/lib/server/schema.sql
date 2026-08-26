@@ -203,6 +203,7 @@ CREATE TABLE IF NOT EXISTS sites (
     notes TEXT,
     custom_fields TEXT,                    -- JSON
 
+    accession TEXT,                         -- INSDC accession this project was imported from (PRJNA…)
     sync_version INTEGER NOT NULL DEFAULT 1,
     is_deleted INTEGER NOT NULL DEFAULT 0,
     created_by TEXT REFERENCES users(id),
@@ -383,6 +384,7 @@ CREATE TABLE IF NOT EXISTS samples (
     -- Sync tracking
     client_id TEXT,
     local_created_at TEXT,
+    accession TEXT,                        -- INSDC BioSample accession (SAMN…), when imported
     sync_version INTEGER NOT NULL DEFAULT 1,
     is_deleted INTEGER NOT NULL DEFAULT 0,
 
@@ -446,6 +448,7 @@ CREATE TABLE IF NOT EXISTS extracts (
     notes TEXT,
     custom_fields TEXT,
 
+    accession TEXT,                       -- INSDC accession this extract was imported from
     sync_version INTEGER NOT NULL DEFAULT 1,
     is_deleted INTEGER NOT NULL DEFAULT 0,
     created_by TEXT REFERENCES users(id),
@@ -518,6 +521,7 @@ CREATE TABLE IF NOT EXISTS pcr_amplifications (
     notes TEXT,
     custom_fields TEXT,
 
+    accession TEXT,                       -- INSDC experiment accession (SRX…), when imported
     sync_version INTEGER NOT NULL DEFAULT 1,
     is_deleted INTEGER NOT NULL DEFAULT 0,
     created_by TEXT REFERENCES users(id),
@@ -589,6 +593,7 @@ CREATE TABLE IF NOT EXISTS library_preps (
     notes TEXT,
     custom_fields TEXT,
 
+    accession TEXT,                         -- INSDC experiment accession (SRX…), when imported
     sync_version INTEGER NOT NULL DEFAULT 1,
     is_deleted INTEGER NOT NULL DEFAULT 0,
     created_by TEXT REFERENCES users(id),
@@ -622,6 +627,7 @@ CREATE TABLE IF NOT EXISTS sequencing_runs (
     notes TEXT,
     custom_fields TEXT,
 
+    accession TEXT,                       -- INSDC run accession (SRR…), when imported
     sync_version INTEGER NOT NULL DEFAULT 1,
     is_deleted INTEGER NOT NULL DEFAULT 0,
     created_by TEXT REFERENCES users(id),

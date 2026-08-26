@@ -25,6 +25,7 @@ export function getDb(): Database.Database {
 		_db.pragma('journal_mode = WAL');
 		_db.pragma('foreign_keys = ON');
 		_db.exec(schema);
+		applyAdditiveMigrations(_db);
 		seedDefaultLab(_db);
 		const defaultLabId = getDefaultLabId(_db);
 		seedConstrainedValues(_db, defaultLabId);
@@ -35,6 +36,35 @@ export function getDb(): Database.Database {
 		startBackupScheduler();
 	}
 	return _db;
+}
+
+/**
+ * Columns added to tables that already exist in deployed databases.
+ *
+ * `schema.sql` runs as CREATE TABLE IF NOT EXISTS, so a new column in it never
+ * reaches a database that already has the table. Adding one therefore needs an
+ * ALTER, applied here. Additive only — SQLite cannot drop or retype a column
+ * without rebuilding the table, and anything needing that belongs in a real
+ * migration rather than on startup.
+ */
+const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
+	// INSDC accession the row was imported from. Nullable: rows entered by hand
+	// have never been submitted anywhere and have no accession to carry.
+	['projects', 'accession', 'TEXT'],
+	['samples', 'accession', 'TEXT'],
+	['extracts', 'accession', 'TEXT'],
+	['pcr_amplifications', 'accession', 'TEXT'],
+	['library_preps', 'accession', 'TEXT'],
+	['sequencing_runs', 'accession', 'TEXT']
+];
+
+function applyAdditiveMigrations(db: Database.Database) {
+	for (const [table, column, definition] of ADDED_COLUMNS) {
+		const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+		if (cols.some((c) => c.name === column)) continue;
+		db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+		console.log(`[db] added ${table}.${column}`);
+	}
 }
 
 /**

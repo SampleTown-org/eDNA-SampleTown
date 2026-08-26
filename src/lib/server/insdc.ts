@@ -267,7 +267,10 @@ export function parseBioSampleXml(xml: string): Record<string, string>[] {
  * and `pick()` takes the first populated one.
  */
 const FIELD_MAP: Record<string, string> = {
-	// Sample identity
+	// Sample identity. sample_title is the submitter's own name for the sample
+	// and the one a reader recognises; sample_alias is the submission-system
+	// handle, which is often a sequencer well like "S230_2".
+	sample_title: 'samp_name',
 	sample_alias: 'samp_name',
 	sample_description: 'notes',
 
@@ -309,6 +312,11 @@ const FIELD_MAP: Record<string, string> = {
 	host: 'specific_host',
 	host_scientific_name: 'specific_host',
 	host_tax_id: 'host_taxid',
+
+	// Accessions carried onto the records themselves, so every row can be
+	// traced back to what it was imported from without digging through tags.
+	sample_accession: 'accession',
+	study_accession: 'project_accession',
 
 	// Extract (SRA experiment)
 	extraction_protocol: 'nucl_acid_ext',
@@ -356,13 +364,13 @@ const SKIP_FIELDS = new Set([
 /**
  * Columns forced to `misc_param:` even though they resolve to a slot.
  *
- * `description` and `sample_title` are archive prose that would otherwise land
- * in a MIxS field and read as curated data; `isolate` and `strain` name a
- * culture rather than the environmental sample. They are worth keeping, but
+ * `description` is archive prose that would otherwise land in a MIxS field and
+ * read as curated data; `isolate` and `strain` name a culture rather than the
+ * environmental sample. They are worth keeping, but
  * as tags, not as slot values.
  */
 const FORCE_PROVENANCE = new Set([
-	'description', 'sample_title', 'isolate', 'strain', 'sample_description',
+	'description', 'isolate', 'strain', 'sample_description',
 	'experiment_title', 'study_title', 'run_alias', 'experiment_alias',
 	'sample_alias', 'study_alias', 'center_name', 'broker_name'
 ]);
@@ -552,7 +560,10 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 	// submitter's alias is the most meaningful name; accessions are the
 	// guaranteed-unique fallback.
 	if (!out.samp_name) {
-		set('samp_name', pick(raw, 'sample_alias', 'sample_accession', 'run_accession', 'accession'));
+		set(
+			'samp_name',
+			pick(raw, 'sample_title', 'sample_alias', 'sample_accession', 'run_accession', 'accession')
+		);
 	}
 
 	// ENA reports a MIxS-shaped `location` only when the submitter gave one;
@@ -577,6 +588,8 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 	// name and the only field that reads as a project in the UI. ENA's own
 	// `project_name` column is a registration field submitters often fill with
 	// the organism, so it ranks below the title and above the bare accession.
+	// The accession itself travels on the project's `accession` column, not in
+	// its name.
 	if (!out.project_name) {
 		set(
 			'project_name',
@@ -595,19 +608,35 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 		const strategy = pick(raw, 'library_strategy').toUpperCase();
 		const selection = pick(raw, 'library_selection').toUpperCase();
 		const targetGene = pick(raw, 'target_gene', 'taxonomic_identity_marker');
+		// An SRA experiment is one library prep on one sample, sequenced in one or
+		// more runs, so the experiment accession names both the reaction and the
+		// library. Runs sharing an experiment then resolve to a single library
+		// rather than one apiece.
+		const experiment = pick(raw, 'experiment_accession');
+		if (experiment) {
+			set('pcr_accession', experiment);
+			set('library_accession', experiment);
+		}
+		set('run_accession_id', pick(raw, 'run_accession'));
+		// A submission is the batch the experiments arrived in — the closest
+		// thing the archives carry to "these were processed together", so it
+		// names the plate they are laid out on.
+		const submission = pick(raw, 'submission_accession');
+
 		if (strategy === 'AMPLICON' || selection === 'PCR' || targetGene) {
-			set('pcr_name', `${out.samp_name}_pcr`);
+			set('pcr_name', experiment ? `${experiment}_pcr` : `${out.samp_name}_pcr`);
 			set('pcr_cond', pick(raw, 'pcr_isolation_protocol', 'library_pcr_isolation_protocol'));
 			if (targetGene) set('target_gene', targetGene);
 			set('pcr_notes', pick(raw, 'library_construction_protocol'));
+			if (submission) set('pcr_plate_name', `${submission}_pcr`);
 		}
 
-		// Experiment → library. ENA writes "unspecified" when the submitter left
-		// library_name blank, which is not a name anyone can look a library up by.
-		if (!out.library_name || out.library_name.toLowerCase() === 'unspecified') {
-			const libName = pick(raw, 'experiment_alias', 'experiment_accession');
-			out.library_name = clean(libName) || `${out.samp_name}_lib`;
-		}
+		// Experiment → library, named by its accession. ENA's library_name is the
+		// submitter's free text and is frequently "unspecified" or a plate well,
+		// neither of which identifies the library outside its own submission.
+		out.library_name = experiment || clean(pick(raw, 'library_name')) || `${out.samp_name}_lib`;
+		if (out.library_name.toLowerCase() === 'unspecified') out.library_name = `${out.samp_name}_lib`;
+		if (submission) set('library_plate_name', `${submission}_lib`);
 		set('library_platform', pick(raw, 'instrument_platform'));
 		set('library_instrument_model', pick(raw, 'instrument_model'));
 
@@ -689,18 +718,20 @@ export function rowsToTsv(rows: Record<string, string>[], headers: string[]): st
 }
 
 const HEADER_ORDER = [
-	'samp_name', 'project_name', 'mixs_checklist', 'extension',
+	'samp_name', 'accession', 'project_name', 'project_accession',
+	'mixs_checklist', 'extension',
 	'collection_date', 'site_name', 'lat_lon',
 	'latitude', 'longitude', 'geo_loc_name', 'env_broad_scale', 'env_local_scale',
 	'env_medium', 'depth', 'elev', 'temp', 'salinity', 'ph', 'specific_host',
 	'host_taxid', 'samp_taxon_id', 'samp_collect_device', 'source_mat_id',
 	'collector_name', 'notes',
 	'extract_name', 'nucl_acid_ext',
-	'pcr_name', 'pcr_cond', 'target_gene', 'pcr_notes',
-	'library_name', 'library_type', 'library_prep_date', 'library_prep_kit',
+	'pcr_name', 'pcr_accession', 'pcr_plate_name', 'pcr_cond', 'target_gene', 'pcr_notes',
+	'library_plate_name',
+	'library_name', 'library_accession', 'library_type', 'library_prep_date', 'library_prep_kit',
 	'library_platform', 'library_instrument_model', 'library_source',
 	'library_selection', 'lib_layout', 'library_fragment_size_bp',
-	'seq_meth', 'run_name', 'run_date', 'run_platform', 'run_instrument_model',
+	'seq_meth', 'run_name', 'run_accession_id', 'run_date', 'run_platform', 'run_instrument_model',
 	'run_read_count', 'run_total_bases_gb', 'run_fastq_dir'
 ];
 

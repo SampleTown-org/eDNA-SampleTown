@@ -23,11 +23,13 @@ type ExtractRow = {
 	storage_location?: string;
 	extract_notes?: string;
 	nucl_acid_ext?: string;
+	extract_accession?: string;
 };
 
 /** PCR-field keys that may live on sample._pcr. Keep in sync with PCR_FIELDS. */
 type PcrRow = {
 	pcr_name?: string;
+	pcr_plate_name?: string;
 	pcr_date?: string;
 	pcr_cond?: string;
 	nucl_acid_amp?: string;
@@ -40,6 +42,7 @@ type PcrRow = {
 	annealing_temp_c?: number;
 	num_cycles?: number;
 	pcr_notes?: string;
+	pcr_accession?: string;
 };
 
 /** Library-field keys on sample._library. Keep in sync with LIBRARY_FIELDS. */
@@ -56,6 +59,8 @@ type LibraryRow = {
 	library_selection?: string;
 	library_type?: string;
 	library_fragment_size_bp?: number;
+	library_plate_name?: string;
+	library_accession?: string;
 };
 
 /** Run-field keys on sample._run. Run records are deduped per upload by
@@ -71,6 +76,7 @@ type RunRow = {
 	run_total_bases_gb?: number;
 	run_fastq_dir?: string;
 	run_read_count?: number;
+	run_accession_id?: string;
 };
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -203,7 +209,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		);
 	}
 
-	type NewProject = { id: string; project_name: string };
+	type NewProject = { id: string; project_name: string; accession: string | null };
 	const newProjectsByName = new Map<string, NewProject>();
 	const rowProjectIds: (string | null)[] = [];
 	{
@@ -222,7 +228,11 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				} else {
 					let q = newProjectsByName.get(pname);
 					if (!q) {
-						q = { id: generateId(), project_name: pname };
+						q = {
+						id: generateId(),
+						project_name: pname,
+						accession: (s.project_accession as string)?.trim() || null
+					};
 						newProjectsByName.set(pname, q);
 					}
 					rowProjectIds.push(q.id);
@@ -587,8 +597,8 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	let runLibrariesCreated = 0;
 
 	const insertProjectStmt = db.prepare(`
-		INSERT INTO projects (id, lab_id, project_name, created_by)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO projects (id, lab_id, project_name, accession, created_by)
+		VALUES (?, ?, ?, ?, ?)
 	`);
 
 	const insertSiteStmt = db.prepare(`
@@ -600,16 +610,68 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	const insertExtractStmt = db.prepare(`
 		INSERT INTO extracts (id, lab_id, sample_id, extract_name, extraction_date,
 			concentration_ng_ul, storage_box, storage_location, notes, nucl_acid_ext,
-			created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			accession, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
+	// Plates are lab-scoped and named, so a sheet naming one either fills an
+	// existing plate or creates it. Resolved once per batch and cached, since a
+	// whole submission usually lands on a single plate.
+	const findPcrPlate = db.prepare(
+		'SELECT id FROM pcr_plates WHERE lab_id = ? AND plate_name = ? AND is_deleted = 0'
+	);
+	const insertPcrPlate = db.prepare(
+		'INSERT INTO pcr_plates (id, lab_id, plate_name, created_by) VALUES (?, ?, ?, ?)'
+	);
+	const findLibraryPlate = db.prepare(
+		'SELECT id FROM library_plates WHERE lab_id = ? AND plate_name = ? AND is_deleted = 0'
+	);
+	const insertLibraryPlate = db.prepare(
+		'INSERT INTO library_plates (id, lab_id, plate_name, library_type, created_by) VALUES (?, ?, ?, ?, ?)'
+	);
+	const pcrPlateIds = new Map<string, string>();
+	const libraryPlateIds = new Map<string, string>();
+	let pcrPlatesCreated = 0;
+	let libraryPlatesCreated = 0;
+
+	function resolvePcrPlate(name: string | undefined): string | null {
+		const key = name?.trim();
+		if (!key) return null;
+		const cached = pcrPlateIds.get(key);
+		if (cached) return cached;
+		const existing = findPcrPlate.get(labId, key) as { id: string } | undefined;
+		const id = existing?.id ?? generateId();
+		if (!existing) {
+			insertPcrPlate.run(id, labId, key, userId);
+			pcrPlatesCreated++;
+		}
+		pcrPlateIds.set(key, id);
+		return id;
+	}
+
+	/** library_plates.library_type is NOT NULL, so the plate inherits the type
+	 *  of the first prep that lands on it. */
+	function resolveLibraryPlate(name: string | undefined, libraryType: string): string | null {
+		const key = name?.trim();
+		if (!key) return null;
+		const cached = libraryPlateIds.get(key);
+		if (cached) return cached;
+		const existing = findLibraryPlate.get(labId, key) as { id: string } | undefined;
+		const id = existing?.id ?? generateId();
+		if (!existing) {
+			insertLibraryPlate.run(id, labId, key, libraryType, userId);
+			libraryPlatesCreated++;
+		}
+		libraryPlateIds.set(key, id);
+		return id;
+	}
+
 	const insertPcrStmt = db.prepare(`
-		INSERT INTO pcr_amplifications (id, lab_id, extract_id, pcr_name, pcr_date,
+		INSERT INTO pcr_amplifications (id, lab_id, extract_id, plate_id, pcr_name, pcr_date,
 			target_subfragment, forward_primer_name, forward_primer_seq,
 			reverse_primer_name, reverse_primer_seq, pcr_cond, annealing_temp_c,
-			num_cycles, notes, custom_fields, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			num_cycles, notes, custom_fields, accession, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	// Lookups for re-upload idempotency: when the same samp_name already
@@ -643,16 +705,16 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
 	const insertRunStmt = db.prepare(`
 		INSERT INTO sequencing_runs (id, lab_id, run_name, run_date, platform,
-			instrument_model, flow_cell_id, run_directory, total_bases, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			instrument_model, flow_cell_id, run_directory, total_bases, accession, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	const insertLibraryStmt = db.prepare(`
-		INSERT INTO library_preps (id, lab_id, extract_id, pcr_id, library_name, library_type,
+		INSERT INTO library_preps (id, lab_id, library_plate_id, extract_id, pcr_id, library_name, library_type,
 			library_source, library_selection, library_prep_kit, library_prep_date,
 			platform, instrument_model, barcode, fragment_size_bp,
-			final_concentration_ng_ul, notes, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			final_concentration_ng_ul, notes, accession, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	const insertRunLibraryStmt = db.prepare(`
@@ -692,7 +754,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			samp_store_sol, samp_store_temp, samp_store_dur, samp_store_loc, store_cond,
 			ref_biomaterial, isol_growth_condt, tax_ident,
 			filter_type, collector_name,
-			notes, created_by)
+			notes, accession, created_by)
 		VALUES (?, ?, ?, ?, ?, ?,
 			?, ?, ?,
 			?, ?, ?, ?,
@@ -702,13 +764,13 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			?, ?, ?, ?, ?,
 			?, ?, ?,
 			?, ?,
-			?, ?)
+			?, ?, ?)
 	`);
 
 	const insertAll = db.transaction((rows: typeof matched) => {
 		// First, insert any new projects queued from the sheet's project_name column
 		for (const p of newProjectsByName.values()) {
-			insertProjectStmt.run(p.id, labId, p.project_name, userId);
+			insertProjectStmt.run(p.id, labId, p.project_name, p.accession, userId);
 			newProjectCount++;
 		}
 
@@ -732,6 +794,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				r.data.run_flow_cell_id ?? null,
 				r.data.run_directory ?? null,
 				totalBases,
+				r.data.run_accession_id ?? null,
 				userId
 			);
 			runIdByName.set(r.run_name, r.id);
@@ -881,6 +944,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 					sample.filter_type || null,
 					sample.collector_name || null,
 					sample.notes || null,
+					sample.accession || null,
 					userId
 				);
 				// Spill fields (non-column MIxS slots, misc_param:* tags)
@@ -928,6 +992,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 							ex?.storage_location ?? null,
 							ex?.extract_notes ?? null,
 							ex?.nucl_acid_ext ?? null,
+							ex?.extract_accession ?? null,
 							userId
 						);
 						extractsCreated++;
@@ -961,6 +1026,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 								pcrId,
 								labId,
 								extractId,
+								resolvePcrPlate(pcr.pcr_plate_name),
 								pcrName,
 								pcr.pcr_date ?? null,
 								pcr.target_subfragment ?? null,
@@ -973,6 +1039,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 								pcr.num_cycles ?? null,
 								pcr.pcr_notes ?? null,
 								Object.keys(extras).length > 0 ? JSON.stringify(extras) : null,
+								pcr.pcr_accession ?? null,
 								userId
 							);
 							pcrsCreated++;
@@ -1000,15 +1067,18 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 							? findExistingLibraryOnExtract.get(extractId, libraryName)
 							: findExistingLibraryInLab.get(labId, libraryName)) as { id: string } | undefined;
 						const libraryId = existingLibrary ? existingLibrary.id : generateId();
+						const libraryType =
+							lib?.library_type?.trim() ||
+							deriveLibraryType(lib?.library_platform || runRow?.run_platform);
 						if (!existingLibrary) {
 						insertLibraryStmt.run(
 							libraryId,
 							labId,
+							resolveLibraryPlate(lib?.library_plate_name, libraryType),
 							extractId,
 							pcrId,
 							libraryName,
-							lib?.library_type?.trim() ||
-								deriveLibraryType(lib?.library_platform || runRow?.run_platform),
+							libraryType,
 							lib?.library_source ?? null,
 							lib?.library_selection ?? null,
 							lib?.library_prep_kit ?? null,
@@ -1021,6 +1091,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 								: null,
 							lib?.library_concentration_ng_ul ?? null,
 							lib?.library_notes ?? null,
+							lib?.library_accession ?? null,
 							userId
 						);
 						librariesCreated++;
@@ -1093,6 +1164,8 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			new_projects: newProjectCount,
 			extracts_created: extractsCreated,
 			pcrs_created: pcrsCreated,
+			pcr_plates_created: pcrPlatesCreated,
+			library_plates_created: libraryPlatesCreated,
 			libraries_created: librariesCreated,
 			runs_created: runsCreated,
 			run_libraries_created: runLibrariesCreated,

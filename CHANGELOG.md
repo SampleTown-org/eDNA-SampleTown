@@ -32,6 +32,28 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### Accessions
+- Records imported from an archive carry the accession they came from, on a new
+  nullable `accession` column on projects, samples, extracts, PCR reactions,
+  library preps, and sequencing runs. Applied to existing databases by an
+  additive migration at startup, since `schema.sql` runs as CREATE TABLE IF NOT
+  EXISTS and never reaches a table that already exists.
+- Every list view shows it: the `ID` column becomes `Accession` when any row
+  has one, falling back to the internal id for records entered by hand. Detail
+  pages link the accession to its ENA browser page.
+
+### SRA import
+- `sample_title` names the sample, ahead of `sample_alias` — the alias is the
+  submission-system handle and is often a sequencer well like "S230_2".
+- PCR reactions and library preps are named by their SRA experiment accession.
+  An experiment is one library prep sequenced in one or more runs, so runs
+  sharing an experiment now resolve to a single library instead of one apiece.
+- Reactions and preps are laid out on plates named for the submission they
+  arrived in (`<submission_accession>_pcr` / `_lib`). Plate creation is new to
+  the import pathway generally: `pcr_plate_name` and `library_plate_name`
+  columns create or reuse a lab-scoped plate by name, so spreadsheet imports
+  can place work on plates too.
+
 ### Fixes
 - Deleting a project works again. `library_preps` forgets a deleted source via
   ON DELETE SET NULL, but a row left with no pcr, extract, or plate violates its

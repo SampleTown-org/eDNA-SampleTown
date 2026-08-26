@@ -30,14 +30,14 @@ export const SITE_FIELDS = new Set([
  *  project_id in the import endpoint. Kept to the bare minimum: the lookup key.
  *  Other project metadata (pi_name, institution, funding) is filled in through
  *  the normal project edit UI after import. */
-export const PROJECT_FIELDS = new Set(['project_name']);
+export const PROJECT_FIELDS = new Set(['project_name', 'project_accession']);
 
 /** Fields that get split off into an extracts row when present. Mirrors the
  *  site auto-create pattern: if any of these are filled for a given sample,
  *  an extract record is created after the sample insert in the same txn. */
 export const EXTRACT_FIELDS = new Set([
 	'extract_name', 'extraction_date', 'concentration_ng_ul',
-	'storage_box', 'storage_location', 'extract_notes',
+	'storage_box', 'storage_location', 'extract_notes', 'extract_accession',
 	// MIxS nucl_acid_ext is owned by extracts (see slot-ownership.ts) and has
 	// a column there, so it lands on the extract rather than spilling into
 	// sample_values.
@@ -52,7 +52,7 @@ export const EXTRACT_FIELDS = new Set([
  *  slot-ownership.ts; target_gene lives on the primer set, so it is carried
  *  in the reaction's custom_fields until one is linked. */
 export const PCR_FIELDS = new Set([
-	'pcr_name', 'pcr_date', 'pcr_cond', 'nucl_acid_amp',
+	'pcr_name', 'pcr_accession', 'pcr_plate_name', 'pcr_date', 'pcr_cond', 'nucl_acid_amp',
 	'target_gene', 'target_subfragment',
 	'forward_primer_name', 'forward_primer_seq',
 	'reverse_primer_name', 'reverse_primer_seq',
@@ -69,7 +69,10 @@ export const LIBRARY_FIELDS = new Set([
 	'library_notes',
 	// SRA library descriptors — real columns on library_preps, so an archive
 	// import round-trips them instead of losing the submission's own terms.
-	'library_source', 'library_selection', 'library_type', 'library_fragment_size_bp'
+	'library_source', 'library_selection', 'library_type', 'library_fragment_size_bp',
+	// Plate the prep is laid out on. Created or reused by name, lab-scoped, so
+	// several imports can fill one plate.
+	'library_plate_name', 'library_accession'
 ]);
 
 /** Fields that get split off into a sequencing_runs row when present. Runs
@@ -81,7 +84,7 @@ export const RUN_FIELDS = new Set([
 	'run_flow_cell_id', 'run_directory', 'run_total_bases_gb',
 	// Per-(run, library) link fields — written to run_libraries, not
 	// sequencing_runs. Side-car bag is shared with the run for parsing.
-	'run_fastq_dir', 'run_read_count'
+	'run_fastq_dir', 'run_read_count', 'run_accession_id'
 ]);
 
 /** Sample columns that exist as real columns in the samples table and are
@@ -506,6 +509,13 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		extension: 'extension',
 		// Project auto-create (lookup key; other project metadata is edited post-import)
 		project_name: 'project_name',
+		project_accession: 'project_accession',
+		// INSDC accession carried onto each record.
+		accession: 'accession',
+		extract_accession: 'extract_accession',
+		pcr_accession: 'pcr_accession',
+		library_accession: 'library_accession',
+		run_accession_id: 'run_accession_id',
 		// Extract auto-create columns
 		extract_name: 'extract_name',
 		extraction_date: 'extraction_date',
@@ -516,6 +526,7 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		nucl_acid_ext: 'nucl_acid_ext',
 		// PCR auto-create columns (one reaction per row, off the row's extract)
 		pcr_name: 'pcr_name',
+		pcr_plate_name: 'pcr_plate_name',
 		pcr_date: 'pcr_date',
 		pcr_cond: 'pcr_cond',
 		nucl_acid_amp: 'nucl_acid_amp',
@@ -534,6 +545,7 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		library_selection: 'library_selection',
 		library_type: 'library_type',
 		library_fragment_size_bp: 'library_fragment_size_bp',
+		library_plate_name: 'library_plate_name',
 		library_barcode: 'library_barcode',
 		library_prep_kit: 'library_prep_kit',
 		library_prep_date: 'library_prep_date',
@@ -586,6 +598,12 @@ export function getImportableFields(): { value: string; table: string; title?: s
 	push('extension', 'sample');
 	// Project lookup (auto-create if no match)
 	push('project_name', 'project');
+	push('project_accession', 'project');
+	push('accession', 'sample');
+	push('extract_accession', 'extract');
+	push('pcr_accession', 'pcr');
+	push('library_accession', 'library');
+	push('run_accession_id', 'run');
 	// Extract auto-create columns — if any are filled, an extract record is
 	// created alongside the sample in the same transaction.
 	push('extract_name', 'extract');
@@ -597,6 +615,7 @@ export function getImportableFields(): { value: string; table: string; title?: s
 	push('nucl_acid_ext', 'extract');
 	// PCR auto-create columns — one reaction per row, off the row's extract.
 	push('pcr_name', 'pcr');
+	push('pcr_plate_name', 'pcr');
 	push('pcr_date', 'pcr');
 	push('pcr_cond', 'pcr');
 	push('nucl_acid_amp', 'pcr');
@@ -615,6 +634,7 @@ export function getImportableFields(): { value: string; table: string; title?: s
 	push('library_selection', 'library');
 	push('library_type', 'library');
 	push('library_fragment_size_bp', 'library');
+	push('library_plate_name', 'library');
 	push('library_barcode', 'library');
 	push('library_prep_kit', 'library');
 	push('library_prep_date', 'library');
@@ -825,7 +845,7 @@ export function parseMixsTsv(
 			    field === 'samp_name' || field === 'collection_date' || field === 'env_medium' ||
 			    SITE_FIELDS.has(field) || field === 'notes' || field === 'mixs_checklist' ||
 			    field === 'extension' || field === 'collector_name' || field === 'latitude' ||
-			    field === 'longitude' || field === 'site_name') {
+			    field === 'longitude' || field === 'site_name' || field === 'accession') {
 				sample[field] = val;
 				continue;
 			}

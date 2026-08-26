@@ -181,6 +181,14 @@
 			<div>
 				<div class="flex items-center gap-3 flex-wrap">
 					<h1 class="text-2xl font-bold text-white">{sample.samp_name}</h1>
+					{#if sample.accession}
+						<!-- INSDC accession this record was imported under. Absent for
+						     records entered by hand, which have never been submitted. -->
+						<a href="https://www.ebi.ac.uk/ena/browser/view/{sample.accession}"
+							target="_blank" rel="noopener noreferrer"
+							class="inline-block mt-1 font-mono text-xs text-ocean-400 hover:text-ocean-300"
+							title="View at ENA">{sample.accession} ↗</a>
+					{/if}
 					<span class="px-2 py-0.5 text-xs rounded bg-slate-800 text-slate-300">
 						{sample.mixs_checklist}{sample.extension ? ' + ' + sample.extension : ''}
 					</span>
