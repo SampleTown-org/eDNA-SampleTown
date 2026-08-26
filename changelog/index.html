@@ -1285,6 +1285,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#fixed-two-columns-claiming-one-field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed: two columns claiming one field
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#sample-naming-from-the-archives" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1704,6 +1715,17 @@
     <span class="md-ellipsis">
       
         Fixed: archive fields landing in the wrong column
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed-two-columns-claiming-one-field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed: two columns claiming one field
       
     </span>
   </a>
@@ -2139,6 +2161,17 @@
   <code>temperature</code> and the GSC checklists a bare <code>temp</code>, both meaning the MIxS
   <code>temp</code> slot, so PRJNA421293 had 2681 temperatures in the slot and 144
   stranded in <code>misc_param:temp</code>. Same-concept columns now fill the slot.</li>
+</ul>
+<h3 id="fixed-two-columns-claiming-one-field">Fixed: two columns claiming one field<a class="headerlink" href="#fixed-two-columns-claiming-one-field" title="Permanent link">&para;</a></h3>
+<ul>
+<li>An archive fetch emitted both <code>samp_name</code> and a bare <code>sample_title</code> column,
+  which the SRA mapping also resolves to <code>samp_name</code>, so the column mapper
+  refused the sheet with "Multiple columns mapped to the same target field".
+  Both candidates for the sample's name are now kept as tags rather than raw
+  columns, and a collision that reaches the end of a fetch is demoted to a tag
+  rather than shipped — a field dropped from the explicit map otherwise falls
+  through to the pass-through, where the SRA mapping can land it on a target
+  another column already fills.</li>
 </ul>
 <h3 id="sample-naming-from-the-archives">Sample naming from the archives<a class="headerlink" href="#sample-naming-from-the-archives" title="Permanent link">&para;</a></h3>
 <ul>
