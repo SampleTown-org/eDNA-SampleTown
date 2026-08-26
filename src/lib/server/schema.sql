@@ -199,6 +199,10 @@ CREATE TABLE IF NOT EXISTS sites (
 
     -- Site characteristics
     access_notes TEXT,                     -- how to get there, permits, etc.
+    -- Coarsen this site's coordinates on export (see mixs-io.ts). Sensitivity
+    -- is a property of the place, not of any one sample taken there, so every
+    -- sample at the site inherits it.
+    is_location_sensitive INTEGER NOT NULL DEFAULT 0,
 
     notes TEXT,
     custom_fields TEXT,                    -- JSON
@@ -374,6 +378,8 @@ CREATE TABLE IF NOT EXISTS samples (
     -- dataGeneralizations tag. Viewers see the coarse value; lab members
     -- still see precise coords on detail pages. Mirrors GBIF's Sensitive
     -- Species Extension pattern (per-record flag rather than a global rule).
+    -- Legacy: sensitivity moved to sites, where the place being protected
+    -- actually lives. Retained so existing rows still SELECT *; unread.
     is_location_sensitive INTEGER NOT NULL DEFAULT 0,
 
     -- Notes — plain-text scratch; every other "extra" MIxS slot or custom

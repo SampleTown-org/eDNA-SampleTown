@@ -55,9 +55,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			`INSERT INTO sites (id, lab_id, project_id, site_name, site_code, description,
 				lat_lon, latitude, longitude, geo_loc_name, locality,
 				env_broad_scale, env_local_scale,
-				access_notes,
+				access_notes, is_location_sensitive,
 				notes, custom_fields, created_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		).run(
 			id,
 			labId,
@@ -73,6 +73,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			nn(data.env_broad_scale),
 			nn(data.env_local_scale),
 			nn(data.access_notes),
+			data.is_location_sensitive ? 1 : 0,
 			nn(data.notes),
 			nn(data.custom_fields),
 			user.id

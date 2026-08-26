@@ -20,6 +20,7 @@
 		env_broad_scale: data.site.env_broad_scale || '',
 		env_local_scale: data.site.env_local_scale || '',
 		access_notes: data.site.access_notes || '',
+		is_location_sensitive: (data.site as any).is_location_sensitive ?? 0,
 		notes: data.site.notes || ''
 	});
 
@@ -150,6 +151,28 @@
 		<div>
 			<FieldLabel slot="access_notes" label="Access Notes" description="How to get to this site: boat access only, permit required, trail conditions, etc. (SampleTown-local note.)" />
 			<textarea id="access_notes" bind:value={form.access_notes} rows="2" class={inputCls} placeholder="Boat access only, permit required, etc."></textarea>
+		</div>
+
+		<!-- CARE-principle data-sensitivity flag. Sensitivity belongs to the
+		     place, so every sample taken here inherits it on export. -->
+		<div>
+			<label class="flex items-start gap-2 p-3 rounded-lg border border-slate-800 bg-slate-900/40">
+				<input
+					type="checkbox"
+					checked={!!form.is_location_sensitive}
+					onchange={(e) => (form.is_location_sensitive = (e.currentTarget as HTMLInputElement).checked ? 1 : 0)}
+					class="mt-0.5"
+				/>
+				<span class="text-sm text-slate-300">
+					<span class="font-medium text-white">Sensitive location</span>
+					<span class="block text-xs text-slate-500">
+						When set, exports coarsen this site's coordinates to 0.1° (~10&nbsp;km) for every
+						sample taken here and tag records with
+						<code class="text-ocean-400">dataGeneralizations</code>. Use for cultural,
+						ecological, or legal sensitivity (e.g. rookery sites, Indigenous-governed areas).
+					</span>
+				</span>
+			</label>
 		</div>
 
 		<div>

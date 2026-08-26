@@ -55,7 +55,9 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
 	['extracts', 'accession', 'TEXT'],
 	['pcr_amplifications', 'accession', 'TEXT'],
 	['library_preps', 'accession', 'TEXT'],
-	['sequencing_runs', 'accession', 'TEXT']
+	['sequencing_runs', 'accession', 'TEXT'],
+	// Location sensitivity describes the place, so it lives on the site.
+	['sites', 'is_location_sensitive', 'INTEGER NOT NULL DEFAULT 0']
 ];
 
 function applyAdditiveMigrations(db: Database.Database) {

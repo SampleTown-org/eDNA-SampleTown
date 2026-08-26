@@ -18,9 +18,26 @@
 	const hasParentFilter = $derived(cartProjectIds.size > 0);
 	let parentFilterActive = $state(true);
 
+	/** Project picker above the table. Narrows both the table and the map, and
+	 *  is independent of the cart-driven parent filter. */
+	let projectFilter = $state('');
+	const projectOptions = $derived.by(() => {
+		const byId = new Map<string, string>();
+		for (const s of allSites as any[]) {
+			if (s.project_id && !byId.has(s.project_id)) byId.set(s.project_id, s.project_name ?? '—');
+		}
+		return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+			a.name.localeCompare(b.name)
+		);
+	});
+
 	let sites = $derived.by(() => {
-		if (!hasParentFilter || !parentFilterActive) return allSites;
-		return allSites.filter((s: any) => cartProjectIds.has(s.project_id));
+		let rows = allSites;
+		if (hasParentFilter && parentFilterActive) {
+			rows = rows.filter((s: any) => cartProjectIds.has(s.project_id));
+		}
+		if (projectFilter) rows = rows.filter((s: any) => s.project_id === projectFilter);
+		return rows;
 	});
 
 	// Detect when selection has diverged from the cart
@@ -44,8 +61,10 @@
 		if (items.length > 0) cart.addMany(items);
 		cart.openSidebar();
 	}
-	/** Mirrored from the DataTable so the map pins can adopt the same tint. */
-	let colorByKey = $state('');
+	/** Mirrored from the DataTable so the map pins can adopt the same tint.
+	 *  Defaults to the project: on a map of several projects' sites, which
+	 *  project a pin belongs to is the first thing worth being able to see. */
+	let colorByKey = $state('project_name');
 
 	/** Strip ENVO ontology codes like [ENVO:00000447] from display values. */
 	function stripEnvo(v: unknown): string {
@@ -157,6 +176,25 @@
 
 <div class="space-y-6">
 	<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}Sites</h1>
+
+	{#if projectOptions.length > 1}
+		<div class="flex items-center gap-2 text-xs">
+			<label for="site_project_filter" class="text-slate-400">Project</label>
+			<select
+				id="site_project_filter"
+				bind:value={projectFilter}
+				class="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-ocean-500"
+			>
+				<option value="">All projects ({allSites.length})</option>
+				{#each projectOptions as p (p.id)}
+					<option value={p.id}>{p.name}</option>
+				{/each}
+			</select>
+			{#if projectFilter}
+				<span class="text-slate-500">showing {sites.length} of {allSites.length} sites</span>
+			{/if}
+		</div>
+	{/if}
 
 	{#if markers.length > 0}
 		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={replaceFromBox} />

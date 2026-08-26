@@ -19,11 +19,17 @@
 	let parentFilterActive = $state(true);
 
 	let samples = $derived.by(() => {
-		if (!hasParentFilter || !parentFilterActive) return allSamples;
-		return allSamples.filter((s: any) =>
-			(cartProjectIds.size === 0 || cartProjectIds.has(s.project_id)) &&
-			(cartSiteIds.size === 0 || cartSiteIds.has(s.site_id))
-		);
+		let rows = allSamples;
+		if (hasParentFilter && parentFilterActive) {
+			rows = rows.filter((s: any) =>
+				(cartProjectIds.size === 0 || cartProjectIds.has(s.project_id)) &&
+				(cartSiteIds.size === 0 || cartSiteIds.has(s.site_id))
+			);
+		}
+		if (projectFilter) rows = rows.filter((s: any) => s.project_id === projectFilter);
+		// Chosen parameters narrow the set to the samples that actually carry them.
+		if (extraColumnSlots.length > 0) rows = rows.filter(hasAllParameters);
+		return rows;
 	});
 
 	// Detect when selection has diverged from the cart
@@ -100,6 +106,19 @@
 		}
 	});
 
+	/** Project picker above the table — narrows the table, the map, and the
+	 *  parameter list, independently of the cart-driven parent filter. */
+	let projectFilter = $state('');
+	const projectOptions = $derived.by(() => {
+		const byId = new Map<string, string>();
+		for (const s of allSamples as any[]) {
+			if (s.project_id && !byId.has(s.project_id)) byId.set(s.project_id, s.project_name ?? '—');
+		}
+		return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+			a.name.localeCompare(b.name)
+		);
+	});
+
 	const parameterTitles = $derived(
 		Object.fromEntries(data.availableParameters.map((p: any) => [p.slot, p.title]))
 	);
@@ -115,15 +134,31 @@
 	const pickableParameters = $derived(
 		data.availableParameters.filter((p: any) => !extraColumnSlots.includes(p.slot))
 	);
+	/**
+	 * Picking a parameter focuses the whole view on it: the samples that carry
+	 * it, a column showing it, and the map coloured by it. A parameter is only
+	 * populated on some samples, so a column on its own mostly renders blanks —
+	 * the question being asked is "which samples have this, and what is it".
+	 */
 	function onAddParameter() {
 		if (!addParamValue) return;
 		if (!extraColumnSlots.includes(addParamValue)) {
 			extraColumnSlots = [...extraColumnSlots, addParamValue];
 		}
+		colorByKey = addParamValue;
 		addParamValue = '';
 	}
 	function removeExtraColumn(slot: string) {
 		extraColumnSlots = extraColumnSlots.filter((s) => s !== slot);
+		if (colorByKey === slot) colorByKey = extraColumnSlots[extraColumnSlots.length - 1] ?? '';
+	}
+
+	/** True when the sample carries a usable value for every chosen parameter. */
+	function hasAllParameters(sample: Record<string, unknown>): boolean {
+		return extraColumnSlots.every((slot) => {
+			const v = sample[slot];
+			return v != null && String(v).trim() !== '';
+		});
 	}
 
 	/** Mirrored from the DataTable so the map pins can adopt the same tint. */
@@ -218,8 +253,25 @@
 		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={replaceFromBox} />
 	{/if}
 
+	{#if projectOptions.length > 1}
+		<div class="flex items-center gap-2 text-xs">
+			<label for="sample_project_filter" class="text-slate-400">Project</label>
+			<select
+				id="sample_project_filter"
+				bind:value={projectFilter}
+				class="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-ocean-500"
+			>
+				<option value="">All projects ({allSamples.length})</option>
+				{#each projectOptions as p (p.id)}
+					<option value={p.id}>{p.name}</option>
+				{/each}
+			</select>
+		</div>
+	{/if}
+
 	<!-- Optional columns: drawn from MIxS parameters that have data on ≥1 sample.
-	     + parameter picker lives on the left; newly-added pills grow to its right. -->
+	     Choosing one narrows the table and map to the samples carrying it, adds
+	     its column, and colours the pins by its value. -->
 	<div class="flex flex-wrap items-center gap-2 text-xs">
 		{#if pickableParameters.length > 0}
 			<select
@@ -249,6 +301,13 @@
 				</span>
 			{/if}
 		{/each}
+
+		{#if extraColumnSlots.length > 0}
+			<span class="text-slate-500">
+				showing {samples.length} of {allSamples.length} samples with
+				{extraColumnSlots.length === 1 ? 'this parameter' : 'all these parameters'}
+			</span>
+		{/if}
 
 		{#if pickableParameters.length === 0 && extraColumnSlots.length === 0 && allSamples.length > 0}
 			<!-- Only show the "no extras" hint when there ARE samples but

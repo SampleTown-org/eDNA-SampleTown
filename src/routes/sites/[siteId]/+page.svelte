@@ -255,6 +255,14 @@
 		</div>
 	{/if}
 
+	{#if (data.site as any).is_location_sensitive}
+		<div class="rounded-lg border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-200">
+			<span class="font-medium">Sensitive location</span> — exports coarsen this site's
+			coordinates to 0.1° for every sample taken here, and tag records with
+			<code class="text-ocean-400">dataGeneralizations</code>.
+		</div>
+	{/if}
+
 	<!-- Permit coverage CRUD — add/remove permits, edit per-site date window. -->
 	<SitePermitsSection
 		siteId={(data.site as any).id}

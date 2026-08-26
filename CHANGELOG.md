@@ -32,6 +32,23 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### Sites and samples views
+- `/sites` colours pins by project and gains a project filter above the map.
+- `/samples` gains the same project filter, and choosing a `+ parameter` now
+  focuses the whole view on it: the table and map narrow to the samples
+  carrying it, its column appears, and the pins colour by its value. Adding a
+  column on its own mostly rendered blanks, since a parameter is only populated
+  on some samples.
+
+### Sensitive locations
+- "Sensitive location" moved from samples to sites. Sensitivity is a property
+  of the place, not of one sample taken there, so every sample at the site
+  inherits it. `samples.is_location_sensitive` is retained as legacy and unread;
+  no lab had set it.
+- Fixed: coordinate coarsening never happened. The mask needs the site's raw
+  latitude and longitude, and the export query selected neither, so a record
+  flagged sensitive still exported its precise position.
+
 ### Accessions
 - Records imported from an archive carry the accession they came from, on a new
   nullable `accession` column on projects, samples, extracts, PCR reactions,

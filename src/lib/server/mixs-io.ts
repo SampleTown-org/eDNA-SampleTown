@@ -174,7 +174,14 @@ export function exportMixsTsv(options: {
 	extension?: string;
 }): string {
 	const db = getDb();
-	const siteSelect = SITE_SLOT_COLUMNS.map((c) => `st.${c} AS site_${c}`).join(', ');
+	// Site columns joined onto each sample row. Beyond the MIxS slots, the mask
+	// below needs the raw coordinates and the sensitivity flag; without the
+	// coordinates it has nothing to coarsen and silently exports the precise
+	// value.
+	const siteSelect =
+		SITE_SLOT_COLUMNS.map((c) => `st.${c} AS site_${c}`).join(', ') +
+		', st.latitude AS site_latitude, st.longitude AS site_longitude' +
+		', st.is_location_sensitive AS site_is_location_sensitive';
 	// project_name comes from the joined projects table (no duplicate column
 	// on samples). nucl_acid_ext / nucl_acid_amp come from the most recent
 	// extract + pcr_plate via correlated subqueries so the emitted TSV carries
@@ -331,8 +338,8 @@ function buildAttributionMap(
 }
 
 /**
- * Return a partial row with lat/lng-derived slots coarsened when the sample
- * carries is_location_sensitive=1. Mirrors GBIF's Sensitive Species Extension
+ * Return a partial row with lat/lng-derived slots coarsened when the sample's
+ * site is marked sensitive. Mirrors GBIF's Sensitive Species Extension
  * pattern: generalize the locality data rather than redacting it, and emit a
  * Darwin Core `dataGeneralizations` note if the downstream format carries it.
  *
@@ -342,7 +349,7 @@ function buildAttributionMap(
  *   - locality + site_name → left alone (string-valued; operator's call)
  */
 function maskSensitiveLocation(row: Record<string, unknown>): Record<string, unknown> {
-	if (!row.is_location_sensitive) return {};
+	if (!row.site_is_location_sensitive) return {};
 	const lat = row.site_latitude ?? row.latitude;
 	const lng = row.site_longitude ?? row.longitude;
 	const latN = typeof lat === 'number' ? lat : Number(lat);
