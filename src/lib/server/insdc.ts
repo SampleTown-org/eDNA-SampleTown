@@ -881,5 +881,40 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		warnings.push(`Stopped at ${MAX_ROWS} rows — import these, then fetch the rest.`);
 	}
 
+	// samp_name has to identify one BioSample, because the importer keys samples
+	// on (project, samp_name): two BioSamples sharing a name become one sample,
+	// silently, taking their runs and extracts with them.
+	//
+	// A title does not guarantee that. NCBI writes one for submitters who left
+	// it blank — "MIMARKS Survey related sample from marine metagenome" covers
+	// 472 distinct BioSamples in PRJNA421293 alone. Where a name spans more than
+	// one accession it is replaced by the accession, which is the only field
+	// that is unique by construction; the title is kept as a tag so nothing is
+	// lost. Rows sharing an accession keep sharing a name — those are several
+	// runs of one sample, which is exactly the case the keying is meant to
+	// collapse.
+	const accessionsByName = new Map<string, Set<string>>();
+	for (const row of rows) {
+		const key = row.accession ?? row.samp_name;
+		if (!row.samp_name) continue;
+		const set = accessionsByName.get(row.samp_name) ?? new Set<string>();
+		set.add(key);
+		accessionsByName.set(row.samp_name, set);
+	}
+
+	let renamed = 0;
+	for (const row of rows) {
+		const shared = accessionsByName.get(row.samp_name);
+		if (!shared || shared.size < 2 || !row.accession) continue;
+		if (!row['misc_param:sample_title']) row['misc_param:sample_title'] = row.samp_name;
+		row.samp_name = row.accession;
+		renamed++;
+	}
+	if (renamed > 0) {
+		warnings.push(
+			`${renamed} record(s) share a sample title with a different BioSample, so they are named by accession instead. The title is kept as misc_param:sample_title.`
+		);
+	}
+
 	return { rows, headers: collectHeaders(rows), warnings, resolved };
 }

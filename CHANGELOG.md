@@ -32,6 +32,18 @@
   dropped metadata that was cheap to fetch. Optional `NCBI_API_KEY` /
   `NCBI_EMAIL` raise the request rate for large projects.
 
+### Fixed: BioSamples merged on import
+- `samp_name` now identifies exactly one BioSample. Naming samples from
+  `sample_title` collapsed distinct BioSamples together, because NCBI writes a
+  title for submitters who left it blank and it is not unique: "MIMARKS Survey
+  related sample from marine metagenome" covers 472 BioSamples in PRJNA421293
+  alone. The importer keys samples on (project, samp_name), so those folded into
+  one another silently, taking their runs and extracts with them — PRJNA421293
+  produced 1404 samples for 2026 BioSamples and left 123 sites holding nothing.
+  Where a title spans more than one accession the sample is named by its
+  accession instead, and the title is kept as `misc_param:sample_title`.
+  **Re-import any project imported between this release and the previous one.**
+
 ### Tables
 - A second horizontal scrollbar sits above the header. These tables are wider
   than the viewport by design — MIxS gives every sample dozens of optional
@@ -39,6 +51,9 @@
   exactly when the reader is looking at the top rows.
 - The right edge fades while there are more columns to reach, with a "more →"
   marker level with the header. Without it the table looks like it simply ends.
+- The proxy scrollbar is drawn at a size worth aiming at and never fades or
+  resizes under the pointer; overlay scrollbars otherwise hide until scrolled
+  and some grow on hover, moving the target while it is being aimed at.
 - The first column wraps instead of sizing to its content. It is sticky, so one
   long sample name pushed every other column off-screen and pinned it there.
 

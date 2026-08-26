@@ -214,19 +214,23 @@
 	const hasOverflow = $derived(scrollWidth - viewportWidth > 1);
 	const moreToTheRight = $derived(hasOverflow && scrollLeft + viewportWidth < scrollWidth - 1);
 
-	/** Guards the two scrollers against echoing each other's scroll events. */
-	let syncing = false;
-
+	/**
+	 * Mirror one scroller onto the other and record the position.
+	 *
+	 * The echo stops itself: assigning scrollLeft fires the other element's
+	 * scroll event, which finds the two already equal and assigns nothing. A
+	 * timing guard was tried first and dropped events during a fast trackpad
+	 * scroll, which left the recorded position stale and the "more" marker
+	 * showing after the table had reached its right edge.
+	 */
 	function syncScroll(from: 'top' | 'table') {
-		if (syncing) return;
-		syncing = true;
 		const source = from === 'top' ? topScrollEl : tableEl;
 		const target = from === 'top' ? tableEl : topScrollEl;
-		if (source && target) target.scrollLeft = source.scrollLeft;
-		if (tableEl) scrollLeft = tableEl.scrollLeft;
-		// Released on the next frame: assigning scrollLeft fires the other
-		// element's scroll event asynchronously.
-		requestAnimationFrame(() => { syncing = false; });
+		if (!source) return;
+		scrollLeft = source.scrollLeft;
+		if (target && Math.abs(target.scrollLeft - source.scrollLeft) > 0.5) {
+			target.scrollLeft = source.scrollLeft;
+		}
 	}
 
 	/** Track the table's dimensions so the proxy scrollbar matches its width
@@ -347,7 +351,7 @@
 		<div
 			bind:this={topScrollEl}
 			onscroll={() => syncScroll('top')}
-			class="overflow-x-auto overflow-y-hidden"
+			class="table-hscroll overflow-x-scroll overflow-y-hidden mb-1"
 			aria-hidden="true"
 		>
 			<div style="width: {scrollWidth}px; height: 1px;"></div>
@@ -547,5 +551,40 @@
 	   boundary (an `outline` on the <tr> is occluded by sticky cells). */
 	tbody tr.row-focused td {
 		box-shadow: inset 0 1px 0 0 rgb(14, 165, 233), inset 0 -1px 0 0 rgb(14, 165, 233);
+	}
+	/*
+	 * The proxy scrollbar is the control, not a hint, so it is drawn at a size
+	 * worth aiming at and never fades. Overlay scrollbars — the platform default
+	 * on macOS and on mobile — hide until scrolled and thin out again after, and
+	 * some grow on hover, which moves the target while it is being aimed at.
+	 */
+	.table-hscroll {
+		scrollbar-width: auto;
+		scrollbar-color: rgb(71 85 105) rgb(15 23 42); /* slate-600 on slate-900 */
+	}
+
+	.table-hscroll::-webkit-scrollbar {
+		-webkit-appearance: none;
+		height: 16px;
+	}
+
+	.table-hscroll::-webkit-scrollbar-track {
+		background: rgb(15 23 42);
+		border-radius: 8px;
+	}
+
+	.table-hscroll::-webkit-scrollbar-thumb {
+		background: rgb(71 85 105);
+		border-radius: 8px;
+		/* Inset the thumb with a transparent border rather than by shrinking it,
+		   so its hit area stays the full height of the bar. */
+		border: 3px solid rgb(15 23 42);
+		background-clip: padding-box;
+	}
+
+	.table-hscroll::-webkit-scrollbar-thumb:hover {
+		background: rgb(100 116 139); /* slate-500 — colour only, same geometry */
+		border: 3px solid rgb(15 23 42);
+		background-clip: padding-box;
 	}
 </style>
