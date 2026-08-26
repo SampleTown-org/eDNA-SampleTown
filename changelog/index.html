@@ -1252,6 +1252,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#fixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#from-the-feedback-queue" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1550,6 +1561,17 @@
     <span class="md-ellipsis">
       
         Import from SRA / ENA / GenBank
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixes
       
     </span>
   </a>
@@ -1861,6 +1883,21 @@
   a 2,000-sample project adds about 15 s — because capping by count silently
   dropped metadata that was cheap to fetch. Optional <code>NCBI_API_KEY</code> /
   <code>NCBI_EMAIL</code> raise the request rate for large projects.</li>
+</ul>
+<h3 id="fixes">Fixes<a class="headerlink" href="#fixes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Deleting a project works again. <code>library_preps</code> forgets a deleted source via
+  ON DELETE SET NULL, but a row left with no pcr, extract, or plate violates its
+  own CHECK, which aborted the whole statement — so any project holding
+  libraries returned 400. The subtree is now removed explicitly, bottom-up,
+  rather than relying on an ON DELETE cascade order SQLite does not promise
+  (<code>samples.site_id</code> is ON DELETE RESTRICT, so sites cannot go before their
+  samples). Plates and sequencing runs are lab-scoped and survive; runs left
+  holding nothing once the project's libraries are gone are cleared out, since
+  an archive import creates one per submitted run.</li>
+<li>The projects list dropped a project from the screen whether or not the server
+  actually deleted it, which is why the failure looked silent. It now reports
+  the error and keeps the row, and a bulk delete removes only what succeeded.</li>
 </ul>
 <h3 id="from-the-feedback-queue">From the feedback queue<a class="headerlink" href="#from-the-feedback-queue" title="Permanent link">&para;</a></h3>
 <ul>
