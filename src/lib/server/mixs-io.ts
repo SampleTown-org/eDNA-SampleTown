@@ -978,26 +978,35 @@ export function parseMixsTsv(
 			continue;
 		}
 
-		// Sanitize identifier-style names: samp_name and site_code become URL/
-		// filesystem-safe. site_name is a display field, so we only strip
-		// control chars (tabs/newlines would break the TSV round-trip) but
-		// leave spaces, punctuation, and unicode letters intact.
-		const STRICT_NAME_RE = /[^a-zA-Z0-9_.\-]/g;
-		const DISPLAY_NAME_RE = /[\x00-\x1f]/g;
-		for (const nameField of ['samp_name', 'site_code']) {
-			const raw = sample[nameField] as string | null;
-			if (raw && STRICT_NAME_RE.test(raw)) {
-				const cleaned = raw.replace(STRICT_NAME_RE, '.');
-				errors.push(`Row ${i + 1}: ${nameField} "${raw}" contains invalid characters, sanitized to "${cleaned}"`);
-				sample[nameField] = cleaned;
-			}
+		// Names are cleaned as far as their role requires and no further.
+		//
+		// site_code is an identifier: POST /api/sites rejects anything outside
+		// [A-Za-z0-9_.-], so an import is held to the same rule rather than
+		// admitting codes that could not have been typed in by hand.
+		//
+		// samp_name and site_name are labels. Nothing addresses a sample by its
+		// name — pages route on the row id, photo files are named for the photo
+		// — and POST /api/samples accepts any non-empty name, so an import that
+		// rewrote them would disagree with the rest of the app and lose the
+		// archive's own wording. Only control characters go, since a tab or a
+		// newline would break the TSV round trip.
+		const CONTROL_RE = /[\x00-\x1f]/;
+		const NON_IDENTIFIER_RE = /[^a-zA-Z0-9_.\-]/;
+		const rawCode = sample.site_code as string | null;
+		if (rawCode && NON_IDENTIFIER_RE.test(rawCode)) {
+			const cleaned = rawCode.replace(/[^a-zA-Z0-9_.\-]/g, '.');
+			errors.push(
+				`Row ${i + 1}: site_code "${rawCode}" contains invalid characters, sanitized to "${cleaned}"`
+			);
+			sample.site_code = cleaned;
 		}
-		{
-			const raw = sample.site_name as string | null;
-			if (raw && DISPLAY_NAME_RE.test(raw)) {
-				const cleaned = raw.replace(DISPLAY_NAME_RE, '').trim();
-				errors.push(`Row ${i + 1}: site_name had control characters, stripped`);
-				sample.site_name = cleaned;
+		for (const nameField of ['samp_name', 'site_name']) {
+			const raw = sample[nameField] as string | null;
+			if (raw && CONTROL_RE.test(raw)) {
+				// A space, not nothing: a tab between two words separates them.
+				const cleaned = raw.replace(/[\x00-\x1f]/g, ' ').replace(/\s+/g, ' ').trim();
+				errors.push(`Row ${i + 1}: ${nameField} had control characters, stripped`);
+				sample[nameField] = cleaned;
 			}
 		}
 
