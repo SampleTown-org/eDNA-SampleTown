@@ -315,9 +315,15 @@ export interface RunLibrary {
 	run_id: string;
 	library_id: string;
 	fastq_r1: string | null;
+	fastq_r1_md5: string | null;
 	fastq_r2: string | null;
+	fastq_r2_md5: string | null;
 	fastq_single: string | null;
+	fastq_single_md5: string | null;
+	fastq_bytes: number | null;
 	read_count: number | null;
+	/** INSDC run accession (SRR…) — one library's reads off one flow cell. */
+	accession: string | null;
 }
 
 /**

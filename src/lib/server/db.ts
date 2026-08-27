@@ -57,7 +57,14 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
 	['library_preps', 'accession', 'TEXT'],
 	['sequencing_runs', 'accession', 'TEXT'],
 	// Location sensitivity describes the place, so it lives on the site.
-	['sites', 'is_location_sensitive', 'INTEGER NOT NULL DEFAULT 0']
+	['sites', 'is_location_sensitive', 'INTEGER NOT NULL DEFAULT 0'],
+	// A run is a flow cell, so the archive's per-library run accession and the
+	// read files it points at hang off the junction, not off the run.
+	['run_libraries', 'accession', 'TEXT'],
+	['run_libraries', 'fastq_r1_md5', 'TEXT'],
+	['run_libraries', 'fastq_r2_md5', 'TEXT'],
+	['run_libraries', 'fastq_single_md5', 'TEXT'],
+	['run_libraries', 'fastq_bytes', 'INTEGER']
 ];
 
 function applyAdditiveMigrations(db: Database.Database) {

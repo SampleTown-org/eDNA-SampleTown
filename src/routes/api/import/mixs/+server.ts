@@ -63,9 +63,10 @@ type LibraryRow = {
 	library_accession?: string;
 };
 
-/** Run-field keys on sample._run. Run records are deduped per upload by
- *  run_name; the trailing run_fastq_dir / run_read_count fields belong on the
- *  run_libraries link, not the run itself. Keep in sync with RUN_FIELDS. */
+/** Run-field keys on sample._run. A run is a flow cell, deduped per upload by
+ *  run_name; the trailing fields describe one library's reads off that cell and
+ *  belong on the run_libraries link, not the run itself. Keep in sync with
+ *  RUN_FIELDS. */
 type RunRow = {
 	run_name?: string;
 	run_date?: string;
@@ -73,10 +74,19 @@ type RunRow = {
 	run_instrument_model?: string;
 	run_flow_cell_id?: string;
 	run_directory?: string;
-	run_total_bases_gb?: number;
 	run_fastq_dir?: string;
+	run_total_bases_gb?: number;
+	run_submission_accession?: string;
+	// Per-(run, library) link fields
 	run_read_count?: number;
 	run_accession_id?: string;
+	run_fastq_r1?: string;
+	run_fastq_r1_md5?: string;
+	run_fastq_r2?: string;
+	run_fastq_r2_md5?: string;
+	run_fastq_single?: string;
+	run_fastq_single_md5?: string;
+	run_fastq_bytes?: number;
 };
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -523,16 +533,30 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		})
 		.filter((x): x is NonNullable<typeof x> => x !== null);
 
-	type NewRun = { id: string; run_name: string; data: RunRow };
+	// A run is a flow cell, so its read and base totals are the sum over every
+	// library sequenced on it, not whatever the first row happened to carry.
+	type NewRun = {
+		id: string;
+		run_name: string;
+		data: RunRow;
+		totalBases: number;
+		totalReads: number;
+	};
 	const newRunsByName = new Map<string, NewRun>();
 	for (const m of matched) {
 		const run = m.sample._run as RunRow | undefined;
 		if (!run?.run_name) continue;
 		const name = String(run.run_name).trim();
 		if (!name) continue;
-		if (!newRunsByName.has(name)) {
-			newRunsByName.set(name, { id: generateId(), run_name: name, data: run });
+		let entry = newRunsByName.get(name);
+		if (!entry) {
+			entry = { id: generateId(), run_name: name, data: run, totalBases: 0, totalReads: 0 };
+			newRunsByName.set(name, entry);
 		}
+		const gb = Number(run.run_total_bases_gb);
+		if (Number.isFinite(gb)) entry.totalBases += gb * 1e9;
+		const reads = Number(run.run_read_count);
+		if (Number.isFinite(reads)) entry.totalReads += reads;
 	}
 
 	if (dryRun) {
@@ -705,8 +729,9 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
 	const insertRunStmt = db.prepare(`
 		INSERT INTO sequencing_runs (id, lab_id, run_name, run_date, platform,
-			instrument_model, flow_cell_id, run_directory, total_bases, accession, created_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			instrument_model, flow_cell_id, run_directory, fastq_directory,
+			total_reads, total_bases, accession, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	const insertLibraryStmt = db.prepare(`
@@ -718,8 +743,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	`);
 
 	const insertRunLibraryStmt = db.prepare(`
-		INSERT OR REPLACE INTO run_libraries (run_id, library_id, fastq_single, read_count)
-		VALUES (?, ?, ?, ?)
+		INSERT OR REPLACE INTO run_libraries (run_id, library_id,
+			fastq_r1, fastq_r1_md5, fastq_r2, fastq_r2_md5,
+			fastq_single, fastq_single_md5, fastq_bytes, read_count, accession)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	/** library_preps.library_type is NOT NULL — derive a sensible default from
@@ -783,9 +810,6 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				runIdByName.set(r.run_name, existing.id);
 				continue;
 			}
-			const totalBases = r.data.run_total_bases_gb != null
-				? Math.round(Number(r.data.run_total_bases_gb) * 1e9)
-				: null;
 			insertRunStmt.run(
 				r.id, labId, r.run_name,
 				r.data.run_date ?? null,
@@ -793,8 +817,12 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				r.data.run_instrument_model ?? null,
 				r.data.run_flow_cell_id ?? null,
 				r.data.run_directory ?? null,
-				totalBases,
-				r.data.run_accession_id ?? null,
+				r.data.run_fastq_dir ?? null,
+				r.totalReads > 0 ? Math.round(r.totalReads) : null,
+				r.totalBases > 0 ? Math.round(r.totalBases) : null,
+				// The run's own accession identifies the batch it stands for.
+				// A library's run accession (SRR…) goes on its link row.
+				r.data.run_submission_accession ?? null,
 				userId
 			);
 			runIdByName.set(r.run_name, r.id);
@@ -1103,8 +1131,15 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 								insertRunLibraryStmt.run(
 									runId,
 									libraryId,
-									runRow.run_fastq_dir ?? null,
-									runRow.run_read_count != null ? Math.round(Number(runRow.run_read_count)) : null
+									runRow.run_fastq_r1 ?? null,
+									runRow.run_fastq_r1_md5 ?? null,
+									runRow.run_fastq_r2 ?? null,
+									runRow.run_fastq_r2_md5 ?? null,
+									runRow.run_fastq_single ?? null,
+									runRow.run_fastq_single_md5 ?? null,
+									runRow.run_fastq_bytes != null ? Math.round(Number(runRow.run_fastq_bytes)) : null,
+									runRow.run_read_count != null ? Math.round(Number(runRow.run_read_count)) : null,
+									runRow.run_accession_id ?? null
 								);
 								runLibrariesCreated++;
 							}

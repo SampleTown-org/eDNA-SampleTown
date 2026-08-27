@@ -641,14 +641,24 @@ CREATE TABLE IF NOT EXISTS sequencing_runs (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Junction table: many libraries per run
+-- Junction table: many libraries per run.
+--
+-- A run is a flow cell; this row is one library's reads off it. That is the
+-- same unit INSDC calls a run (SRR…), so the archive's run accession and the
+-- read files belong here rather than on sequencing_runs. The checksums are
+-- kept alongside the paths because a submission manifest has to declare them.
 CREATE TABLE IF NOT EXISTS run_libraries (
     run_id TEXT NOT NULL REFERENCES sequencing_runs(id) ON DELETE CASCADE,
     library_id TEXT NOT NULL REFERENCES library_preps(id) ON DELETE CASCADE,
     fastq_r1 TEXT,
+    fastq_r1_md5 TEXT,
     fastq_r2 TEXT,
+    fastq_r2_md5 TEXT,
     fastq_single TEXT,
+    fastq_single_md5 TEXT,
+    fastq_bytes INTEGER,
     read_count INTEGER,
+    accession TEXT,                       -- INSDC run accession (SRR…), when imported
     PRIMARY KEY (run_id, library_id)
 );
 

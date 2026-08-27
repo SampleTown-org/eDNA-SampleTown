@@ -8,6 +8,14 @@
 		label: string;
 		sortable?: boolean;
 		class?: string;
+		/** Makes this column's cells links. Returning null leaves the cell as
+		 *  plain text, so a column of files can hold rows that have none. The
+		 *  cell keeps showing `row[key]`, so sorting and filtering still work
+		 *  on the value rather than on the target. */
+		href?: (row: Record<string, unknown>) => string | null;
+		/** Open this column's links in a new tab — for targets outside the app,
+		 *  such as an archive's download URL. */
+		external?: boolean;
 	}
 
 	interface Props {
@@ -519,7 +527,14 @@
 							class="px-4 py-3 {col.class || ''} {colIdx === 0 ? 'sm:sticky sm:z-10 max-w-56 break-words' : ''}"
 							style={colIdx === 0 ? `left: ${stickyOffsets.firstCol}px; background-color: ${stickyBg(row)};` : ''}
 						>
-							{#if href && col === columns[0]}
+							{#if col.href && col.href(row)}
+								<a
+									href={col.href(row)}
+									target={col.external ? '_blank' : null}
+									rel={col.external ? 'noopener noreferrer' : null}
+									class="text-ocean-400 hover:text-ocean-300 hover:underline"
+								>{row[col.key] ?? '—'}{col.external ? ' ↗' : ''}</a>
+							{:else if href && col === columns[0]}
 								<a href={href(row)} class="text-ocean-400 hover:text-ocean-300 hover:underline">
 									{row[col.key] ?? '—'}
 								</a>

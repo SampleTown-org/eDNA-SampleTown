@@ -33,11 +33,56 @@
 		return c;
 	});
 
-	const runColumns = [
+	/** Last path segment — the filename a reader recognises. The full path
+	 *  stays reachable as the link target. */
+	function fileName(path: unknown): string | null {
+		if (!path) return null;
+		const s = String(path).replace(/\/+$/, '');
+		const cut = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'));
+		return cut >= 0 ? s.slice(cut + 1) : s;
+	}
+
+	/** Only a URL can be opened from the browser. A path on a lab server is
+	 *  shown but not linked — SampleTown cannot reach it. */
+	function fileHref(path: unknown): string | null {
+		const s = path ? String(path) : '';
+		return /^https?:\/\/|^ftp:\/\//i.test(s) ? s : null;
+	}
+
+	const runs = $derived(
+		(data.runs as any[]).map((r) => ({
+			...r,
+			r1: fileName(r.fastq_r1 ?? r.fastq_single),
+			r2: fileName(r.fastq_r2),
+			reads: r.read_count?.toLocaleString() ?? null
+		}))
+	);
+	const hasFiles = $derived(runs.some((r: any) => r.r1 || r.r2));
+
+	const runColumns = $derived([
 		{ key: 'run_name', label: 'Run', sortable: true },
 		{ key: 'platform', label: 'Platform', sortable: true },
-		{ key: 'run_date', label: 'Date', sortable: true }
-	];
+		{ key: 'run_date', label: 'Date', sortable: true },
+		...(hasFiles
+			? [
+					{ key: 'reads', label: 'Reads', sortable: true },
+					{
+						key: 'r1',
+						label: 'Reads R1',
+						sortable: true,
+						href: (row: any) => fileHref(row.fastq_r1 ?? row.fastq_single),
+						external: true
+					},
+					{
+						key: 'r2',
+						label: 'Reads R2',
+						sortable: true,
+						href: (row: any) => fileHref(row.fastq_r2),
+						external: true
+					}
+				]
+			: [])
+	]);
 
 	const fields: Array<[string, unknown, string?]> = [
 		['Well', data.library.well_label],
@@ -82,6 +127,6 @@
 
 	<div>
 		<h2 class="text-lg font-semibold text-white mb-3">Sequencing Runs ({data.runs.length})</h2>
-		<DataTable columns={runColumns} rows={data.runs} href={(row) => `/runs/${row.id}`} empty="Not yet sequenced." />
+		<DataTable columns={runColumns} rows={runs} href={(row) => `/runs/${row.id}`} empty="Not yet sequenced." />
 	</div>
 </div>

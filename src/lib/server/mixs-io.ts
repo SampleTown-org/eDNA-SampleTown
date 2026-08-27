@@ -82,16 +82,22 @@ export const LIBRARY_FIELDS = new Set([
 	'library_plate_name', 'library_accession'
 ]);
 
-/** Fields that get split off into a sequencing_runs row when present. Runs
- *  are deduped within a batch by run_name — multiple samples on the same
- *  flow cell share one run record. The link table run_libraries carries
- *  per-(run, library) details (fastq directory, read count). */
+/** Fields that get split off into a sequencing_runs row when present.
+ *
+ *  A run is a flow cell. Runs are deduped within a batch by run_name, so the
+ *  many libraries sequenced on one cell share a single run record, and the
+ *  link table run_libraries carries what differs between them: that library's
+ *  read files, their checksums, its read count, and the archive's own run
+ *  accession for it. */
 export const RUN_FIELDS = new Set([
 	'run_name', 'run_date', 'run_platform', 'run_instrument_model',
-	'run_flow_cell_id', 'run_directory', 'run_total_bases_gb',
+	'run_flow_cell_id', 'run_directory', 'run_fastq_dir', 'run_total_bases_gb',
+	'run_submission_accession',
 	// Per-(run, library) link fields — written to run_libraries, not
 	// sequencing_runs. Side-car bag is shared with the run for parsing.
-	'run_fastq_dir', 'run_read_count', 'run_accession_id'
+	'run_read_count', 'run_accession_id',
+	'run_fastq_r1', 'run_fastq_r1_md5', 'run_fastq_r2', 'run_fastq_r2_md5',
+	'run_fastq_single', 'run_fastq_single_md5', 'run_fastq_bytes'
 ]);
 
 /** Sample columns that exist as real columns in the samples table and are
@@ -636,7 +642,16 @@ export function buildHeaderToFieldMap(): Record<string, string> {
 		run_directory: 'run_directory',
 		run_total_bases_gb: 'run_total_bases_gb',
 		run_fastq_dir: 'run_fastq_dir',
-		run_read_count: 'run_read_count'
+		run_submission_accession: 'run_submission_accession',
+		// Per-(run, library) link columns
+		run_read_count: 'run_read_count',
+		run_fastq_r1: 'run_fastq_r1',
+		run_fastq_r1_md5: 'run_fastq_r1_md5',
+		run_fastq_r2: 'run_fastq_r2',
+		run_fastq_r2_md5: 'run_fastq_r2_md5',
+		run_fastq_single: 'run_fastq_single',
+		run_fastq_single_md5: 'run_fastq_single_md5',
+		run_fastq_bytes: 'run_fastq_bytes'
 	};
 	for (const [k, v] of Object.entries(local)) map[k] = v;
 
@@ -725,7 +740,15 @@ export function getImportableFields(): { value: string; table: string; title?: s
 	push('run_directory', 'run');
 	push('run_total_bases_gb', 'run');
 	push('run_fastq_dir', 'run');
+	push('run_submission_accession', 'run');
 	push('run_read_count', 'run');
+	push('run_fastq_r1', 'run');
+	push('run_fastq_r1_md5', 'run');
+	push('run_fastq_r2', 'run');
+	push('run_fastq_r2_md5', 'run');
+	push('run_fastq_single', 'run');
+	push('run_fastq_single_md5', 'run');
+	push('run_fastq_bytes', 'run');
 
 	// Every MIxS slot, mapped to its owning table via slot-ownership.
 	// Imports against keys not in SAMPLE_CORE_KEYS get routed to sample_values.
@@ -911,7 +934,11 @@ export function parseMixsTsv(
 			// batch and creates run_libraries links per row.
 			if (RUN_FIELDS.has(field)) {
 				let rv: unknown = val;
-				if (field === 'run_total_bases_gb' || field === 'run_read_count') {
+				if (
+					field === 'run_total_bases_gb' ||
+					field === 'run_read_count' ||
+					field === 'run_fastq_bytes'
+				) {
 					const n = Number(val);
 					rv = isNaN(n) ? null : n;
 				}

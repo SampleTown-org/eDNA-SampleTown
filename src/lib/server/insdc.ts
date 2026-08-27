@@ -402,13 +402,13 @@ const FIELD_MAP: Record<string, string> = {
 	// archives shout PAIRED, the MIxS enum is lowercase.
 	library_layout: 'lib_layout',
 
-	// Run
-	run_accession: 'run_name',
+	// Run. `run_accession` is deliberately absent: an INSDC run is one
+	// library's reads, which is a run_libraries link here, not a flow cell.
+	// It is carried as run_accession_id onto that link instead.
 	run_date: 'run_date',
 	instrument_platform: 'run_platform',
 	instrument_model: 'run_instrument_model',
-	read_count: 'run_read_count',
-	fastq_ftp: 'run_fastq_dir'
+	read_count: 'run_read_count'
 };
 
 /**
@@ -630,6 +630,24 @@ function clean(value: string): string {
 	return value.replace(/[\r\n]+/g, ' ').trim();
 }
 
+/** ENA returns per-file columns as positionally aligned, semicolon-joined
+ *  lists. Empty entries are kept so index 1 stays R2 even when R1 is blank. */
+function splitList(value: string): string[] {
+	return value ? value.split(';').map((v) => v.trim()) : [];
+}
+
+/** ENA reports FTP paths without a scheme. Make them openable. */
+function url(path: string | undefined): string {
+	if (!path) return '';
+	return /^[a-z]+:\/\//i.test(path) ? path : `https://${path}`;
+}
+
+/** Instrument models carry spaces and punctuation; a run name is handled as an
+ *  identifier, typed into forms and matched on re-import. */
+function slug(value: string): string {
+	return value.trim().replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
 /**
  * Turn one archive record into a SampleTown import row.
  *
@@ -754,21 +772,49 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 
 		if (out.lib_layout) out.lib_layout = out.lib_layout.toLowerCase();
 
-		// Run → sequencing run. One SRA run is one sequencing event, so each
-		// becomes its own run record; the importer dedupes them by name.
+		// Run → sequencing run, where a run is a flow cell.
+		//
+		// The archives do not record which flow cell a run came from: none of
+		// ENA's read_run fields name one, and NCBI does not report it either.
+		// The nearest true grouping they do carry is the submission — the batch
+		// the reads arrived in — so a submission on one instrument model stands
+		// in for a flow cell. It is honest about what is known: reads that were
+		// submitted together off one instrument, without claiming to know the
+		// cell. Runs on differing instruments never merge, since a single flow
+		// cell cannot span two.
+		const instrument = pick(raw, 'instrument_model');
+		const batch = submission || pick(raw, 'study_accession', 'secondary_study_accession');
+		if (batch) {
+			set('run_name', instrument ? `${batch}_${slug(instrument)}` : batch);
+			// The run stands for the submission, so that is the accession it
+			// carries. The per-library run accessions (SRR…) sit on the links.
+			set('run_submission_accession', batch);
+		}
 		const bases = Number(pick(raw, 'base_count'));
 		if (Number.isFinite(bases) && bases > 0) {
 			set('run_total_bases_gb', String(bases / 1e9));
 		}
 		if (!out.run_date) set('run_date', pick(raw, 'first_created', 'first_public'));
-		// fastq_ftp is a semicolon-joined pair for paired runs; the link row
-		// stores the directory they share.
-		const fastq = pick(raw, 'fastq_ftp');
-		if (fastq) {
-			const first = fastq.split(';')[0];
-			const dir = first.includes('/') ? first.slice(0, first.lastIndexOf('/')) : first;
-			set('run_fastq_dir', dir);
+
+		// fastq_ftp, fastq_md5 and fastq_bytes are positionally aligned
+		// semicolon-joined lists, one entry per file. A paired run gives two,
+		// a single-end run one. The files are recorded rather than fetched, and
+		// their checksums travel with them because a submission has to declare
+		// them.
+		const files = splitList(pick(raw, 'fastq_ftp'));
+		const md5s = splitList(pick(raw, 'fastq_md5'));
+		const sizes = splitList(pick(raw, 'fastq_bytes'));
+		if (files.length > 1) {
+			set('run_fastq_r1', url(files[0]));
+			set('run_fastq_r2', url(files[1]));
+			set('run_fastq_r1_md5', md5s[0]);
+			set('run_fastq_r2_md5', md5s[1]);
+		} else if (files.length === 1) {
+			set('run_fastq_single', url(files[0]));
+			set('run_fastq_single_md5', md5s[0]);
 		}
+		const bytes = sizes.reduce((sum, n) => sum + (Number(n) || 0), 0);
+		if (bytes > 0) set('run_fastq_bytes', String(bytes));
 	}
 
 	// The declared checklist decides which MIxS combination class the row is
@@ -801,11 +847,11 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 				continue;
 			}
 			// The target is spoken for but empty on this row, which means the two
-			// spellings are the same measurement reported different ways. ENA
+			// spellings are the same measurement reported different ways: ENA
 			// exposes `temperature` and the GSC checklists a bare `temp`, and both
-			// resolve to the MIxS `temp` slot; demoting the loser stranded 144 of
-			// PRJNA421293's temperatures in a misc_param tag while the rest sat in
-			// the slot. Fill the slot instead.
+			// resolve to the MIxS `temp` slot. Fill the slot rather than demoting
+			// the second spelling to a tag, which would scatter one measurement
+			// across two columns.
 			if (!out[target]) {
 				set(target, value);
 				continue;
@@ -850,8 +896,10 @@ const HEADER_ORDER = [
 	'library_name', 'library_accession', 'library_type', 'library_prep_date', 'library_prep_kit',
 	'library_platform', 'library_instrument_model', 'library_source',
 	'library_selection', 'lib_layout', 'library_fragment_size_bp',
-	'seq_meth', 'run_name', 'run_accession_id', 'run_date', 'run_platform', 'run_instrument_model',
-	'run_read_count', 'run_total_bases_gb', 'run_fastq_dir'
+	'seq_meth', 'run_name', 'run_submission_accession', 'run_accession_id', 'run_date',
+	'run_platform', 'run_instrument_model', 'run_read_count', 'run_total_bases_gb',
+	'run_fastq_r1', 'run_fastq_r1_md5', 'run_fastq_r2', 'run_fastq_r2_md5',
+	'run_fastq_single', 'run_fastq_single_md5', 'run_fastq_bytes'
 ];
 
 /** Union of the columns present, in HEADER_ORDER first, then misc_param tags. */
@@ -1065,11 +1113,28 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		else byAccession++;
 	}
 	if (byAlias + byAccession > 0) {
+		// Counts are only worth naming when the records split between the two
+		// fallbacks; with one fallback the leading count already said it.
 		const parts: string[] = [];
-		if (byAlias > 0) parts.push(`${byAlias} by the submitter's sample name`);
-		if (byAccession > 0) parts.push(`${byAccession} by accession`);
+		const split = byAlias > 0 && byAccession > 0;
+		if (byAlias > 0)
+			parts.push(split ? `${byAlias} by the submitter's sample name` : "by the submitter's sample name");
+		if (byAccession > 0) parts.push(split ? `${byAccession} by accession` : 'by accession');
 		warnings.push(
 			`${byAlias + byAccession} record(s) share a sample title with a different BioSample, so they are named ${parts.join(' and ')} instead. The title is kept as misc_param:sample_title.`
+		);
+	}
+
+	// A run the archive holds no files for imports fine — it keeps its accession,
+	// so a later fetch fills the reads in once they are released — but silence
+	// about it would read as "these reads are unavailable to SampleTown".
+	const runRows = rows.filter((r) => r.run_accession_id);
+	const fileless = runRows.filter(
+		(r) => !r.run_fastq_r1 && !r.run_fastq_single
+	).length;
+	if (fileless > 0) {
+		warnings.push(
+			`${fileless} of ${runRows.length} run(s) have no read files published at the archive yet. They import with their accessions, so re-fetching later will pick the files up.`
 		);
 	}
 

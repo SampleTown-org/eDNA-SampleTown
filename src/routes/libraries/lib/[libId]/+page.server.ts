@@ -57,6 +57,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		plate = db.prepare('SELECT id, plate_name FROM library_plates WHERE id = ?').get((library as any).library_plate_id);
 	}
 
-	const runs = db.prepare(`SELECT r.* FROM sequencing_runs r JOIN run_libraries rl ON rl.run_id = r.id WHERE rl.library_id = ? AND r.is_deleted = 0`).all(params.libId);
+	// This library's reads off each flow cell it was sequenced on: the files
+	// and read count come from the link, not the run.
+	const runs = db.prepare(`
+		SELECT r.*,
+			rl.fastq_r1, rl.fastq_r1_md5, rl.fastq_r2, rl.fastq_r2_md5,
+			rl.fastq_single, rl.fastq_single_md5, rl.fastq_bytes,
+			rl.read_count, rl.accession AS run_accession
+		FROM sequencing_runs r
+		JOIN run_libraries rl ON rl.run_id = r.id
+		WHERE rl.library_id = ? AND r.is_deleted = 0
+	`).all(params.libId);
 	return { library, source, plate, runs };
 };
