@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import AccessionLink from '$lib/components/AccessionLink.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import type { PageData } from './$types';
@@ -53,6 +54,7 @@
 		<div class="flex items-start justify-between gap-4">
 			<div>
 				<h1 class="text-2xl font-bold text-white">{data.pcr.pcr_name}</h1>
+				<AccessionLink accession={(data.pcr as any).accession} class="mt-1" />
 				<Breadcrumb items={crumbs} />
 			</div>
 			<div class="flex items-center gap-3 shrink-0">

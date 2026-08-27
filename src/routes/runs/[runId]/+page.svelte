@@ -1,5 +1,7 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import AccessionLink from '$lib/components/AccessionLink.svelte';
+	import { insdcUrl } from '$lib/insdc-links';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
@@ -53,11 +55,25 @@
 	/** True once any library on this run has files recorded — the columns are
 	 *  only worth their width when something fills them. */
 	const hasFiles = $derived(libraries.some((l: any) => l.r1 || l.r2));
+	/** The archive's own run accession for a library on this cell — present
+	 *  only on imported runs. */
+	const hasArchiveRuns = $derived(libraries.some((l: any) => l.run_accession));
 
 	const libColumns = $derived([
 		{ key: 'library_name', label: 'Library', sortable: true },
 		{ key: 'library_type', label: 'Type', sortable: true },
 		{ key: 'platform', label: 'Platform', sortable: true },
+		...(hasArchiveRuns
+			? [
+					{
+						key: 'run_accession',
+						label: 'Archive run',
+						sortable: true,
+						href: (row: any) => insdcUrl(row.run_accession),
+						external: true
+					}
+				]
+			: []),
 		...(hasFiles
 			? [
 					{ key: 'reads', label: 'Reads', sortable: true },
@@ -102,14 +118,7 @@
 		<div class="flex items-start justify-between gap-4">
 			<div>
 				<h1 class="text-2xl font-bold text-white">{data.run.run_name}</h1>
-					{#if (data.run as any).accession}
-						<!-- INSDC accession this record was imported under. Absent for
-						     records entered by hand, which have never been submitted. -->
-						<a href="https://www.ebi.ac.uk/ena/browser/view/{(data.run as any).accession}"
-							target="_blank" rel="noopener noreferrer"
-							class="inline-block mt-1 font-mono text-xs text-ocean-400 hover:text-ocean-300"
-							title="View at ENA">{(data.run as any).accession} ↗</a>
-					{/if}
+					<AccessionLink accession={(data.run as any).accession} class="mt-1" />
 				<Breadcrumb items={crumbs} />
 			</div>
 			<div class="flex items-center gap-3 shrink-0">

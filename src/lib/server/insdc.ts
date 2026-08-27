@@ -23,6 +23,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { buildHeaderToFieldMap } from '$lib/server/mixs-io';
 import { SRA_PLATFORM_TO_SEQ_METH } from '$lib/mixs/sra-mapping';
 import { INSDC_FETCH_TIMEOUT_MS } from '$lib/insdc-limits';
+import { insdcKind } from '$lib/insdc-links';
 
 const ENA_PORTAL = 'https://www.ebi.ac.uk/ena/portal/api/filereport';
 
@@ -68,19 +69,12 @@ export interface InsdcFetchResult {
  * answer for it — querying the wrong one is a 400, not an empty result.
  */
 export function classifyAccession(accession: string): AccessionKind {
-	const a = accession.trim().toUpperCase();
-	if (/^PRJ[EDN][A-Z][0-9]+$/.test(a)) return 'bioproject';
-	if (/^[EDS]RP[0-9]{6,}$/.test(a)) return 'study';
-	if (/^[EDS]RR[0-9]{6,}$/.test(a)) return 'run';
-	if (/^[EDS]RX[0-9]{6,}$/.test(a)) return 'experiment';
-	if (/^SAM[END][A-Z]?[0-9]+$/.test(a)) return 'sample';
-	if (/^[EDS]RS[0-9]{6,}$/.test(a)) return 'sample';
-	// INSDC sequence accessions: 1-2 letters + 5-6 digits (GenBank/EMBL/DDBJ),
-	// or the 4-letter + 2-digit + 6-8 digit WGS form. A version suffix (.1) is
-	// tolerated — ENA resolves both.
-	if (/^[A-Z]{1,2}[0-9]{5,6}(\.[0-9]+)?$/.test(a)) return 'sequence';
-	if (/^[A-Z]{4}[0-9]{2}[0-9]{6,8}(\.[0-9]+)?$/.test(a)) return 'sequence';
-	return 'unknown';
+	const kind = insdcKind(accession);
+	// A submission accession is a delivery receipt, not a queryable record: the
+	// portal has no result set for one. It still links out, which is why the
+	// link module knows the prefix and this classifier calls it unfetchable.
+	if (!kind || kind === 'submission') return 'unknown';
+	return kind;
 }
 
 /** Result sets to try for a kind, in order. The first with rows wins. */

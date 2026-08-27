@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import AccessionLink from '$lib/components/AccessionLink.svelte';
 	import PeopleRoster from '$lib/components/PeopleRoster.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
@@ -89,14 +90,7 @@
 		<div class="flex items-start justify-between gap-4">
 			<div>
 				<h1 class="text-2xl font-bold text-white">{ext.extract_name}</h1>
-					{#if (ext as any).accession}
-						<!-- INSDC accession this record was imported under. Absent for
-						     records entered by hand, which have never been submitted. -->
-						<a href="https://www.ebi.ac.uk/ena/browser/view/{(ext as any).accession}"
-							target="_blank" rel="noopener noreferrer"
-							class="inline-block mt-1 font-mono text-xs text-ocean-400 hover:text-ocean-300"
-							title="View at ENA">{(ext as any).accession} ↗</a>
-					{/if}
+					<AccessionLink accession={(ext as any).accession} class="mt-1" />
 				<Breadcrumb items={crumbs} />
 			</div>
 			<div class="flex items-center gap-3 shrink-0">

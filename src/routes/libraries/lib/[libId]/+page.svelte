@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DataTable from '$lib/components/DataTable.svelte';
+	import AccessionLink from '$lib/components/AccessionLink.svelte';
 	import GlossaryDoc from '$lib/components/GlossaryDoc.svelte';
 	import EntityQR from '$lib/components/EntityQR.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
@@ -104,6 +105,7 @@
 		<div class="flex items-start justify-between gap-4">
 			<div>
 				<h1 class="text-2xl font-bold text-white">{data.library.library_name}</h1>
+				<AccessionLink accession={(data.library as any).accession} class="mt-1" />
 				<Breadcrumb items={crumbs} />
 			</div>
 			<EntityQR id={data.library.id} size={96} />

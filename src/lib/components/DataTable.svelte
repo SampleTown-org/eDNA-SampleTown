@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { insdcUrl, insdcLabel } from '$lib/insdc-links';
 	import { page } from '$app/state';
 	import { makeRankedHueMap, hashHue } from '$lib/color-rank';
 
@@ -513,10 +514,23 @@
 					{/if}
 					{#if showId}
 						<td class="hidden sm:table-cell write-only px-3 py-3 sm:sticky sm:z-10" style="left: {stickyOffsets.id}px; width: 120px; min-width: 120px; max-width: 120px; background-color: {stickyBg(row)};">
-							<span
-								class="font-mono text-xs {row.accession ? 'text-slate-400' : 'text-slate-600'}"
-								title={row.id as string}
-							>{rowIdentity(row)}</span>
+							{#if insdcUrl(row.accession as string)}
+								<!-- An accession is a public identifier; the record it names is
+								     one click away, and reaching it should not mean retyping
+								     the accession into an archive's search box. -->
+								<a
+									href={insdcUrl(row.accession as string)}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="font-mono text-xs text-ocean-400 hover:text-ocean-300 hover:underline"
+									title={insdcLabel(row.accession as string)}
+								>{rowIdentity(row)}</a>
+							{:else}
+								<span
+									class="font-mono text-xs {row.accession ? 'text-slate-400' : 'text-slate-600'}"
+									title={row.id as string}
+								>{rowIdentity(row)}</span>
+							{/if}
 						</td>
 					{/if}
 					{#each columns as col, colIdx}
