@@ -40,6 +40,17 @@
 		return rows;
 	});
 
+	/** The cart filter survives a reload, so a table it has emptied must not
+	 *  claim the lab has no sites. */
+	const emptyMessage = $derived.by(() => {
+		if (allSites.length === 0) return 'No sites yet.';
+		const hiding: string[] = [];
+		if (hasParentFilter && parentFilterActive) hiding.push('the cart');
+		if (projectFilter) hiding.push('the project picker');
+		if (hiding.length === 0) return 'No sites yet.';
+		return `All ${allSites.length} sites are hidden by ${hiding.join(' and ')}.`;
+	});
+
 	// Detect when selection has diverged from the cart
 	const selectionChanged = $derived.by(() => {
 		const carted = cart.idsOfType('site');
@@ -206,7 +217,7 @@
 		bind:colorByKey
 		bind:selectedIds
 		href={(row) => `/sites/${row.id}`}
-		empty="No sites yet."
+		empty={emptyMessage}
 		showId
 		filterable
 		selectable

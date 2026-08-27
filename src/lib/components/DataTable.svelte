@@ -14,6 +14,8 @@
 		columns: Column[];
 		rows: Record<string, unknown>[];
 		href?: (row: Record<string, unknown>) => string;
+		/** Shown when there is genuinely nothing to list. A table emptied by a
+		 *  filter says that instead, so this should not mention filtering. */
 		empty?: string;
 		actions?: Snippet<[Record<string, unknown>]>;
 		showId?: boolean;
@@ -218,10 +220,10 @@
 	 * Mirror one scroller onto the other and record the position.
 	 *
 	 * The echo stops itself: assigning scrollLeft fires the other element's
-	 * scroll event, which finds the two already equal and assigns nothing. A
-	 * timing guard was tried first and dropped events during a fast trackpad
-	 * scroll, which left the recorded position stale and the "more" marker
-	 * showing after the table had reached its right edge.
+	 * scroll event, which finds the two already equal and assigns nothing.
+	 * Every event must be handled — suppressing them on a timer drops the last
+	 * one of a fast trackpad scroll and leaves the recorded position stale,
+	 * with the "more" marker showing at the right edge.
 	 */
 	function syncScroll(from: 'top' | 'table') {
 		const source = from === 'top' ? topScrollEl : tableEl;
@@ -463,7 +465,16 @@
 						colspan={columns.length + (showId ? 1 : 0) + (hasActions ? 1 : 0) + (selectable ? 1 : 0)}
 						class="px-4 py-8 text-center text-slate-500"
 					>
-						{empty}
+						{#if searchQuery && rows.length > 0}
+							Nothing matches “{searchQuery}”.
+							<button
+								type="button"
+								onclick={() => (searchQuery = '')}
+								class="text-ocean-400 hover:text-ocean-300 underline"
+							>Clear the filter</button>
+						{:else}
+							{empty}
+						{/if}
 					</td>
 				</tr>
 			{/if}

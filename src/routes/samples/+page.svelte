@@ -153,6 +153,26 @@
 		if (colorByKey === slot) colorByKey = extraColumnSlots[extraColumnSlots.length - 1] ?? '';
 	}
 
+	/**
+	 * What an empty table means. Three filters here survive a reload — the
+	 * cart, and the chosen parameters in localStorage — so a table they have
+	 * emptied must not claim the lab has no samples.
+	 */
+	const emptyMessage = $derived.by(() => {
+		if (allSamples.length === 0) return 'No samples yet.';
+		const hiding: string[] = [];
+		if (hasParentFilter && parentFilterActive) hiding.push('the cart');
+		if (projectFilter) hiding.push('the project picker');
+		if (extraColumnSlots.length > 0)
+			hiding.push(extraColumnSlots.length === 1 ? 'the chosen parameter' : 'the chosen parameters');
+		if (hiding.length === 0) return 'No samples yet.';
+		const by =
+			hiding.length === 1
+				? hiding[0]
+				: `${hiding.slice(0, -1).join(', ')} and ${hiding[hiding.length - 1]}`;
+		return `All ${allSamples.length} samples are hidden by ${by}.`;
+	});
+
 	/** True when the sample carries a usable value for every chosen parameter. */
 	function hasAllParameters(sample: Record<string, unknown>): boolean {
 		return extraColumnSlots.every((slot) => {
@@ -288,18 +308,19 @@
 
 		{#each extraColumnSlots as slot (slot)}
 			{@const p = data.availableParameters.find((x: any) => x.slot === slot)}
-			{#if p}
-				<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-slate-700 bg-slate-800/70 text-slate-200">
-					{p.title}
-					<code class="text-slate-500 text-[10px]">{p.slot}</code>
-					<button
-						type="button"
-						onclick={() => removeExtraColumn(slot)}
-						class="text-slate-400 hover:text-red-300 ml-0.5"
-						title="Remove column"
-					>×</button>
-				</span>
-			{/if}
+			<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-slate-700 bg-slate-800/70 text-slate-200">
+				{p?.title ?? slot}
+				<code class="text-slate-500 text-[10px]">{slot}</code>
+				{#if !p}
+					<span class="text-amber-400/80 text-[10px]" title="No sample carries this parameter, so nothing matches">no data</span>
+				{/if}
+				<button
+					type="button"
+					onclick={() => removeExtraColumn(slot)}
+					class="text-slate-400 hover:text-red-300 ml-0.5"
+					title="Remove column"
+				>×</button>
+			</span>
 		{/each}
 
 		{#if extraColumnSlots.length > 0}
@@ -323,7 +344,7 @@
 		rows={displaySamples}
 		bind:selectedIds
 		href={(row) => `/samples/${row.id}`}
-		empty="No samples yet."
+		empty={emptyMessage}
 		showId
 		filterable
 		selectable
