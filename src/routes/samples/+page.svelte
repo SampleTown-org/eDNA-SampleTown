@@ -27,8 +27,8 @@
 			);
 		}
 		if (projectFilter) rows = rows.filter((s: any) => s.project_id === projectFilter);
-		// Chosen parameters narrow the set to the samples that actually carry them.
-		if (extraColumnSlots.length > 0) rows = rows.filter(hasAllParameters);
+		// Chosen parameters select the samples that carry any of them.
+		if (extraColumnSlots.length > 0) rows = rows.filter(hasAnyParameter);
 		return rows;
 	});
 
@@ -173,9 +173,13 @@
 		return `All ${allSamples.length} samples are hidden by ${by}.`;
 	});
 
-	/** True when the sample carries a usable value for every chosen parameter. */
-	function hasAllParameters(sample: Record<string, unknown>): boolean {
-		return extraColumnSlots.every((slot) => {
+	/** True when the sample carries a usable value for at least one of the
+	 *  chosen parameters. Parameters widen the view rather than narrowing it:
+	 *  picking two asks for the samples described by either, since few samples
+	 *  carry every optional slot and requiring all of them mostly returns
+	 *  nothing. */
+	function hasAnyParameter(sample: Record<string, unknown>): boolean {
+		return extraColumnSlots.some((slot) => {
 			const v = sample[slot];
 			return v != null && String(v).trim() !== '';
 		});
@@ -219,6 +223,13 @@
 					colorValue: colorByKey ? (isNull ? '—' : String(v)) : undefined
 				};
 			})
+	);
+
+	/** Whether any sample in the lab has coordinates at all — the map is worth
+	 *  drawing for a filter that currently matches nothing, but not for a lab
+	 *  that has never recorded a position. */
+	const hasMappableSamples = $derived(
+		allSamples.some((s: any) => s.latitude != null && s.longitude != null)
 	);
 
 	/** Shift-drag a rectangle on the map replaces the existing selection with
@@ -269,7 +280,10 @@
 <div class="space-y-4">
 	<h1 class="text-2xl font-bold text-white">{data.lab?.name ? data.lab.name + " " : ""}Samples</h1>
 
-	{#if markers.length > 0}
+	<!-- Shown whenever the lab has anything mappable, not merely when the
+	     current filter does: a map that vanishes on an empty result takes the
+	     page's layout with it and hides where the samples were. -->
+	{#if hasMappableSamples}
 		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={replaceFromBox} />
 	{/if}
 
@@ -326,7 +340,7 @@
 		{#if extraColumnSlots.length > 0}
 			<span class="text-slate-500">
 				showing {samples.length} of {allSamples.length} samples with
-				{extraColumnSlots.length === 1 ? 'this parameter' : 'all these parameters'}
+				{extraColumnSlots.length === 1 ? 'this parameter' : 'any of these parameters'}
 			</span>
 		{/if}
 

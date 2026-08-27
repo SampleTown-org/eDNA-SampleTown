@@ -40,6 +40,13 @@
 		return rows;
 	});
 
+	/** Whether any site in the lab has coordinates at all — the map is worth
+	 *  drawing for a filter that currently matches nothing, but not for a lab
+	 *  that has never recorded a position. */
+	const hasMappableSites = $derived(
+		allSites.some((s: any) => s.latitude != null && s.longitude != null)
+	);
+
 	/** The cart filter survives a reload, so a table it has emptied must not
 	 *  claim the lab has no sites. */
 	const emptyMessage = $derived.by(() => {
@@ -207,7 +214,10 @@
 		</div>
 	{/if}
 
-	{#if markers.length > 0}
+	<!-- Shown whenever the lab has anything mappable, not merely when the
+	     current filter does: a map that vanishes on an empty result takes the
+	     page's layout with it and hides where the sites were. -->
+	{#if hasMappableSites}
 		<MapPicker latitude={null} longitude={null} {markers} readonly height="400px" onboxselect={replaceFromBox} />
 	{/if}
 

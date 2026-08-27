@@ -141,11 +141,12 @@
 			}
 		}
 
-		// Multi-marker mode (dashboard / sites list)
-		if (markers.length > 0) {
-			renderMarkers();
-			if (onboxselect) setupBoxSelect();
-		}
+		// Multi-marker mode (dashboard / sites list). Box-select is wired up
+		// whenever the parent offers it, not only when pins happen to be
+		// present at mount — a list whose filter matches nothing still draws
+		// its map, and gains pins again as soon as the filter is relaxed.
+		if (markers.length > 0) renderMarkers();
+		if (onboxselect) setupBoxSelect();
 
 		// Re-fetch any active Native Land overlay when the operator pans/zooms
 		// to a new area. Debounced so a single drag doesn't trigger dozens of
@@ -284,8 +285,13 @@
 		layer.addTo(map);
 		markerLayer = layer;
 
+		// Frame whatever is on the map. A single pin has no bounds to fit, so
+		// it is centred instead — otherwise a map that mounted empty would keep
+		// its default view and leave that one pin off-screen.
 		if (markers.length > 1) {
 			map.fitBounds(layer.getBounds(), { padding: [40, 40] });
+		} else {
+			map.setView([markers[0].lat, markers[0].lng], Math.max(map.getZoom(), 10));
 		}
 	}
 
