@@ -1193,6 +1193,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
 	return json(
 		{
+			// Rows in the sheet, which is not the same as samples created: an
+			// archive project gives one row per sequencing run, and several runs
+			// commonly describe one sample.
+			rows: samples.length,
 			imported: inserted.length,
 			site_matches: matchedCount,
 			new_sites: newSiteCount,

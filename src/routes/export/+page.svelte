@@ -4,6 +4,7 @@
 	import { CHECKLIST_OPTIONS, EXTENSION_OPTIONS } from '$lib/mixs/checklists';
 	import { MIXS_ACTIVE_VERSION } from '$lib/mixs/schema-index';
 	import { sortAndLabelTsv } from '$lib/mixs/tsv';
+	import { INSDC_FETCH_TIMEOUT_MS } from '$lib/insdc-limits';
 
 	let { data }: { data: PageData } = $props();
 
@@ -153,7 +154,7 @@
 		return targetTable.get(target) ?? 'sample (unknown — will spill)';
 	}
 	let importing = $state(false);
-	let importResult: { imported: number; errors: string[]; site_matches?: number; new_sites?: number; new_projects?: number; extracts_created?: number; pcrs_created?: number; libraries_created?: number; runs_created?: number; run_libraries_created?: number } | null = $state(null);
+	let importResult: { rows?: number; imported: number; errors: string[]; site_matches?: number; new_sites?: number; new_projects?: number; extracts_created?: number; pcrs_created?: number; libraries_created?: number; runs_created?: number; run_libraries_created?: number } | null = $state(null);
 
 	// Column mapper state — populated from the dry-run response and editable by the user.
 	let columnMap = $state<Record<string, string>>({});
@@ -204,11 +205,53 @@
 		}
 	}
 
+	/** "1 new project", not "1 new projects" — the summary line reads as prose. */
+	function plural(n: number, one: string, many = `${one}s`): string {
+		return `${n} ${n === 1 ? one : many}`;
+	}
+
+	/**
+	 * Time left before the fetch gives up, counted down while it runs.
+	 *
+	 * The number is the server's own deadline, not a guess at how long the
+	 * archives will take: a fetch of one BioSample returns in a second and
+	 * leaves most of it on the clock. What it answers is "how long could this
+	 * still go on for", which is the question someone watching a spinner has.
+	 */
+	let fetchRemainingMs = $state(0);
+	let countdownTimer: ReturnType<typeof setInterval> | undefined;
+
+	const fetchCountdown = $derived.by(() => {
+		const total = Math.ceil(fetchRemainingMs / 1000);
+		return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+	});
+
+	function startCountdown() {
+		const endsAt = Date.now() + INSDC_FETCH_TIMEOUT_MS;
+		fetchRemainingMs = INSDC_FETCH_TIMEOUT_MS;
+		clearInterval(countdownTimer);
+		countdownTimer = setInterval(() => {
+			fetchRemainingMs = Math.max(0, endsAt - Date.now());
+			if (fetchRemainingMs === 0) clearInterval(countdownTimer);
+		}, 1000);
+	}
+
+	function stopCountdown() {
+		clearInterval(countdownTimer);
+		countdownTimer = undefined;
+		fetchRemainingMs = 0;
+	}
+
+	// A fetch left running when the operator navigates away would keep its
+	// interval alive.
+	$effect(() => () => clearInterval(countdownTimer));
+
 	/** Pull metadata for the pasted accessions and hand the resulting TSV to the
 	 *  same preview path an uploaded file takes. */
 	async function fetchAccessions() {
 		if (!accessions.trim()) return;
 		fetching = true;
+		startCountdown();
 		fetchError = '';
 		fetchResult = null;
 		importPreview = null;
@@ -216,11 +259,26 @@
 		importFile = null;
 		importTsv = '';
 
-		const res = await fetch('/api/import/insdc', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ accessions })
-		});
+		// The server stops at the same deadline and answers with whatever it
+		// retrieved; this is the backstop for a reply that never arrives at all.
+		// The grace period lets that fuller answer win the race.
+		let res: Response;
+		try {
+			res = await fetch('/api/import/insdc', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ accessions }),
+				signal: AbortSignal.timeout(INSDC_FETCH_TIMEOUT_MS + 15_000)
+			});
+		} catch (err) {
+			fetchError =
+				err instanceof DOMException && err.name === 'TimeoutError'
+					? `The archives did not answer within ${Math.round(INSDC_FETCH_TIMEOUT_MS / 60_000)} minutes. Try fewer accessions at once.`
+					: `Lookup failed: ${err instanceof Error ? err.message : String(err)}`;
+			fetching = false;
+			stopCountdown();
+			return;
+		}
 		const body = await res.json().catch(() => null);
 
 		if (!res.ok) {
@@ -235,6 +293,7 @@
 			await previewImport();
 		}
 		fetching = false;
+		stopCountdown();
 	}
 
 	/** True once there are rows to validate, whichever source produced them. */
@@ -444,6 +503,15 @@
 					class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
 					{fetching ? 'Fetching...' : 'Fetch metadata'}
 				</button>
+				{#if fetching}
+					<span class="text-xs text-slate-400 tabular-nums" aria-live="polite">
+						{#if fetchRemainingMs > 0}
+							gives up in {fetchCountdown}
+						{:else}
+							finishing up…
+						{/if}
+					</span>
+				{/if}
 				<p class="text-[11px] text-slate-500">
 					BioProject → project · BioSample → sample · Experiment → extract, PCR, library · Run → sequencing run.
 					Separate accessions with spaces, commas, or newlines.
@@ -618,15 +686,19 @@
 			{#if importResult}
 				<div class="flex-1 min-w-64 px-3 py-2 rounded-lg text-sm {importResult.imported > 0 ? 'bg-green-900/20 border border-green-800 text-green-300' : 'bg-red-900/20 border border-red-800 text-red-300'}">
 					{#if importResult.imported > 0}
-						<span class="font-medium">{importResult.imported} imported</span>
-						{#if importResult.new_projects}· {importResult.new_projects} new projects{/if}
+						<!-- Rows first: that is what the operator handed over. Samples
+						     are counted separately because an archive sheet carries one
+						     row per run, and several runs often describe one sample. -->
+						<span class="font-medium">{importResult.rows ?? importResult.imported} rows imported</span>
+						· {plural(importResult.imported, 'sample')}
+						{#if importResult.new_projects}· {plural(importResult.new_projects, 'new project')}{/if}
 						{#if importResult.site_matches}· {importResult.site_matches} matched{/if}
-						{#if importResult.new_sites}· {importResult.new_sites} new sites{/if}
-						{#if importResult.extracts_created}· {importResult.extracts_created} extracts{/if}
+						{#if importResult.new_sites}· {plural(importResult.new_sites, 'new site')}{/if}
+						{#if importResult.extracts_created}· {plural(importResult.extracts_created, 'extract')}{/if}
 						{#if importResult.pcrs_created}· {importResult.pcrs_created} PCRs{/if}
-						{#if importResult.libraries_created}· {importResult.libraries_created} libraries{/if}
-						{#if importResult.runs_created}· {importResult.runs_created} runs{/if}
-						{#if importResult.errors.length > 0}· <span class="text-yellow-300">{importResult.errors.length} warnings</span>{/if}
+						{#if importResult.libraries_created}· {plural(importResult.libraries_created, 'library', 'libraries')}{/if}
+						{#if importResult.runs_created}· {plural(importResult.runs_created, 'run')}{/if}
+						{#if importResult.errors.length > 0}· <span class="text-yellow-300">{plural(importResult.errors.length, 'warning')}</span>{/if}
 						<a href="/samples" class="ml-2 text-ocean-400 hover:text-ocean-300">View samples →</a>
 					{:else}
 						{importResult.errors[0] || 'Import failed'}

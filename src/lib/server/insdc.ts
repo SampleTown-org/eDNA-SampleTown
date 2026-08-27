@@ -22,6 +22,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { buildHeaderToFieldMap } from '$lib/server/mixs-io';
 import { SRA_PLATFORM_TO_SEQ_METH } from '$lib/mixs/sra-mapping';
+import { INSDC_FETCH_TIMEOUT_MS } from '$lib/insdc-limits';
 
 const ENA_PORTAL = 'https://www.ebi.ac.uk/ena/portal/api/filereport';
 
@@ -33,7 +34,7 @@ const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
 const FETCH_TIMEOUT_MS = 60_000;
 
 /** Accessions accepted in one request. Each one is a separate archive query. */
-export const MAX_ACCESSIONS = 25;
+export { MAX_ACCESSIONS } from '$lib/insdc-limits';
 
 /** Rows returned across all accessions in one request. Matches the row cap the
  *  MIxS importer enforces, so a fetch can't build a TSV the importer rejects. */
@@ -102,9 +103,20 @@ function resultsFor(kind: AccessionKind): EnaResult[] {
 	}
 }
 
-async function getWithTimeout(url: string): Promise<Response> {
+/**
+ * One outbound request, bounded twice: by its own timeout, and by the deadline
+ * of the fetch it belongs to. Without the second bound a single hung archive
+ * request would carry the whole fetch past the deadline the operator is
+ * watching count down.
+ */
+async function getWithTimeout(url: string, deadline?: number): Promise<Response> {
+	const remaining = deadline != null ? deadline - Date.now() : Infinity;
+	if (remaining <= 0) throw new Error('the fetch ran out of time');
 	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+	const timer = setTimeout(
+		() => controller.abort(),
+		Math.min(FETCH_TIMEOUT_MS, remaining)
+	);
 	try {
 		return await fetch(url, {
 			signal: controller.signal,
@@ -120,7 +132,11 @@ async function getWithTimeout(url: string): Promise<Response> {
  * carry checklist fields we cannot enumerate ahead of time, and empty columns
  * are dropped per row on parse.
  */
-async function enaQuery(accession: string, result: EnaResult): Promise<Record<string, string>[]> {
+async function enaQuery(
+	accession: string,
+	result: EnaResult,
+	deadline?: number
+): Promise<Record<string, string>[]> {
 	const params = new URLSearchParams({
 		accession,
 		result,
@@ -128,7 +144,7 @@ async function enaQuery(accession: string, result: EnaResult): Promise<Record<st
 		format: 'tsv',
 		limit: '0'
 	});
-	const res = await getWithTimeout(`${ENA_PORTAL}?${params}`);
+	const res = await getWithTimeout(`${ENA_PORTAL}?${params}`, deadline);
 	if (res.status === 400) return []; // accession not valid for this result set
 	if (!res.ok) throw new Error(`ENA returned HTTP ${res.status} for ${accession}`);
 
@@ -166,7 +182,11 @@ const COUNT_FIELD: Record<EnaResult, string> = {
 };
 
 /** Rows ENA says it holds, or null when the question cannot be answered. */
-async function enaRowCount(accession: string, result: EnaResult): Promise<number | null> {
+async function enaRowCount(
+	accession: string,
+	result: EnaResult,
+	deadline?: number
+): Promise<number | null> {
 	const params = new URLSearchParams({
 		accession,
 		result,
@@ -175,7 +195,7 @@ async function enaRowCount(accession: string, result: EnaResult): Promise<number
 		limit: '0'
 	});
 	try {
-		const res = await getWithTimeout(`${ENA_PORTAL}?${params}`);
+		const res = await getWithTimeout(`${ENA_PORTAL}?${params}`, deadline);
 		if (!res.ok) return null;
 		const text = (await res.text()).trim();
 		if (!text) return 0;
@@ -201,13 +221,14 @@ const FETCH_ATTEMPTS = 3;
  */
 async function enaQueryVerified(
 	accession: string,
-	result: EnaResult
+	result: EnaResult,
+	deadline?: number
 ): Promise<{ rows: Record<string, string>[]; expected: number | null; complete: boolean }> {
-	const expected = await enaRowCount(accession, result);
+	const expected = await enaRowCount(accession, result, deadline);
 	let rows: Record<string, string>[] = [];
 
 	for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
-		rows = await enaQuery(accession, result);
+		rows = await enaQuery(accession, result, deadline);
 		if (expected == null || rows.length >= expected) {
 			return { rows, expected, complete: true };
 		}
@@ -266,7 +287,8 @@ async function fetchNcbiBioSamples(
 		if (i > 0) await sleep(ncbiDelayMs());
 
 		const res = await getWithTimeout(
-			`${EUTILS}/efetch.fcgi?db=biosample&id=${batch.join(',')}&rettype=full&retmode=xml${ncbiAuth()}`
+			`${EUTILS}/efetch.fcgi?db=biosample&id=${batch.join(',')}&rettype=full&retmode=xml${ncbiAuth()}`,
+			deadline
 		);
 		if (!res.ok) throw new Error(`NCBI efetch returned HTTP ${res.status}`);
 
@@ -781,11 +803,14 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 		// in for a flow cell. It is honest about what is known: reads that were
 		// submitted together off one instrument, without claiming to know the
 		// cell. Runs on differing instruments never merge, since a single flow
-		// cell cannot span two.
+		// cell cannot span two, and neither do differing library types: an
+		// amplicon panel and a shotgun library are separate pieces of work even
+		// when one submission carries both.
 		const instrument = pick(raw, 'instrument_model');
 		const batch = submission || pick(raw, 'study_accession', 'secondary_study_accession');
 		if (batch) {
-			set('run_name', instrument ? `${batch}_${slug(instrument)}` : batch);
+			const key = [batch, slug(instrument), slug(strategy)].filter(Boolean).join('_');
+			set('run_name', key);
 			// The run stands for the submission, so that is the accession it
 			// carries. The per-library run accessions (SRR…) sit on the links.
 			set('run_submission_accession', batch);
@@ -918,13 +943,31 @@ function collectHeaders(rows: Record<string, string>[]): string[] {
  * Accessions are queried one at a time: they resolve to different result sets,
  * and one bad accession should cost a warning rather than the whole request.
  */
-export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult> {
+export async function fetchInsdc(
+	accessions: string[],
+	/** Absolute time this fetch must be finished by. The caller's clock and the
+	 *  operator's countdown are the same deadline, so what the page promises is
+	 *  what the fetch honours. */
+	deadline: number = Date.now() + INSDC_FETCH_TIMEOUT_MS
+): Promise<InsdcFetchResult> {
 	const warnings: string[] = [];
 	const resolved: InsdcFetchResult['resolved'] = [];
 	const rows: Record<string, string>[] = [];
 	let truncated = false;
 
 	for (const accession of accessions) {
+		// Out of time: return the accessions already retrieved rather than
+		// nothing at all, and name the ones that were not reached.
+		if (Date.now() >= deadline) {
+			const remaining = accessions.slice(accessions.indexOf(accession));
+			warnings.push(
+				`Ran out of time after ${Math.round(INSDC_FETCH_TIMEOUT_MS / 1000)}s with ${remaining.length} accession(s) still to go (${remaining.join(', ')}). The rows already retrieved are below — fetch the rest separately.`
+			);
+			for (const acc of remaining) {
+				resolved.push({ accession: acc, kind: classifyAccession(acc), source: 'none', rows: 0 });
+			}
+			break;
+		}
 		const kind = classifyAccession(accession);
 		if (kind === 'unknown') {
 			warnings.push(`${accession}: not a recognized INSDC accession — skipped`);
@@ -940,7 +983,7 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		let incomplete: { got: number; expected: number } | null = null;
 		try {
 			for (const result of resultsFor(kind)) {
-				const attempt = await enaQueryVerified(accession, result);
+				const attempt = await enaQueryVerified(accession, result, deadline);
 				raw = attempt.rows;
 				if (raw.length > 0) {
 					source = `ENA ${result}`;
@@ -961,7 +1004,7 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 		// findable at NCBI and nowhere else.
 		if (raw.length === 0 && (kind === 'sample' || kind === 'bioproject' || kind === 'study')) {
 			try {
-				const direct = await fetchNcbiBioSamples([accession]);
+				const direct = await fetchNcbiBioSamples([accession], deadline);
 				raw = Array.from(direct.byAccession.values());
 				if (raw.length > 0) {
 					source = 'NCBI biosample';
@@ -995,7 +1038,9 @@ export async function fetchInsdc(accessions: string[]): Promise<InsdcFetchResult
 				try {
 					const { byAccession, unreached } = await fetchNcbiBioSamples(
 						wanted,
-						Date.now() + ENRICH_BUDGET_MS
+						// Enrichment gets its own budget, but never past the
+						// deadline the whole fetch is working to.
+						Math.min(Date.now() + ENRICH_BUDGET_MS, deadline)
 					);
 
 					for (const row of withBioSample) {
