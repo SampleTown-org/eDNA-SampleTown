@@ -789,10 +789,14 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 			if (submission) set('pcr_plate_name', `${submission}_pcr`);
 		}
 
-		// Experiment → library, named by its accession. ENA's library_name is the
-		// submitter's free text and is frequently "unspecified" or a plate well,
-		// neither of which identifies the library outside its own submission.
-		out.library_name = experiment || clean(pick(raw, 'library_name')) || `${out.samp_name}_lib`;
+		// Experiment → library, named by its accession like the extract and the
+		// PCR are by theirs. ENA's library_name is the submitter's free text and
+		// is frequently "unspecified" or a plate well, neither of which
+		// identifies the library outside its own submission — but where it is a
+		// real name it is the submitter's own and is left as they wrote it.
+		out.library_name = experiment
+			? `${experiment}_lib`
+			: clean(pick(raw, 'library_name')) || `${out.samp_name}_lib`;
 		if (out.library_name.toLowerCase() === 'unspecified') out.library_name = `${out.samp_name}_lib`;
 		if (submission) set('library_plate_name', `${submission}_lib`);
 		set('library_platform', pick(raw, 'instrument_platform'));
