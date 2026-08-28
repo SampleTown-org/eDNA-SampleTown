@@ -1184,16 +1184,16 @@ export async function fetchInsdc(
 		);
 	}
 
-	// A run the archive holds no files for imports fine — it keeps its accession,
-	// so a later fetch fills the reads in once they are released — but silence
-	// about it would read as "these reads are unavailable to SampleTown".
+	// A run the archive holds no files for imports fine, and keeps its accession.
+	// Reporting the gap distinguishes it from a fetch that dropped the files:
+	// the reads are absent at the source, not lost on the way in.
 	const runRows = rows.filter((r) => r.run_accession_id);
 	const fileless = runRows.filter(
 		(r) => !r.run_fastq_r1 && !r.run_fastq_single
 	).length;
 	if (fileless > 0) {
 		warnings.push(
-			`${fileless} of ${runRows.length} run(s) have no read files published at the archive yet. They import with their accessions, so re-fetching later will pick the files up.`
+			`${fileless} of ${runRows.length} run(s) have no read files published at this time.`
 		);
 	}
 
