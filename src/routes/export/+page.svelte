@@ -211,7 +211,7 @@
 	}
 
 	/**
-	 * Time left before the fetch gives up, counted down while it runs.
+	 * Time left before the fetch times out, counted down while it runs.
 	 *
 	 * The number is the server's own deadline, not a guess at how long the
 	 * archives will take: a fetch of one BioSample returns in a second and
@@ -531,7 +531,7 @@
 				{#if fetching}
 					<span class="text-xs text-slate-400 tabular-nums" aria-live="polite">
 						{#if fetchRemainingMs > 0}
-							gives up in {fetchCountdown}
+							timeout in {fetchCountdown}
 						{:else}
 							finishing up…
 						{/if}
