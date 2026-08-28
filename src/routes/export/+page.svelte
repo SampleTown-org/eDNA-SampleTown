@@ -868,6 +868,14 @@
 							(checklist+extension compliance per mixs.yaml v6.3.0)
 						</span>
 					</summary>
+					<!-- Validation reports how far a sheet is from the standard. It
+					     does not gate the import: an archive record is routinely
+					     missing slots its checklist calls for, and refusing it would
+					     leave the operator with no record at all. -->
+					<p class="mt-2 text-xs text-rose-300/80">
+						These rows still import. MIxS compliance is reported so gaps can be
+						filled in later, and never blocks an import.
+					</p>
 					<div class="mt-2 space-y-2 max-h-80 overflow-y-auto">
 						{#each rowsWithErrors as row}
 							<div class="border-l-2 border-rose-700 pl-2">
@@ -894,6 +902,9 @@
 				{/if}
 			{/if}
 
+			<!-- Panels follow the order the records are made in: a project holds
+			     sites, a site holds samples, and a sample carries the chain from
+			     extract through PCR and library to the run it was sequenced on. -->
 			{#if importPreview.new_projects && importPreview.new_projects.length > 0}
 				<div class="p-3 rounded-lg bg-violet-900/20 border border-violet-800 text-violet-200 text-sm space-y-2">
 					<p class="font-medium text-violet-200">
@@ -906,81 +917,6 @@
 						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
 							{#each importPreview.new_projects as p}
 								<div>{p.project_name}</div>
-							{/each}
-						</div>
-					</details>
-				</div>
-			{/if}
-
-			{#if importPreview.extracts && importPreview.extracts.length > 0}
-				<div class="p-3 rounded-lg bg-amber-900/20 border border-amber-800 text-amber-200 text-sm space-y-2">
-					<p class="font-medium text-amber-200">
-						{importPreview.extracts.length} DNA extract{importPreview.extracts.length === 1 ? '' : 's'} will be created alongside samples
-					</p>
-					<details>
-						<summary class="cursor-pointer text-xs text-amber-300 hover:text-amber-200">
-							Show extracts
-						</summary>
-						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
-							{#each importPreview.extracts as ex}
-								<div>
-									{ex.extract_name}
-									<span class="text-slate-500">·</span>
-									{ex.samp_name}
-									{#if ex.extraction_date}<span class="text-slate-500"> · {ex.extraction_date}</span>{/if}
-									{#if ex.concentration_ng_ul != null}<span class="text-slate-500"> · {ex.concentration_ng_ul} ng/µL</span>{/if}
-									{#if ex.storage_box}<span class="text-slate-500"> · box {ex.storage_box}</span>{/if}
-									{#if ex.storage_location}<span class="text-slate-500"> / {ex.storage_location}</span>{/if}
-								</div>
-							{/each}
-						</div>
-					</details>
-				</div>
-			{/if}
-
-			{#if importPreview.libraries && importPreview.libraries.length > 0}
-				<div class="p-3 rounded-lg bg-cyan-900/20 border border-cyan-800 text-cyan-200 text-sm space-y-2">
-					<p class="font-medium text-cyan-200">
-						{importPreview.libraries.length} sequencing librar{importPreview.libraries.length === 1 ? 'y' : 'ies'} will be created
-					</p>
-					<details>
-						<summary class="cursor-pointer text-xs text-cyan-300 hover:text-cyan-200">
-							Show libraries
-						</summary>
-						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
-							{#each importPreview.libraries as lib}
-								<div>
-									{lib.library_name}
-									<span class="text-slate-500">·</span>
-									{lib.samp_name}
-									{#if lib.library_barcode}<span class="text-slate-500"> · {lib.library_barcode}</span>{/if}
-									{#if lib.library_platform}<span class="text-slate-500"> · {lib.library_platform}</span>{/if}
-									{#if lib.library_concentration_ng_ul != null}<span class="text-slate-500"> · {lib.library_concentration_ng_ul} ng/µL</span>{/if}
-									{#if lib.run_name}<span class="text-slate-500"> → run {lib.run_name}</span>{/if}
-								</div>
-							{/each}
-						</div>
-					</details>
-				</div>
-			{/if}
-
-			{#if importPreview.new_runs && importPreview.new_runs.length > 0}
-				<div class="p-3 rounded-lg bg-sky-900/20 border border-sky-800 text-sky-200 text-sm space-y-2">
-					<p class="font-medium text-sky-200">
-						{importPreview.new_runs.length} sequencing run{importPreview.new_runs.length === 1 ? '' : 's'} will be created
-					</p>
-					<details>
-						<summary class="cursor-pointer text-xs text-sky-300 hover:text-sky-200">
-							Show runs
-						</summary>
-						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
-							{#each importPreview.new_runs as r}
-								<div>
-									{r.run_name}
-									{#if r.run_date}<span class="text-slate-500"> · {r.run_date}</span>{/if}
-									{#if r.run_platform}<span class="text-slate-500"> · {r.run_platform}</span>{/if}
-									{#if r.run_flow_cell_id}<span class="text-slate-500"> · {r.run_flow_cell_id}</span>{/if}
-								</div>
 							{/each}
 						</div>
 					</details>
@@ -1043,7 +979,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each importPreview.samples.slice(0, 30) as s, i}
+							{#each importPreview.samples as s, i}
 							<tr class="border-b border-slate-800/30 {i % 2 ? 'bg-slate-900/30' : ''}">
 								<td class="px-2 py-1 text-white">{s.samp_name}</td>
 								<td class="px-2 py-1 text-slate-300">{s.collection_date || '—'}</td>
@@ -1059,6 +995,108 @@
 				</div>
 			</div>
 		</div>
+
+			{#if importPreview.extracts && importPreview.extracts.length > 0}
+				<div class="p-3 rounded-lg bg-amber-900/20 border border-amber-800 text-amber-200 text-sm space-y-2">
+					<p class="font-medium text-amber-200">
+						{importPreview.extracts.length} DNA extract{importPreview.extracts.length === 1 ? '' : 's'} will be created
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-amber-300 hover:text-amber-200">
+							Show extracts
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each importPreview.extracts as ex}
+								<div>
+									{ex.extract_name}
+									<span class="text-slate-500">·</span>
+									{ex.samp_name}
+									{#if ex.extraction_date}<span class="text-slate-500"> · {ex.extraction_date}</span>{/if}
+									{#if ex.concentration_ng_ul != null}<span class="text-slate-500"> · {ex.concentration_ng_ul} ng/µL</span>{/if}
+									{#if ex.storage_box}<span class="text-slate-500"> · box {ex.storage_box}</span>{/if}
+									{#if ex.storage_location}<span class="text-slate-500"> / {ex.storage_location}</span>{/if}
+								</div>
+							{/each}
+						</div>
+					</details>
+				</div>
+			{/if}
+
+			{#if importPreview.pcrs && importPreview.pcrs.length > 0}
+				<div class="p-3 rounded-lg bg-amber-900/20 border border-amber-800 text-amber-200 text-sm space-y-2">
+					<p class="font-medium text-amber-200">
+						{importPreview.pcrs.length} PCR{importPreview.pcrs.length === 1 ? '' : 's'} will be created
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-amber-300 hover:text-amber-200">
+							Show PCRs
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each importPreview.pcrs as pc}
+								<div>
+									{pc.pcr_name}
+									<span class="text-slate-500">·</span>
+									{pc.samp_name}
+									{#if pc.target_gene}<span class="text-slate-500"> · {pc.target_gene}</span>{/if}
+									{#if pc.target_subfragment}<span class="text-slate-500"> {pc.target_subfragment}</span>{/if}
+									{#if pc.forward_primer_name}<span class="text-slate-500"> · {pc.forward_primer_name}</span>{/if}
+									{#if pc.reverse_primer_name}<span class="text-slate-500"> / {pc.reverse_primer_name}</span>{/if}
+									{#if pc.pcr_date}<span class="text-slate-500"> · {pc.pcr_date}</span>{/if}
+								</div>
+							{/each}
+						</div>
+					</details>
+				</div>
+			{/if}
+
+			{#if importPreview.libraries && importPreview.libraries.length > 0}
+				<div class="p-3 rounded-lg bg-cyan-900/20 border border-cyan-800 text-cyan-200 text-sm space-y-2">
+					<p class="font-medium text-cyan-200">
+						{importPreview.libraries.length} sequencing librar{importPreview.libraries.length === 1 ? 'y' : 'ies'} will be created
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-cyan-300 hover:text-cyan-200">
+							Show libraries
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each importPreview.libraries as lib}
+								<div>
+									{lib.library_name}
+									<span class="text-slate-500">·</span>
+									{lib.samp_name}
+									{#if lib.library_barcode}<span class="text-slate-500"> · {lib.library_barcode}</span>{/if}
+									{#if lib.library_platform}<span class="text-slate-500"> · {lib.library_platform}</span>{/if}
+									{#if lib.library_concentration_ng_ul != null}<span class="text-slate-500"> · {lib.library_concentration_ng_ul} ng/µL</span>{/if}
+									{#if lib.run_name}<span class="text-slate-500"> → run {lib.run_name}</span>{/if}
+								</div>
+							{/each}
+						</div>
+					</details>
+				</div>
+			{/if}
+
+			{#if importPreview.new_runs && importPreview.new_runs.length > 0}
+				<div class="p-3 rounded-lg bg-sky-900/20 border border-sky-800 text-sky-200 text-sm space-y-2">
+					<p class="font-medium text-sky-200">
+						{importPreview.new_runs.length} sequencing run{importPreview.new_runs.length === 1 ? '' : 's'} will be created
+					</p>
+					<details>
+						<summary class="cursor-pointer text-xs text-sky-300 hover:text-sky-200">
+							Show runs
+						</summary>
+						<div class="mt-2 space-y-0.5 text-xs text-slate-300 font-mono max-h-40 overflow-y-auto">
+							{#each importPreview.new_runs as r}
+								<div>
+									{r.run_name}
+									{#if r.run_date}<span class="text-slate-500"> · {r.run_date}</span>{/if}
+									{#if r.run_platform}<span class="text-slate-500"> · {r.run_platform}</span>{/if}
+									{#if r.run_flow_cell_id}<span class="text-slate-500"> · {r.run_flow_cell_id}</span>{/if}
+								</div>
+							{/each}
+						</div>
+					</details>
+				</div>
+			{/if}
 		{/if}
 
 		{#if importResult && importResult.errors.length > 0}

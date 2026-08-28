@@ -674,6 +674,11 @@ function slug(value: string): string {
  */
 function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<string, string> {
 	const out: Record<string, string> = {};
+	// Archive columns read explicitly below under a different name. The
+	// pass-through skips them rather than tagging a second copy, and it is
+	// per-row: a field consumed on a run record is still worth keeping as a tag
+	// on a record that has no run to attach it to.
+	const consumed = new Set<string>();
 	const set = (k: string, v: string) => {
 		const c = clean(v);
 		if (c) out[k] = c;
@@ -741,7 +746,16 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 		// Experiment → extract. SRA has no extraction record of its own, so one
 		// extract per sample stands in for the material the library was built
 		// from; the importer reuses it across a sample's several runs.
+		//
+		// SRA's own sample accession (SRS…) names the material that was
+		// submitted, as distinct from the BioSample (SAMN…) that describes what
+		// was collected — so it is the extract's accession, not the sample's.
 		set('extract_name', `${out.samp_name}_ext`);
+		const submittedMaterial = pick(raw, 'secondary_sample_accession');
+		if (submittedMaterial) {
+			set('extract_accession', submittedMaterial);
+			consumed.add('secondary_sample_accession');
+		}
 
 		// Experiment → PCR, but only for amplicon libraries. Recording a PCR for
 		// a shotgun metagenome would assert an amplification that did not happen.
@@ -851,7 +865,13 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 	const map = headerMap();
 	const claimed = new Set(MAPPED_TARGETS);
 	for (const key of Object.keys(raw).sort()) {
-		if (key in FIELD_MAP || SKIP_FIELDS.has(key) || NAME_CANDIDATES.has(key) || key in out)
+		if (
+			key in FIELD_MAP ||
+			SKIP_FIELDS.has(key) ||
+			NAME_CANDIDATES.has(key) ||
+			consumed.has(key) ||
+			key in out
+		)
 			continue;
 		const value = raw[key];
 		if (!value) continue;
@@ -909,7 +929,7 @@ const HEADER_ORDER = [
 	'env_medium', 'depth', 'elev', 'temp', 'salinity', 'ph', 'specific_host',
 	'host_taxid', 'samp_taxon_id', 'samp_collect_device', 'source_mat_id',
 	'collector_name', 'notes',
-	'extract_name', 'nucl_acid_ext',
+	'extract_name', 'extract_accession', 'nucl_acid_ext',
 	'pcr_name', 'pcr_accession', 'pcr_plate_name', 'pcr_cond', 'target_gene', 'pcr_notes',
 	'library_plate_name',
 	'library_name', 'library_accession', 'library_type', 'library_prep_date', 'library_prep_kit',
