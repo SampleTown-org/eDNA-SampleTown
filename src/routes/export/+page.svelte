@@ -689,16 +689,23 @@
 			label="Apply people to all imported samples"
 		/>
 
+		<!-- One definition, rendered at the top of the form and again under the
+		     preview: the panels are long enough that the button that acts on
+		     them scrolls out of sight while they are being read. -->
+		{#snippet importButton()}
+			{#if importPreview && importPreview.samples.length > 0}
+				<button onclick={runImport} disabled={importing || hasDuplicates} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
+					{importing ? 'Importing...' : `Import ${importPreview.count} Samples`}
+				</button>
+			{/if}
+		{/snippet}
+
 		{#if hasImportRows}
 		<div class="flex gap-3 items-start flex-wrap">
 			<button onclick={previewImport} disabled={importing} class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
 				{importing ? 'Parsing...' : 'Validate'}
 			</button>
-			{#if importPreview && importPreview.samples.length > 0}
-			<button onclick={runImport} disabled={importing || hasDuplicates} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
-				{importing ? 'Importing...' : `Import ${importPreview.count} Samples`}
-			</button>
-			{/if}
+			{@render importButton()}
 			{#if importTsv}
 			<button onclick={downloadTsv} disabled={importing}
 				title="Download these rows as a TSV, correct them in a spreadsheet, then re-import from Upload file"
@@ -1095,6 +1102,16 @@
 							{/each}
 						</div>
 					</details>
+				</div>
+			{/if}
+
+			<!-- The same action again, after everything it acts on. -->
+			{#if importPreview.samples.length > 0}
+				<div class="flex items-center gap-3 pt-1 border-t border-slate-800">
+					<div class="pt-3">{@render importButton()}</div>
+					{#if hasDuplicates}
+						<span class="pt-3 text-xs text-red-300">Fix the duplicate target fields above first.</span>
+					{/if}
 				</div>
 			{/if}
 		{/if}
