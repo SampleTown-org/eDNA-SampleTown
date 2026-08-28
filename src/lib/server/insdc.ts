@@ -750,12 +750,16 @@ function normalizeRow(raw: Record<string, string>, result: EnaResult): Record<st
 		// SRA's own sample accession (SRS…) names the material that was
 		// submitted, as distinct from the BioSample (SAMN…) that describes what
 		// was collected — so it is the extract's accession, not the sample's.
-		set('extract_name', `${out.samp_name}_ext`);
 		const submittedMaterial = pick(raw, 'secondary_sample_accession');
 		if (submittedMaterial) {
 			set('extract_accession', submittedMaterial);
 			consumed.add('secondary_sample_accession');
 		}
+		// Named by its own accession, as the PCR and the library are by theirs.
+		// The accession is stable across a sample's several runs, so the runs
+		// resolve to one extract rather than one apiece. Falls back to the
+		// sample name for a record the archive gives no sample accession.
+		set('extract_name', `${submittedMaterial || out.samp_name}_ext`);
 
 		// Experiment → PCR, but only for amplicon libraries. Recording a PCR for
 		// a shotgun metagenome would assert an amplification that did not happen.
