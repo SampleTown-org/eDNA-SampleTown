@@ -95,7 +95,15 @@ export function validateRow(
 
 	const errors = (validator.errors ?? []) as ErrorObject[];
 	return errors.map((e) => ({
-		slot: e.instancePath.replace(/^\//, '') || (e.params?.missingProperty as string) || '?',
+		// Which slot an error is about is reported three different ways: in the
+		// path for a bad value, and in params for one that is missing or one the
+		// class does not define — the last two sit at the object root, so the
+		// path is empty and only params names them.
+		slot:
+			e.instancePath.replace(/^\//, '') ||
+			(e.params?.missingProperty as string) ||
+			(e.params?.additionalProperty as string) ||
+			'?',
 		message: formatError(e),
 		keyword: e.keyword
 	}));
@@ -113,6 +121,8 @@ function formatError(e: ErrorObject): string {
 			return `expected ${e.params?.type}`;
 		case 'format':
 			return `invalid ${e.params?.format} format`;
+		case 'additionalProperties':
+			return 'not a slot this checklist defines — it imports, but is off-schema';
 		default:
 			return e.message ?? e.keyword;
 	}

@@ -10,6 +10,7 @@ import { assertLabOwnsRow } from '$lib/server/lab-scope';
 import { findNearbySites, haversineKm } from '$lib/server/proximity';
 import { setEntityPersonnel, normalizePeople } from '$lib/server/entity-personnel';
 import { validateRow } from '$lib/server/mixs-validator';
+import { getSlot } from '$lib/mixs/schema-index';
 import { insertSampleValues } from '$lib/server/sample-body';
 import { MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
 
@@ -456,6 +457,13 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 		// key, but it is also a MIxS slot the checklist requires.
 		'mixs_checklist', 'extension', 'notes', 'collector_name', 'filter_type'
 	]);
+	// Every other column SampleTown owns, derived rather than listed: a column
+	// added to the app should not turn into a validation error on every row.
+	// Local columns that are MIxS slots stay — target_gene is ours to collect
+	// and the standard's to define, and the class is entitled to an opinion.
+	for (const field of getImportableFields()) {
+		if (field.local && !getSlot(field.value)) SIDECAR_KEYS.add(field.value);
+	}
 	const mixsValidation = matched.map((m) => {
 		const checklist = (m.sample.mixs_checklist as string) || defaultChecklist;
 		const extension = (m.sample.extension as string) || defaultExtension;
