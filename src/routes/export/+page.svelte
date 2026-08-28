@@ -695,7 +695,7 @@
 		{#snippet importButton()}
 			{#if importPreview && importPreview.samples.length > 0}
 				<button onclick={runImport} disabled={importing || hasDuplicates} class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
-					{importing ? 'Importing...' : `Import ${importPreview.count} Samples`}
+					{importing ? 'Importing...' : `Import ${importPreview.count} row${importPreview.count === 1 ? '' : 's'}`}
 				</button>
 			{/if}
 		{/snippet}
@@ -747,7 +747,7 @@
 					</div>
 				{:else}
 					<div class="flex-1 min-w-64 px-3 py-2 rounded-lg text-sm bg-slate-800/50 border border-slate-700 text-slate-400">
-						Ready to import {importPreview.count} sample{importPreview.count === 1 ? '' : 's'}
+						Ready to import {importPreview.count} row{importPreview.count === 1 ? '' : 's'}
 					</div>
 				{/if}
 			{/if}
@@ -971,7 +971,10 @@
 			{/if}
 
 			<div>
-				<p class="text-sm text-slate-300 mb-2">{importPreview.count} samples parsed — mapped columns: {importPreview.headers.length}</p>
+				<!-- Rows, not samples: an archive sheet carries one row per run and
+				     several runs commonly describe one sample, so the two counts
+				     differ and the sheet is what was handed over. -->
+				<p class="text-sm text-slate-300 mb-2">{importPreview.count} row{importPreview.count === 1 ? '' : 's'} parsed — mapped columns: {importPreview.headers.length}</p>
 				<div class="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-slate-800">
 					<table class="text-xs">
 						<thead class="sticky top-0">
