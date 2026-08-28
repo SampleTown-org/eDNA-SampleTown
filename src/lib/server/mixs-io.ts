@@ -21,6 +21,8 @@ import {
 	type ColumnVocabulary
 } from '$lib/mixs/vocabulary';
 import { sanitizeMiscParamName, MISC_PARAM_PREFIX } from '$lib/mixs/sample-form';
+import { sheetFormat, type SheetFormat } from '$lib/sheet-formats';
+import { sheetColumns } from './sheet-columns';
 import * as XLSX from 'xlsx';
 import type { Permit } from '$lib/types';
 
@@ -125,7 +127,7 @@ export const SAMPLE_SLOT_COLUMNS = [
 ] as const;
 
 /** Site columns that are MIxS slots. */
-const SITE_SLOT_COLUMNS = [
+export const SITE_SLOT_COLUMNS = [
 	'lat_lon', 'geo_loc_name', 'env_broad_scale', 'env_local_scale'
 ] as const;
 
@@ -191,11 +193,119 @@ const SITE_SLOT_SET = new Set<string>(SITE_SLOT_COLUMNS);
  * checklist mixin's slots. When neither, we fall back to SampleTown's full
  * MIxS slot column set for generic dumps.
  */
+/**
+ * The lab work hanging off each sample: one entry per library, carrying the
+ * extract and PCR it came from and the run it was sequenced on.
+ *
+ * Assembled with one query rather than joined onto the sample query, because a
+ * sample-driven outer join over four optional tables produces rows for
+ * combinations that do not exist — an extract with two PCRs and a library on
+ * only one of them yields a phantom library-less row.
+ *
+ * Columns are prefixed by the table they came from: the same field name means
+ * different things on different tables, and `notes` and `accession` are on
+ * nearly all of them.
+ */
+/** Last path segment — what a submission sheet names, as against where the
+ *  file happens to sit. */
+function baseName(path: unknown): string {
+	if (!path) return '';
+	const s = String(path).replace(/\/+$/, '');
+	const cut = s.lastIndexOf('/');
+	return cut >= 0 ? s.slice(cut + 1) : s;
+}
+
+/** The SRA filetype for a library's reads, from what is actually recorded. */
+function fileType(chain: Record<string, unknown>): string {
+	const first = String(chain.rl_fastq_r1 ?? chain.rl_fastq_single ?? '');
+	if (!first) return '';
+	if (/\.bam$/i.test(first)) return 'bam';
+	if (/\.fast(q|a)(\.gz)?$/i.test(first) || /\.fq(\.gz)?$/i.test(first)) return 'fastq';
+	return 'fastq';
+}
+
+function loadSampleChain(
+	db: ReturnType<typeof getDb>,
+	labId: string,
+	projectId?: string
+): Map<string, Record<string, unknown>[]> {
+	const params: string[] = [labId];
+	let where = 'l.lab_id = ? AND l.is_deleted = 0 AND s.is_deleted = 0';
+	if (projectId) {
+		where += ' AND s.project_id = ?';
+		params.push(projectId);
+	}
+	const rows = db
+		.prepare(
+			`SELECT s.id AS __sample_id__,
+				e.extract_name AS ext_extract_name, e.extraction_date AS ext_extraction_date,
+				e.concentration_ng_ul AS ext_concentration_ng_ul, e.storage_box AS ext_storage_box,
+				e.storage_location AS ext_storage_location, e.notes AS ext_notes,
+				e.accession AS ext_accession, e.nucl_acid_ext AS ext_nucl_acid_ext,
+				pa.pcr_name AS pcr_pcr_name, pa.pcr_date AS pcr_pcr_date,
+				pa.target_subfragment AS pcr_target_subfragment, pa.pcr_cond AS pcr_pcr_cond,
+				pa.forward_primer_name AS pcr_forward_primer_name,
+				pa.forward_primer_seq AS pcr_forward_primer_seq,
+				pa.reverse_primer_name AS pcr_reverse_primer_name,
+				pa.reverse_primer_seq AS pcr_reverse_primer_seq,
+				pa.annealing_temp_c AS pcr_annealing_temp_c, pa.num_cycles AS pcr_num_cycles,
+				pa.notes AS pcr_notes, pa.accession AS pcr_accession,
+				pa.custom_fields AS __pcr_custom_fields__,
+				pp.plate_name AS pcr_plate_name,
+				l.library_name AS lib_library_name, l.accession AS lib_accession,
+				l.library_type AS lib_library_type, l.library_source AS lib_library_source,
+				l.library_selection AS lib_library_selection,
+				l.library_prep_kit AS lib_library_prep_kit,
+				l.library_prep_date AS lib_library_prep_date,
+				l.platform AS lib_platform, l.instrument_model AS lib_instrument_model,
+				l.barcode AS lib_barcode, l.fragment_size_bp AS lib_fragment_size_bp,
+				l.final_concentration_ng_ul AS lib_final_concentration_ng_ul,
+				l.notes AS lib_notes, lp.plate_name AS lib_plate_name,
+				rl.fastq_r1 AS rl_fastq_r1, rl.fastq_r1_md5 AS rl_fastq_r1_md5,
+				rl.fastq_r2 AS rl_fastq_r2, rl.fastq_r2_md5 AS rl_fastq_r2_md5,
+				rl.fastq_single AS rl_fastq_single, rl.fastq_single_md5 AS rl_fastq_single_md5,
+				rl.fastq_bytes AS rl_fastq_bytes, rl.read_count AS rl_read_count,
+				rl.accession AS rl_accession,
+				r.run_name AS run_run_name, r.run_date AS run_run_date,
+				r.platform AS run_platform, r.instrument_model AS run_instrument_model,
+				r.flow_cell_id AS run_flow_cell_id, r.run_directory AS run_run_directory,
+				r.fastq_directory AS run_fastq_directory, r.accession AS run_accession
+			 FROM library_preps l
+			 LEFT JOIN pcr_amplifications pa ON pa.id = l.pcr_id
+			 LEFT JOIN pcr_plates pp ON pp.id = pa.plate_id
+			 LEFT JOIN library_plates lp ON lp.id = l.library_plate_id
+			 LEFT JOIN extracts e ON e.id = COALESCE(l.extract_id, pa.extract_id)
+			 JOIN samples s ON s.id = e.sample_id
+			 LEFT JOIN run_libraries rl ON rl.library_id = l.id
+			 LEFT JOIN sequencing_runs r ON r.id = rl.run_id AND r.is_deleted = 0
+			 WHERE ${where}
+			 ORDER BY l.library_name`
+		)
+		.all(...params) as Record<string, unknown>[];
+
+	const bySample = new Map<string, Record<string, unknown>[]>();
+	for (const row of rows) {
+		// target_gene and nucl_acid_amp have no column of their own on a PCR.
+		let custom: Record<string, unknown> = {};
+		const raw = row.__pcr_custom_fields__;
+		if (typeof raw === 'string' && raw) {
+			try { custom = JSON.parse(raw) as Record<string, unknown>; } catch { custom = {}; }
+		}
+		row.__pcr_target_gene__ = custom.target_gene ?? null;
+		row.__pcr_nucl_acid_amp__ = custom.nucl_acid_amp ?? null;
+		const id = row.__sample_id__ as string;
+		(bySample.get(id) ?? bySample.set(id, []).get(id)!).push(row);
+	}
+	return bySample;
+}
+
 export function exportMixsTsv(options: {
 	labId: string;
 	projectId?: string;
 	checklist?: string;
 	extension?: string;
+	/** Which sheet to build. Defaults to the MIxS sample sheet. */
+	format?: SheetFormat;
 }): string {
 	const db = getDb();
 	// Site columns joined onto each sample row. Beyond the MIxS slots, the mask
@@ -269,13 +379,40 @@ export function exportMixsTsv(options: {
 	// Columns grouped by vocabulary, alphabetical within each group, with
 	// samp_name pulled to the front — it identifies the row, and burying it
 	// inside the MIxS block would make the sheet hard to read.
-	const columns = sortColumnsByVocabulary(
-		chooseExportColumns(options.checklist, options.extension)
-	);
+	const format = options.format ?? 'mixs';
+	const grain = sheetFormat(format).grain;
+	// Only the MIxS sheet is grouped by vocabulary. The others are ordered by
+	// the record each column describes — for the SRA sheet that order is NCBI's
+	// and must not be disturbed, and for the rest it follows the chain.
+	const chosen = sheetColumns(format, options.checklist, options.extension);
+	const columns = format === 'mixs' ? sortColumnsByVocabulary(chosen) : chosen;
+	// A library-grain sheet repeats a sample once per library sequenced from
+	// it. A sample with no library still gets its row: it exists, and a sheet
+	// that omitted it would misreport the lab's holdings.
+	const chainBySample =
+		grain === 'library' ? loadSampleChain(db, options.labId, options.projectId) : null;
 	const headers = columns.map((c) => c.header);
 	// Second header row: each column's vocabulary. The importer strips it.
 	const vocabularies = columns.map((c) => c.vocabulary);
-	const lines = rows.map((row) => {
+	const expanded: { row: Record<string, unknown>; chain: Record<string, unknown> | null }[] = [];
+	for (const row of rows) {
+		const chain = chainBySample?.get(row.id as string);
+		if (chain && chain.length > 0) {
+			for (const link of chain) expanded.push({ row, chain: link });
+		} else {
+			expanded.push({ row, chain: null });
+		}
+	}
+
+	// "not collected" is INSDC's term for an attribute that was never recorded,
+	// and BioSample expects it in place of a blank. It has no such meaning on
+	// the other sheets: an SRA submission with "not collected" under filename
+	// is rejected, and on SampleTown's own sheet it would come back on import
+	// as a value someone had typed. Those sheets leave a blank blank.
+	const cell = (value: unknown) =>
+		format === 'mixs' || (value != null && value !== '') ? escTsv(value) : '';
+
+	const lines = expanded.map(({ row, chain }) => {
 		const values = valuesBySample[row.id as string] ?? {};
 		// Per-row sensitive-location masking. When the sample flag is set, the
 		// geographic slot values — lat_lon, latitude, longitude — are coarsened
@@ -291,18 +428,26 @@ export function exportMixsTsv(options: {
 		}
 		return columns
 			.map((c) => {
-				if (c.source === '__project_name__') return escTsv(row.proj_project_name);
-				if (c.source === '__project_accession__') return escTsv(row.proj_accession);
-				if (c.source === '__nucl_acid_ext__') return escTsv(row.sample_nucl_acid_ext);
-				if (c.source === '__nucl_acid_amp__') return escTsv(row.sample_nucl_acid_amp);
-				if (c.source === '__samp_taxon_id__') return escTsv(row.sample_samp_taxon_id);
-				if (c.source === '__samp_vol_we_dna_ext__') return escTsv(row.sample_samp_vol_we_dna_ext);
-				if (c.source === '__pool_dna_extracts__') return escTsv(row.sample_pool_dna_extracts);
+				if (c.source === '__project_name__') return cell(row.proj_project_name);
+				if (c.source === '__project_accession__') return cell(row.proj_accession);
+				if (c.source === '__nucl_acid_ext__') return cell(row.sample_nucl_acid_ext);
+				if (c.source === '__nucl_acid_amp__') return cell(row.sample_nucl_acid_amp);
+				if (c.source === '__samp_taxon_id__') return cell(row.sample_samp_taxon_id);
+				if (c.source === '__samp_vol_we_dna_ext__') return cell(row.sample_samp_vol_we_dna_ext);
+				if (c.source === '__pool_dna_extracts__') return cell(row.sample_pool_dna_extracts);
+				if (c.source === '__blank__') return '';
+				if (c.source === '__filetype__') return cell(chain ? fileType(chain) : '');
+				if (c.source === '__filename__')
+					return cell(baseName(chain?.rl_fastq_r1 ?? chain?.rl_fastq_single));
+				if (c.source === '__filename2__') return cell(baseName(chain?.rl_fastq_r2));
+				// Chain columns are prefixed by their table, so they cannot collide
+				// with a sample column or an EAV slot.
+				if (chain && c.source in chain) return cell(chain[c.source]);
 				// Sample_values EAV — any slot the samples table doesn't have a
 				// column for is looked up here by slot name.
 				const eavValue = values[c.source];
-				if (eavValue != null) return escTsv(eavValue);
-				return escTsv(masked[c.source] ?? row[c.source]);
+				if (eavValue != null) return cell(eavValue);
+				return cell(masked[c.source] ?? row[c.source]);
 			})
 			.join('\t');
 	});

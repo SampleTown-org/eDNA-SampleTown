@@ -5,16 +5,18 @@
 	import { MIXS_ACTIVE_VERSION } from '$lib/mixs/schema-index';
 	import { sortAndLabelTsv } from '$lib/mixs/tsv';
 	import { INSDC_FETCH_TIMEOUT_MS } from '$lib/insdc-limits';
+	import { SHEET_FORMATS, sheetFormat, type SheetFormat } from '$lib/sheet-formats';
 
 	let { data }: { data: PageData } = $props();
 
 	// People to apply to every imported sample
 	let importPeople = $state<{ personnel_id: string; role?: string | null }[]>([]);
 
-	let mode = $state<'export' | 'import'>('export');
+	let mode = $state<'export' | 'import' | 'templates'>('export');
 
 	// --- Export ---
 	let exportProject = $state('');
+	let exportSheet = $state<SheetFormat>('mixs');
 	let exportChecklist = $state('MimarksS');
 	let exportExtension = $state('Water');
 	let previewTsv = $state('');
@@ -22,12 +24,22 @@
 	let exporting = $state(false);
 	let previewLines = $derived(previewTsv ? previewTsv.trim().split('\n') : []);
 
+	/** The export query, shared by the preview and the download so the file can
+	 *  never be a different sheet from the one on screen. */
+	function exportParams(): URLSearchParams {
+		const params = new URLSearchParams({ sheet: exportSheet });
+		if (exportProject) params.set('project_id', exportProject);
+		if (sheetFormat(exportSheet).usesChecklist) {
+			if (exportChecklist) params.set('checklist', exportChecklist);
+			if (exportExtension) params.set('extension', exportExtension);
+		}
+		return params;
+	}
+
 	async function previewExport() {
 		exporting = true;
-		const params = new URLSearchParams({ format: 'preview' });
-		if (exportProject) params.set('project_id', exportProject);
-		if (exportChecklist) params.set('checklist', exportChecklist);
-		if (exportExtension) params.set('extension', exportExtension);
+		const params = exportParams();
+		params.set('format', 'preview');
 		const res = await fetch(`/api/export/mixs?${params}`);
 		if (res.ok) {
 			const data = await res.json();
@@ -38,27 +50,30 @@
 	}
 
 	function downloadExport() {
-		const params = new URLSearchParams();
-		if (exportProject) params.set('project_id', exportProject);
-		if (exportChecklist) params.set('checklist', exportChecklist);
-		if (exportExtension) params.set('extension', exportExtension);
-		window.location.href = `/api/export/mixs?${params}`;
+		window.location.href = `/api/export/mixs?${exportParams()}`;
 	}
 
-	// --- MIxS template download (import side) ---
+	// --- Template download ---
+	let templateSheet = $state<SheetFormat>('mixs');
 	let templateChecklist = $state('MimarksS');
 	let templateExtension = $state('Water');
-	let templateUrl = $derived(
-		`/api/mixs/template?checklist=${templateChecklist}${templateExtension ? '&extension=' + templateExtension : ''}`
-	);
+	// Checklist and extension ride along only where the format's columns come
+	// from a MIxS class; for the others they would name a scope that had no
+	// bearing on the sheet.
+	let templateUrl = $derived.by(() => {
+		const params = new URLSearchParams({ sheet: templateSheet });
+		if (sheetFormat(templateSheet).usesChecklist) {
+			params.set('checklist', templateChecklist);
+			if (templateExtension) params.set('extension', templateExtension);
+		}
+		return `/api/mixs/template?${params}`;
+	});
 
 	// --- Import ---
 	/** Where the rows come from: an uploaded sheet, or a fetch from the sequence
 	 *  archives. Both produce a TSV that goes through /api/import/mixs, so
-	 *  everything below this point — preview, mapper, validation — is shared.
-	 *  'template' is the odd one out: a download-only view for starting a sheet
-	 *  from an empty MIxS checklist. */
-	let importSource = $state<'file' | 'accession' | 'template'>('file');
+	 *  everything below this point — preview, mapper, validation — is shared. */
+	let importSource = $state<'file' | 'accession'>('file');
 	let importProject = $state('');
 	let importTsv = $state('');
 	let importFileName = $state('');
@@ -435,13 +450,20 @@
 	<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
 		<button onclick={() => mode = 'export'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {mode === 'export' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Export</button>
 		<button onclick={() => mode = 'import'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {mode === 'import' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Import</button>
+		<button onclick={() => mode = 'templates'} class="px-4 py-1.5 rounded text-sm font-medium transition-colors {mode === 'templates' ? 'bg-ocean-600 text-white' : 'text-slate-400 hover:text-white'}">Templates</button>
 	</div>
 
 	{#if mode === 'export'}
 	<div class="space-y-4">
-		<p class="text-sm text-slate-400">Export samples as MIxS-compliant TSV for NCBI BioSample / SRA submission.</p>
+		<p class="text-sm text-slate-400">Export the lab's records as a TSV, in the shape whoever is receiving it expects.</p>
 
 		<div class="flex gap-4 items-end flex-wrap">
+			<div>
+				<label class="block text-xs font-medium text-slate-400 mb-1">Format</label>
+				<select bind:value={exportSheet} class={selectCls}>
+					{#each SHEET_FORMATS as f}<option value={f.value}>{f.label}</option>{/each}
+				</select>
+			</div>
 			<div>
 				<label class="block text-xs font-medium text-slate-400 mb-1">Project</label>
 				<select bind:value={exportProject} class={selectCls}>
@@ -449,19 +471,23 @@
 					{#each data.projects as p}<option value={p.id}>{p.project_name}</option>{/each}
 				</select>
 			</div>
-			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
-				<select bind:value={exportChecklist} class={selectCls}>
-					{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
-				</select>
-			</div>
-			<div>
-				<label class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
-				<select bind:value={exportExtension} class={selectCls}>
-					<option value="">(none)</option>
-					{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
-				</select>
-			</div>
+			<!-- A checklist only decides columns for the formats built from a MIxS
+			     class; offering it elsewhere would suggest it changed the sheet. -->
+			{#if sheetFormat(exportSheet).usesChecklist}
+				<div>
+					<label class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
+					<select bind:value={exportChecklist} class={selectCls}>
+						{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
+					</select>
+				</div>
+				<div>
+					<label class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
+					<select bind:value={exportExtension} class={selectCls}>
+						<option value="">(none)</option>
+						{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
+					</select>
+				</div>
+			{/if}
 			<button onclick={previewExport} disabled={exporting} class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium">
 				{exporting ? 'Loading...' : 'Preview'}
 			</button>
@@ -470,11 +496,16 @@
 			</button>
 		</div>
 
-		<p class="text-xs text-slate-500">{data.sampleCount} total samples</p>
+		<p class="text-xs text-slate-500">
+			{sheetFormat(exportSheet).description}
+			One row per {sheetFormat(exportSheet).grain}. {data.sampleCount} samples in the lab.
+		</p>
 
 		{#if previewTsv}
 		<div class="space-y-2">
-			<p class="text-sm text-slate-300">{previewRows} samples in export</p>
+			<p class="text-sm text-slate-300">
+				{previewRows} {sheetFormat(exportSheet).grain === 'sample' ? 'samples' : 'rows'} in export
+			</p>
 			<div class="overflow-x-auto max-h-96 overflow-y-auto rounded-lg border border-slate-800">
 				<table class="text-xs">
 					<thead class="sticky top-0">
@@ -500,7 +531,7 @@
 		{/if}
 	</div>
 
-	{:else}
+	{:else if mode === 'import'}
 	<!-- Import -->
 	<div class="space-y-4">
 		<p class="text-sm text-slate-400">Import samples from a MIxS-compliant sheet, or straight from SRA / ENA / GenBank by accession. Sites are auto-created or matched by proximity.</p>
@@ -508,7 +539,6 @@
 		<div class="flex gap-1 p-1 bg-slate-800 rounded-lg w-fit">
 			<button onclick={() => importSource = 'file'} class="px-3 py-1 rounded text-xs font-medium transition-colors {importSource === 'file' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}">Upload file</button>
 			<button onclick={() => importSource = 'accession'} class="px-3 py-1 rounded text-xs font-medium transition-colors {importSource === 'accession' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}">From accession</button>
-			<button onclick={() => importSource = 'template'} class="px-3 py-1 rounded text-xs font-medium transition-colors {importSource === 'template' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}">Templates</button>
 		</div>
 
 		{#if importSource === 'accession'}
@@ -578,42 +608,7 @@
 		</div>
 		{/if}
 
-		{#if importSource === 'template'}
-		<!-- MIxS v6.3 templates — generated from SampleTown's bundled LinkML
-		     schema, so column headers exactly match what the import parser
-		     recognizes. NCBI BioSample's public templates still lag at v6.0;
-		     using our own generation keeps everything in sync. -->
-		<div class="p-4 rounded-lg border border-slate-800 bg-slate-900/50 space-y-3">
-			<h3 class="text-sm font-medium text-slate-300">MIxS v{MIXS_ACTIVE_VERSION} templates</h3>
-			<p class="text-xs text-slate-500">
-				Pick a checklist and extension to download an empty TSV with the exact columns that combination requires and recommends.
-				Required parameters are prefixed with <code class="text-rose-400">*</code>. Fill in the file, save as TSV, and import above.
-			</p>
-			<div class="flex flex-wrap gap-2 items-end">
-				<div>
-					<label for="tmpl_checklist" class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
-					<select id="tmpl_checklist" bind:value={templateChecklist} class={selectCls}>
-						{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
-					</select>
-				</div>
-				<div>
-					<label for="tmpl_extension" class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
-					<select id="tmpl_extension" bind:value={templateExtension} class={selectCls}>
-						<option value="">(none)</option>
-						{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
-					</select>
-				</div>
-				<a href={templateUrl} download
-					class="px-3 py-2 bg-ocean-700 hover:bg-ocean-600 text-white rounded-lg text-sm font-medium">
-					Download TSV template
-				</a>
-			</div>
-		</div>
-		{/if}
 
-		<!-- The templates tab is a download-only view; none of the import
-		     controls below apply to it. -->
-		{#if importSource !== 'template'}
 		{#if importSource === 'file'}
 		<div class="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
 			<label for="import_file" class="block text-xs font-medium text-slate-400 mb-1">File (.xlsx, .tsv, .csv)</label>
@@ -1129,8 +1124,56 @@
 				</div>
 			</div>
 		{/if}
-		{/if}
 
+	</div>
+
+	{:else if mode === 'templates'}
+	<!-- Empty sheets to fill in and import back. Generated from the same column
+	     definitions the exporter and the import parser use, so a template's
+	     headers are exactly what the importer recognises. NCBI's public
+	     BioSample templates still lag at MIxS v6.0; generating our own keeps
+	     the two ends in step. -->
+	<div class="space-y-4">
+		<p class="text-sm text-slate-400">
+			Download an empty sheet with the columns of a given format, fill it in, then import it from the Import tab.
+		</p>
+
+		<div class="p-4 rounded-lg border border-slate-800 bg-slate-900/50 space-y-3">
+			<div class="flex flex-wrap gap-2 items-end">
+				<div>
+					<label for="tmpl_sheet" class="block text-xs font-medium text-slate-400 mb-1">Format</label>
+					<select id="tmpl_sheet" bind:value={templateSheet} class={selectCls}>
+						{#each SHEET_FORMATS as f}<option value={f.value}>{f.label}</option>{/each}
+					</select>
+				</div>
+				{#if sheetFormat(templateSheet).usesChecklist}
+					<div>
+						<label for="tmpl_checklist" class="block text-xs font-medium text-slate-400 mb-1">Checklist</label>
+						<select id="tmpl_checklist" bind:value={templateChecklist} class={selectCls}>
+							{#each CHECKLIST_OPTIONS as c}<option value={c.value}>{c.label}</option>{/each}
+						</select>
+					</div>
+					<div>
+						<label for="tmpl_extension" class="block text-xs font-medium text-slate-400 mb-1">Extension</label>
+						<select id="tmpl_extension" bind:value={templateExtension} class={selectCls}>
+							<option value="">(none)</option>
+							{#each EXTENSION_OPTIONS as e}<option value={e.value}>{e.label}</option>{/each}
+						</select>
+					</div>
+				{/if}
+				<a href={templateUrl} download
+					class="px-3 py-2 bg-ocean-700 hover:bg-ocean-600 text-white rounded-lg text-sm font-medium">
+					Download template
+				</a>
+			</div>
+			<p class="text-xs text-slate-500">
+				{sheetFormat(templateSheet).description}
+				One row per {sheetFormat(templateSheet).grain}.
+				{#if sheetFormat(templateSheet).usesChecklist}
+					Required parameters carry a leading <code class="text-rose-400">*</code>, from MIxS v{MIXS_ACTIVE_VERSION}.
+				{/if}
+			</p>
+		</div>
 	</div>
 	{/if}
 </div>
