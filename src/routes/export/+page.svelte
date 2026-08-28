@@ -134,7 +134,7 @@
 		libraries?: LibraryPreview[];
 		new_runs?: NewRun[];
 		column_map?: Record<string, string>;
-		available_fields?: { value: string; table: string; title?: string }[];
+		available_fields?: { value: string; table: string; title?: string; local?: true }[];
 		site_fields?: string[];
 		mixs_validation?: MixsRowValidation[];
 	} | null = $state(null);
@@ -375,6 +375,27 @@
 		return base ? `${base}.tsv` : 'sampletown_import.tsv';
 	}
 
+	/**
+	 * How a column was named at its source.
+	 *
+	 * A sheet on disk is quoted verbatim — it is the operator's own file and
+	 * they should recognise it. Rows fetched from an archive have no file: the
+	 * `misc_param:` prefix on an off-schema column is SampleTown's routing
+	 * decision, so the archive's bare field name is what actually arrived.
+	 */
+	function sourceColumn(header: string): string {
+		if (importSource !== 'accession') return header;
+		return header.startsWith('misc_param:') ? header.slice('misc_param:'.length) : header;
+	}
+
+	/** SampleTown's own importable columns — the auto-create chain and the
+	 *  site/project lookups. Offered on a downloaded sheet so a hand edit can
+	 *  fill them in. */
+	const offeredColumns = $derived.by(() => {
+		const fields = importPreview?.available_fields ?? [];
+		return fields.filter((f) => f.local).map((f) => f.value);
+	});
+
 	/** Download the rows as they stand.
 	 *
 	 *  The preview is read-only, so a bad cell is corrected by editing the sheet
@@ -384,7 +405,11 @@
 		if (!importTsv) return;
 		// Grouped by vocabulary and labelled, the same shape the Export tab
 		// produces — one app should not hand out two differently-shaped sheets.
-		const blob = new Blob([sortAndLabelTsv(importTsv)], {
+		// SampleTown's own columns are appended empty: an archive sheet carries
+		// none of the lab's own work, and the sheet is the only place an
+		// operator finds out which columns would create an extract, a PCR, a
+		// library or a run.
+		const blob = new Blob([sortAndLabelTsv(importTsv, offeredColumns)], {
 			type: 'text/tab-separated-values'
 		});
 		const url = URL.createObjectURL(blob);
@@ -760,7 +785,7 @@
 								<table class="w-full text-xs">
 									<thead class="sticky top-0 bg-slate-900/80 backdrop-blur">
 										<tr class="text-slate-400 border-b border-slate-800">
-											<th class="px-2 py-1.5 text-left font-medium">File column</th>
+											<th class="px-2 py-1.5 text-left font-medium">{importSource === 'accession' ? 'Archive column' : 'File column'}</th>
 											<th class="px-2 py-1.5 text-left font-medium">Target field</th>
 											<th class="px-2 py-1.5 text-left font-medium">Goes to</th>
 										</tr>
@@ -768,7 +793,11 @@
 									<tbody>
 										{#each Object.keys(importPreview.column_map) as header}
 											<tr class="border-b border-slate-800/40">
-												<td class="px-2 py-1.5 font-mono text-slate-300 align-top">{header}</td>
+												<!-- The archive's own name for the field. A fetch tags an
+												     off-schema field as misc_param:<name> to route it, but that
+												     prefix is where the value is going, not what it arrived as,
+												     and showing it here means naming a column nobody sent. -->
+												<td class="px-2 py-1.5 font-mono text-slate-300 align-top" title={header}>{sourceColumn(header)}</td>
 												<td class="px-2 py-1.5">
 													<input
 														type="text"

@@ -666,14 +666,24 @@ export function buildHeaderToFieldMap(): Record<string, string> {
  *   - SampleTown-local sample/site fields (site_name, notes, collector_name)
  *   - SampleTown routing columns (mixs_checklist, extension)
  */
-export function getImportableFields(): { value: string; table: string; title?: string }[] {
-	const out: { value: string; table: string; title?: string }[] = [];
+export function getImportableFields(): {
+	value: string;
+	table: string;
+	title?: string;
+	/** SampleTown's own column rather than a MIxS slot — the auto-create chain
+	 *  (extract, PCR, library, run) and the site/project lookups. Flagged so a
+	 *  sheet can offer them: nothing else tells an operator they exist. */
+	local?: true;
+}[] {
+	const out: { value: string; table: string; title?: string; local?: true }[] = [];
 	const seen = new Set<string>();
 
+	// Everything pushed before the MIxS slot loop is SampleTown's own.
+	let isLocal = true;
 	const push = (value: string, table: string, title?: string) => {
 		if (seen.has(value)) return;
 		seen.add(value);
-		out.push(title ? { value, table, title } : { value, table });
+		out.push({ value, table, ...(title ? { title } : {}), ...(isLocal ? { local: true as const } : {}) });
 	};
 
 	// SampleTown-local fields without a MIxS slot.
@@ -752,6 +762,7 @@ export function getImportableFields(): { value: string; table: string; title?: s
 
 	// Every MIxS slot, mapped to its owning table via slot-ownership.
 	// Imports against keys not in SAMPLE_CORE_KEYS get routed to sample_values.
+	isLocal = false;
 	for (const slotName of allSlotNames()) {
 		const table = slotTable(slotName);
 		const title = getSlot(slotName)?.title;

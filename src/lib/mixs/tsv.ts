@@ -55,8 +55,14 @@ const bare = (header: string) => header.replace(/^\*/, '');
  * inside the MIxS block makes the sheet hard to read. An existing vocabulary
  * row is regenerated rather than kept, so re-labelling a sheet that has
  * already been through here is a no-op.
+ *
+ * `alsoOffer` names columns the importer accepts that the sheet does not use.
+ * They are appended empty, after everything with data in it, so the sheet
+ * doubles as a list of what can be filled in — the auto-create chain is
+ * otherwise invisible until someone reads the source. Columns already present
+ * are not repeated.
  */
-export function sortAndLabelTsv(tsv: string): string {
+export function sortAndLabelTsv(tsv: string, alsoOffer: string[] = []): string {
 	const lines = tsv.replace(/\r\n/g, '\n').split('\n');
 	if (lines.length === 0 || !lines[0].trim()) return tsv;
 
@@ -75,9 +81,24 @@ export function sortAndLabelTsv(tsv: string): string {
 
 	const take = (cells: string[]) => order.map((i) => escapeTsvCell(cells[i]));
 
+	// Offered columns keep to the right of the data, sorted, each one distinct
+	// and not already in the sheet.
+	const present = new Set(headers.map((h) => bare(h).trim().toLowerCase()));
+	const offered: string[] = [];
+	for (const column of alsoOffer) {
+		const key = bare(column).trim().toLowerCase();
+		if (!key || present.has(key)) continue;
+		present.add(key);
+		offered.push(column.trim());
+	}
+	offered.sort((a, b) => a.localeCompare(b));
+	const blanks = offered.map(() => '');
+
 	return [
-		take(headers).join('\t'),
-		order.map((i) => vocabularies[i]).join('\t'),
-		...body.filter((l) => l !== '').map((l) => take(parseTsvLine(l)).join('\t'))
+		[...take(headers), ...offered.map(escapeTsvCell)].join('\t'),
+		[...order.map((i) => vocabularies[i]), ...offered.map(columnVocabulary)].join('\t'),
+		...body
+			.filter((l) => l !== '')
+			.map((l) => [...take(parseTsvLine(l)), ...blanks].join('\t'))
 	].join('\n');
 }
