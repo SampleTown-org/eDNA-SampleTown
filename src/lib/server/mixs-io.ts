@@ -412,7 +412,7 @@ export function exportMixsTsv(options: {
 	const cell = (value: unknown) =>
 		format === 'mixs' || (value != null && value !== '') ? escTsv(value) : '';
 
-	const lines = expanded.map(({ row, chain }) => {
+	const rawRows = expanded.map(({ row, chain }) => {
 		const values = valuesBySample[row.id as string] ?? {};
 		// Per-row sensitive-location masking. When the sample flag is set, the
 		// geographic slot values — lat_lon, latitude, longitude — are coarsened
@@ -427,31 +427,44 @@ export function exportMixsTsv(options: {
 			values.misc_param = existing ? `${existing}; ${attribution}` : attribution;
 		}
 		return columns
-			.map((c) => {
-				if (c.source === '__project_name__') return cell(row.proj_project_name);
-				if (c.source === '__project_accession__') return cell(row.proj_accession);
-				if (c.source === '__nucl_acid_ext__') return cell(row.sample_nucl_acid_ext);
-				if (c.source === '__nucl_acid_amp__') return cell(row.sample_nucl_acid_amp);
-				if (c.source === '__samp_taxon_id__') return cell(row.sample_samp_taxon_id);
-				if (c.source === '__samp_vol_we_dna_ext__') return cell(row.sample_samp_vol_we_dna_ext);
-				if (c.source === '__pool_dna_extracts__') return cell(row.sample_pool_dna_extracts);
+			.map((c): unknown => {
+				if (c.source === '__project_name__') return row.proj_project_name;
+				if (c.source === '__project_accession__') return row.proj_accession;
+				if (c.source === '__nucl_acid_ext__') return row.sample_nucl_acid_ext;
+				if (c.source === '__nucl_acid_amp__') return row.sample_nucl_acid_amp;
+				if (c.source === '__samp_taxon_id__') return row.sample_samp_taxon_id;
+				if (c.source === '__samp_vol_we_dna_ext__') return row.sample_samp_vol_we_dna_ext;
+				if (c.source === '__pool_dna_extracts__') return row.sample_pool_dna_extracts;
 				if (c.source === '__blank__') return '';
-				if (c.source === '__filetype__') return cell(chain ? fileType(chain) : '');
+				if (c.source === '__filetype__') return chain ? fileType(chain) : '';
 				if (c.source === '__filename__')
-					return cell(baseName(chain?.rl_fastq_r1 ?? chain?.rl_fastq_single));
-				if (c.source === '__filename2__') return cell(baseName(chain?.rl_fastq_r2));
+					return baseName(chain?.rl_fastq_r1 ?? chain?.rl_fastq_single);
+				if (c.source === '__filename2__') return baseName(chain?.rl_fastq_r2);
 				// Chain columns are prefixed by their table, so they cannot collide
 				// with a sample column or an EAV slot.
-				if (chain && c.source in chain) return cell(chain[c.source]);
+				if (chain && c.source in chain) return chain[c.source];
 				// Sample_values EAV — any slot the samples table doesn't have a
 				// column for is looked up here by slot name.
 				const eavValue = values[c.source];
-				if (eavValue != null) return cell(eavValue);
-				return cell(masked[c.source] ?? row[c.source]);
-			})
-			.join('\t');
+				if (eavValue != null) return eavValue;
+				return masked[c.source] ?? row[c.source];
+			});
 	});
-	return [headers.join('\t'), vocabularies.join('\t'), ...lines].join('\n');
+
+	// A MIxS class offers every slot its checklist allows, which for a water
+	// survey is over a hundred; a sheet where most of them read "not collected"
+	// buries the ones that were. Optional columns nothing filled are dropped.
+	// Required columns stay whether or not they have values — the archive
+	// expects them, and their absence is itself the thing being reported.
+	const keep = columns.map((c, i) =>
+		format !== 'mixs' || c.required || rawRows.some((r) => r[i] != null && r[i] !== '')
+	);
+	const kept = <T,>(list: T[]): T[] => list.filter((_, i) => keep[i]);
+
+	const lines = rawRows.map((values) => kept(values).map(cell).join('\t'));
+	const head = [kept(headers).join('\t')];
+	if (sheetFormat(format).vocabularyRow) head.push(kept(vocabularies).join('\t'));
+	return [...head, ...lines].join('\n');
 }
 
 /**
@@ -620,7 +633,17 @@ export function chooseExportColumns(
 		}
 		// project_name: some checklists don't list it in properties but the GSC
 		// templates always include it. Append as optional if not already there.
-		if (!baseColumns.some((c) => c.source === 'project_name' || c.source === 'site_project_name')) {
+		// A class that does list it routes to the __project_name__ subquery, so
+		// that is what "already there" has to look for — matching on the bare
+		// column name emits the sheet's own project_name twice.
+		if (
+			!baseColumns.some(
+				(c) =>
+					c.source === '__project_name__' ||
+					c.source === 'project_name' ||
+					c.source === 'site_project_name'
+			)
+		) {
 			baseColumns.push({
 				header: 'project_name',
 				source: '__project_name__',

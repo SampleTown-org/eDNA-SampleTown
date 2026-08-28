@@ -21,6 +21,17 @@ export interface SheetFormatInfo {
 	/** Whether the checklist/extension pickers apply — only MIxS columns come
 	 *  from a combination class. */
 	usesChecklist: boolean;
+	/**
+	 * Whether the sheet carries the second header row naming each column's
+	 * vocabulary.
+	 *
+	 * It is a SampleTown convention: useful on a sheet coming back to us, and
+	 * fatal on one going to an archive, where row two is read as the first
+	 * record. The submission formats therefore go without it. The importer
+	 * strips the row when it is there and does not miss it when it is not, so
+	 * either shape reads back.
+	 */
+	vocabularyRow: boolean;
 }
 
 export const SHEET_FORMATS: SheetFormatInfo[] = [
@@ -30,7 +41,8 @@ export const SHEET_FORMATS: SheetFormatInfo[] = [
 		grain: 'sample',
 		description:
 			'Sample metadata for the chosen checklist and extension. This is the sheet NCBI BioSample and ENA take.',
-		usesChecklist: true
+		usesChecklist: true,
+		vocabularyRow: false
 	},
 	{
 		value: 'sra',
@@ -38,7 +50,8 @@ export const SHEET_FORMATS: SheetFormatInfo[] = [
 		grain: 'library',
 		description:
 			"The columns of NCBI's own SRA_metadata template — one row per sequencing library, naming its read files.",
-		usesChecklist: false
+		usesChecklist: false,
+		vocabularyRow: false
 	},
 	{
 		value: 'sampletown',
@@ -46,7 +59,8 @@ export const SHEET_FORMATS: SheetFormatInfo[] = [
 		grain: 'library',
 		description:
 			"SampleTown's own columns across the whole chain — site, extract, PCR, library and run. Not a standard; what the app records and can read back.",
-		usesChecklist: false
+		usesChecklist: false,
+		vocabularyRow: true
 	},
 	{
 		value: 'all',
@@ -54,7 +68,8 @@ export const SHEET_FORMATS: SheetFormatInfo[] = [
 		grain: 'library',
 		description:
 			'Every column of the three above together, for an archive copy or for working out where something is recorded.',
-		usesChecklist: true
+		usesChecklist: true,
+		vocabularyRow: true
 	}
 ];
 

@@ -21,9 +21,10 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	const columns = sheetColumns(sheet.value, checklist, extension);
 	const headerRow = columns.map((c) => c.header).join('\t');
-	// Second row names each column's vocabulary, as an exported sheet does. The
-	// importer strips it, so a filled template reads back the same way.
-	const vocabRow = columns.map((c) => c.vocabulary).join('\t');
+	// The vocabulary row goes on the sheets that carry it when exported, and is
+	// left off the submission formats: a template is meant to be filled in and
+	// sent, and an archive reads row two as the first record.
+	const vocabRow = sheet.vocabularyRow ? columns.map((c) => c.vocabulary).join('\t') : null;
 
 	// Comment row says what the template is and, where the columns came from a
 	// MIxS class, which release — round-trips across releases are easier to
@@ -32,7 +33,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		? `${checklist}${extension ? ' + ' + extension : ''}, MIxS ${MIXS_ACTIVE_VERSION} — `
 		: '';
 	const meta = `# ${sheet.label} template — ${scope}one row per ${sheet.grain}`;
-	const body = `${meta}\n${headerRow}\n${vocabRow}\n`;
+	const body = vocabRow ? `${meta}\n${headerRow}\n${vocabRow}\n` : `${meta}\n${headerRow}\n`;
 
 	const scopeSuffix = sheet.usesChecklist
 		? `_${checklist}${extension ? '_' + extension : ''}`
