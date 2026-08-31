@@ -62,6 +62,10 @@ function isPublicApi(pathname: string, method: string): boolean {
  * are intentionally NOT here — regular users can edit those. The
  * admin-only items are user accounts, the DB-snapshot push, and the
  * feedback queue.
+ *
+ * Matching is per path segment: an entry gates itself (unless it ends in
+ * '/', meaning children only — POST /api/feedback stays open to users)
+ * plus everything under it. '/api/lab' must not catch '/api/labels/...'.
  */
 const ADMIN_WRITE_PREFIXES = [
 	'/api/users', // covers /api/users and /api/users/[id]/...
@@ -91,7 +95,11 @@ function requiresAdmin(pathname: string, method: string): boolean {
 		if (pathname === '/api/db/restore/commits' && method === 'GET') return true;
 		return false;
 	}
-	return ADMIN_WRITE_PREFIXES.some((p) => pathname.startsWith(p));
+	return ADMIN_WRITE_PREFIXES.some((p) => {
+		const base = p.endsWith('/') ? p.slice(0, -1) : p;
+		if (pathname.startsWith(base + '/')) return true;
+		return pathname === base && !p.endsWith('/');
+	});
 }
 
 /**
@@ -151,6 +159,8 @@ const LAB_SETUP_ALLOWLIST = new Set([
 	'/auth/setup-lab',
 	'/auth/logout',
 	'/api/auth/setup-lab',
+	'/api/auth/setup-lab/sync-probe', // "sync an existing lab" onboarding
+	'/api/auth/setup-lab/sync',
 	'/api/auth/join',
 	'/account'
 ]);

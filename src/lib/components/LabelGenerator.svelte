@@ -165,6 +165,9 @@
 	let zebraStatus = $state<ZebraStatus>('unknown');
 	let zebraPrinter = $state<ZebraDevice | null>(null);
 	let zebraError = $state('');
+	/** Which section the current zebraError belongs to, so the message
+	 *  renders next to the button that was actually clicked. */
+	let zebraErrorAt = $state<'panel' | 'cart' | 'blank'>('panel');
 	let zebraBusy = $state(false);
 
 	/** Server-attached printer (this deployment), detected via the API. Null
@@ -202,6 +205,7 @@
 		} catch (e) {
 			zebraStatus = 'unavailable';
 			zebraError = e instanceof Error ? e.message : String(e);
+			zebraErrorAt = 'panel';
 		}
 	}
 
@@ -219,10 +223,11 @@
 		}
 	}
 
-	async function sendToZebra(labels: LabelInput[]) {
+	async function sendToZebra(labels: LabelInput[], source: 'cart' | 'blank') {
 		if (labels.length === 0) return;
 		zebraBusy = true;
 		zebraError = '';
+		zebraErrorAt = source;
 		try {
 			if (printBackend === 'server') {
 				const res = await fetch('/api/labels/print', {
@@ -264,8 +269,8 @@
 	}
 
 	const ts = () => new Date().toISOString().slice(0, 10);
-	const printCartZebra = () => sendToZebra(cartLabels());
-	const printBlankZebra = () => sendToZebra(blankLabels());
+	const printCartZebra = () => sendToZebra(cartLabels(), 'cart');
+	const printBlankZebra = () => sendToZebra(blankLabels(), 'blank');
 	const downloadCartZpl = () => downloadZpl(cartLabels(), `sampletown-cart-${ts()}.zpl`);
 	const downloadBlankZpl = () =>
 		downloadZpl(blankLabels(), `sampletown-labels${blankType ? `-${blankType}` : ''}-${ts()}.zpl`);
@@ -389,7 +394,7 @@
 				<code>scripts/setup-zebra.mjs</code>).
 			</p>
 		{/if}
-		{#if zebraError}
+		{#if zebraError && zebraErrorAt === 'panel'}
 			<p class="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded px-3 py-2">{zebraError}</p>
 		{/if}
 
@@ -502,6 +507,9 @@
 				<span class="text-xs text-slate-500">Add items to the cart on any list page to enable this.</span>
 			{/if}
 		</div>
+		{#if zebraError && zebraErrorAt === 'cart'}
+			<p class="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded px-3 py-2">{zebraError}</p>
+		{/if}
 	</section>
 
 	<!-- ========== Blank pre-printed sheets ========== -->
@@ -585,10 +593,12 @@
 				>Export CSV</button>
 			{/if}
 		</div>
+		{#if zebraError && zebraErrorAt === 'blank'}
+			<p class="text-xs text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded px-3 py-2">{zebraError}</p>
+		{/if}
 		<p class="text-xs text-slate-500">
 			With a type selected, scanning a blank label skips the claim picker and
-			jumps straight to that entity's new form. Zebra-printer wiring will slot
-			in as another export button once the hardware arrives.
+			jumps straight to that entity's new form.
 		</p>
 
 		{#if blankIds.length > 0}

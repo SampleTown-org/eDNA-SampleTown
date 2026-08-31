@@ -24,9 +24,20 @@ CREATE TABLE IF NOT EXISTS labs (
     github_token TEXT,
     -- Automated backup. NULL or 0 = manual only. Otherwise the scheduler
     -- runs a snapshot every N hours. Last successful run timestamp drives
-    -- the "is it time to back up again" check.
+    -- the "is it time to back up again" check. (Superseded by sync when
+    -- sync_enabled=1 — the push side of sync covers backups.)
     backup_interval_hours INTEGER,
     last_backup_at TEXT,
+    -- Two-way snapshot sync (push local changes / pull remote changes via
+    -- the snapshot repo). On by default; the Backup tab can turn it off.
+    -- last_synced_sha = remote commit at last sync; last_synced_state =
+    -- fingerprint of local content at last sync. Both NULL = uninitialized
+    -- (the scheduler bootstraps conservatively — see syncLab()).
+    sync_enabled INTEGER NOT NULL DEFAULT 1,
+    last_synced_sha TEXT,
+    last_synced_state TEXT,
+    last_sync_at TEXT,
+    last_sync_status TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

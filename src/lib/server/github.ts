@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { getDb } from './db';
 import { env } from '$env/dynamic/private';
 import type Database from 'better-sqlite3';
@@ -21,6 +22,12 @@ import type Database from 'better-sqlite3';
  * saved_carts + saved_cart_items (private to each user, not lab-shared),
  * db_snapshots (this lab's own backup history), sessions, oauth_states,
  * sync_log, users, labs.
+ *
+ * The users table itself stays out, but snapshots DO carry a `users.json`
+ * sidecar of sanitized identity stubs (id, username, github_id, avatar —
+ * never emails or password hashes) for the users the lab's rows reference,
+ * so created_by provenance survives a restore onto another instance. See
+ * exportUserStubs / applyUserStubs.
  *
  * run_libraries / sample_values / *_photos / entity_personnel are junction
  * or child rows — included so a restored lab is functionally complete.
@@ -139,6 +146,170 @@ export async function testLabConnection(
 			error: err instanceof Error ? err.message : String(err)
 		};
 	}
+}
+
+/**
+ * Fingerprint of a lab's exportable content, built from the git blob SHAs
+ * of the exact JSON files a push would create. Computed entirely locally
+ * (no API calls), so the sync scheduler can detect "nothing changed here"
+ * for free. Compared against `labs.last_synced_state` — i.e. against this
+ * instance's own content at the last sync, never against the remote — so
+ * it doesn't depend on byte-parity with what another instance pushed.
+ */
+export function localStateHash(data: Record<string, unknown[]>): string {
+	const outer = createHash('sha1');
+	for (const [table, rows] of Object.entries(data)) {
+		const content = JSON.stringify(rows, null, 2);
+		const blob = createHash('sha1');
+		blob.update(`blob ${Buffer.byteLength(content, 'utf8')}\0`);
+		blob.update(content, 'utf8');
+		outer.update(`${table}:${blob.digest('hex')}\n`);
+	}
+	return outer.digest('hex');
+}
+
+/** Latest commit that touched this lab's snapshot path, or null when the
+ *  repo has no snapshot for the lab yet. Throws on API failure. */
+async function getRemoteHeadSha(config: GitHubConfig, lab: LabRow): Promise<string | null> {
+	const [owner, repo] = config.repo.split('/');
+	const path = `data/${lab.slug}`;
+	const res = await fetch(
+		`https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(path)}&per_page=1`,
+		{
+			headers: {
+				Authorization: `Bearer ${config.token}`,
+				Accept: 'application/vnd.github+json',
+				'X-GitHub-Api-Version': '2022-11-28'
+			}
+		}
+	);
+	// 409 = repo exists but is empty (no commits at all).
+	if (res.status === 409) return null;
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`GitHub commits lookup: ${res.status} ${body.slice(0, 300)}`);
+	}
+	const list = (await res.json()) as Array<{ sha: string }>;
+	return list[0]?.sha ?? null;
+}
+
+/** Columns of `table` that are foreign keys into `users`. */
+function userRefColumns(db: Database.Database, table: string): Set<string> {
+	return new Set(
+		(db.prepare(`PRAGMA foreign_key_list(${table})`).all() as { table: string; from: string }[])
+			.filter((fk) => fk.table === 'users')
+			.map((fk) => fk.from)
+	);
+}
+
+export interface UserStub {
+	id: string;
+	github_id: number | null;
+	username: string;
+	display_name: string | null;
+	avatar_url: string | null;
+	avatar_emoji: string | null;
+}
+
+export interface MembershipRow {
+	user_id: string;
+	role: string;
+	status: string;
+}
+
+/** The lab's memberships, exported as a snapshot sidecar so that access
+ *  travels with the data: a person who signs into another instance of
+ *  this lab via GitHub lands on the same user id (github_id match) and is
+ *  already a member there. Restore MERGES these (insert-if-absent only) —
+ *  it never removes or downgrades anyone the local instance added. */
+export function exportLabMemberships(labId: string): MembershipRow[] {
+	const db = getDb();
+	return db
+		.prepare('SELECT user_id, role, status FROM lab_memberships WHERE lab_id = ? ORDER BY user_id')
+		.all(labId) as MembershipRow[];
+}
+
+/** Sanitized identity stubs for every user the exported rows reference —
+ *  plus the lab's members — just enough for another instance to keep
+ *  created_by provenance and membership intact. Deliberately excludes
+ *  email, password hash, and every flag/role. */
+export function exportUserStubs(
+	data: Record<string, unknown[]>,
+	memberships: MembershipRow[] = []
+): UserStub[] {
+	const db = getDb();
+	const ids = new Set<string>();
+	for (const m of memberships) if (m.user_id) ids.add(m.user_id);
+	for (const [table, rows] of Object.entries(data)) {
+		const refCols = userRefColumns(db, table);
+		if (refCols.size === 0) continue;
+		for (const raw of rows) {
+			const row = raw as Record<string, unknown>;
+			for (const col of refCols) {
+				const v = row[col];
+				if (typeof v === 'string' && v) ids.add(v);
+			}
+		}
+	}
+	if (ids.size === 0) return [];
+	const placeholders = [...ids].map(() => '?').join(',');
+	return db
+		.prepare(
+			`SELECT id, github_id, username, display_name, avatar_url, avatar_emoji
+			 FROM users WHERE id IN (${placeholders}) ORDER BY id`
+		)
+		.all(...ids) as UserStub[];
+}
+
+/**
+ * Make a snapshot's user references resolvable on THIS instance. Returns a
+ * map from snapshot user id → local user id (or null = drop the ref).
+ *
+ *   - id already exists locally           → keep as-is
+ *   - same github_id under a different id → map to the local row (the
+ *     person logged in here before a pull carried their stub)
+ *   - unknown                             → insert the stub. Stub rows are
+ *     shells: no password, not a local account, is_approved=0 — nobody can
+ *     sign in through one, but if its person later logs in via GitHub,
+ *     upsertGitHubUser matches github_id and takes the row over, giving
+ *     them the same user id on every instance.
+ *   - insert collides (username taken by a different person) → null refs
+ */
+function applyUserStubs(db: Database.Database, stubs: UserStub[]): Map<string, string | null> {
+	const map = new Map<string, string | null>();
+	const insert = db.prepare(
+		`INSERT INTO users (id, github_id, username, display_name, avatar_url, avatar_emoji, is_approved)
+		 VALUES (?, ?, ?, ?, ?, ?, 0)`
+	);
+	for (const stub of stubs) {
+		if (!stub?.id || !stub?.username) continue;
+		if (db.prepare('SELECT 1 FROM users WHERE id = ?').get(stub.id)) {
+			map.set(stub.id, stub.id);
+			continue;
+		}
+		if (stub.github_id != null) {
+			const byGithub = db
+				.prepare('SELECT id FROM users WHERE github_id = ?')
+				.get(stub.github_id) as { id: string } | undefined;
+			if (byGithub) {
+				map.set(stub.id, byGithub.id);
+				continue;
+			}
+		}
+		try {
+			insert.run(stub.id, stub.github_id, stub.username, stub.display_name, stub.avatar_url, stub.avatar_emoji);
+			map.set(stub.id, stub.id);
+		} catch {
+			map.set(stub.id, null);
+		}
+	}
+	return map;
+}
+
+function setSyncMarkers(db: Database.Database, labId: string, sha: string | null, state: string) {
+	db.prepare(
+		`UPDATE labs SET last_synced_sha = ?, last_synced_state = ?, updated_at = datetime('now') WHERE id = ?`
+	).run(sha, state, labId);
 }
 
 /** Export all lab-scoped tables as JSON, filtered by the caller's lab_id.
@@ -275,7 +446,15 @@ export async function listSnapshotCommits(
  */
 export async function restoreSnapshot(
 	labId: string,
-	commitSha: string
+	commitSha: string,
+	options: {
+		/** When set (by syncLab's auto-pull), abort if the lab's content no
+		 *  longer hashes to this value right before the wipe — i.e. someone
+		 *  wrote to the lab while the snapshot files were downloading. The
+		 *  next sync tick will then see both sides changed and flag a
+		 *  conflict instead of silently discarding the fresh writes. */
+		abortUnlessState?: string;
+	} = {}
 ): Promise<
 	| { ok: true; counts: Record<string, number>; missing: string[] }
 	| { ok: false; status: number | null; error: string; hint?: string }
@@ -290,9 +469,12 @@ export async function restoreSnapshot(
 
 	// Fetch each table's JSON at the requested commit. Missing files (404)
 	// are tolerated — we record them in `missing` and treat as empty data.
+	// 'users' and 'lab_memberships' are merge-only sidecars, not restored
+	// tables.
+	const SIDECARS = ['users', 'lab_memberships'];
 	const fetched: Record<string, unknown[]> = {};
 	const missing: string[] = [];
-	for (const table of TABLES_TO_EXPORT) {
+	for (const table of [...TABLES_TO_EXPORT, ...SIDECARS]) {
 		const path = `data/${lab.slug}/${table}.json`;
 		const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(commitSha)}`;
 		const res = await fetch(url, {
@@ -303,7 +485,9 @@ export async function restoreSnapshot(
 			}
 		});
 		if (res.status === 404) {
-			missing.push(table);
+			// Sidecar absence just means an older snapshot — not a
+			// "table skipped" worth reporting to the UI.
+			if (!SIDECARS.includes(table)) missing.push(table);
 			fetched[table] = [];
 			continue;
 		}
@@ -334,20 +518,60 @@ export async function restoreSnapshot(
 	// column doesn't error on the missing key.
 	const counts: Record<string, number> = {};
 	try {
+		if (
+			options.abortUnlessState &&
+			localStateHash(exportTablesAsJson(labId)) !== options.abortUnlessState
+		) {
+			return { ok: false, status: null, error: 'Local data changed while the snapshot was downloading — pull skipped.' };
+		}
 		db.transaction(() => {
 			db.pragma('defer_foreign_keys = ON');
+			// Resolve the snapshot's user references against this instance
+			// (inserting identity stubs as needed) BEFORE inserting rows.
+			const userMap = applyUserStubs(db, (fetched['users'] as UserStub[]) ?? []);
+			// Merge the snapshot's memberships: access travels with the lab.
+			// Insert-if-absent only — local memberships (e.g. the replica's
+			// creator) are never removed or downgraded by a pull, and a bad
+			// row (unknown role value etc.) is skipped, not fatal.
+			const memIns = db.prepare(
+				`INSERT INTO lab_memberships (user_id, lab_id, role, status) VALUES (?, ?, ?, ?)
+				 ON CONFLICT(user_id, lab_id) DO NOTHING`
+			);
+			for (const raw of (fetched['lab_memberships'] as MembershipRow[]) ?? []) {
+				const mapped = userMap.has(raw?.user_id) ? userMap.get(raw.user_id) : null;
+				if (!mapped) continue;
+				try {
+					memIns.run(mapped, labId, raw.role, raw.status);
+				} catch {
+					/* CHECK-constraint mismatch from a foreign schema — skip */
+				}
+			}
 			// Wipe existing lab data, child tables first to be tidy.
 			for (const t of [...TABLES_TO_EXPORT].reverse()) {
 				wipeLabTable(db, t, labId);
 			}
 			// Re-insert in declared order.
 			for (const t of TABLES_TO_EXPORT) {
-				counts[t] = restoreTable(db, t, fetched[t], labId);
+				counts[t] = restoreTable(db, t, fetched[t], labId, userMap);
 			}
 		})();
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
 		return { ok: false, status: null, error: msg };
+	}
+
+	// Sync bookkeeping: after a restore, this instance's content came from
+	// the repo, so re-fingerprint it (a re-export may not be byte-identical
+	// to the snapshot files) and mark the lab as synced at the path head.
+	// When an admin restored an OLD commit the markers still point at the
+	// head + current content: sync then holds steady (nothing auto-pushes
+	// or auto-pulls) until the next local edit pushes the rolled-back state
+	// as a new commit — an intentional rollback is never auto-undone.
+	try {
+		const head = await getRemoteHeadSha(config, lab);
+		setSyncMarkers(db, labId, head ?? commitSha, localStateHash(exportTablesAsJson(labId)));
+	} catch {
+		setSyncMarkers(db, labId, commitSha, localStateHash(exportTablesAsJson(labId)));
 	}
 
 	return { ok: true, counts, missing };
@@ -390,18 +614,29 @@ function wipeLabTable(db: Database.Database, table: string, labId: string) {
 /** INSERT every row from `rows` into `table`, building the column list
  *  from the intersection of the table's actual columns and the row's
  *  keys (so snapshots that pre-date a column addition don't error).
- *  Forces lab_id to the restoring lab's id for tables that have one. */
+ *  Forces lab_id to the restoring lab's id for tables that have one.
+ *
+ *  User references (created_by, personnel.user_id, …) go through `userMap`
+ *  (snapshot user id → local user id, built by applyUserStubs): snapshots
+ *  from another instance carry user ids this instance may not have, and
+ *  inserting them verbatim trips the FK at commit. Unmapped ids that don't
+ *  exist locally are nulled — all such columns are nullable by design. */
 function restoreTable(
 	db: Database.Database,
 	table: string,
 	rows: unknown[],
-	labId: string
+	labId: string,
+	userMap: Map<string, string | null>
 ): number {
 	if (!rows || rows.length === 0) return 0;
 	const tableCols = new Set(
 		(db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name)
 	);
 	const hasLabId = tableCols.has('lab_id');
+	const userRefCols = userRefColumns(db, table);
+	const localUserIds = userRefCols.size
+		? new Set((db.prepare('SELECT id FROM users').all() as { id: string }[]).map((u) => u.id))
+		: new Set<string>();
 	const sample = rows[0] as Record<string, unknown>;
 	const keys = Object.keys(sample).filter((k) => tableCols.has(k));
 	if (keys.length === 0) return 0;
@@ -410,7 +645,15 @@ function restoreTable(
 	let n = 0;
 	for (const raw of rows) {
 		const row = raw as Record<string, unknown>;
-		const values = keys.map((k) => (k === 'lab_id' && hasLabId ? labId : row[k] ?? null));
+		const values = keys.map((k) => {
+			if (k === 'lab_id' && hasLabId) return labId;
+			const v = row[k] ?? null;
+			if (v !== null && userRefCols.has(k)) {
+				if (userMap.has(v as string)) return userMap.get(v as string);
+				return localUserIds.has(v as string) ? v : null;
+			}
+			return v;
+		});
 		stmt.run(...values);
 		n++;
 	}
@@ -454,16 +697,24 @@ export async function commitSnapshot(
 		const commitRes = await ghApi(config, `GET /repos/${owner}/${repo}/git/commits/${latestSha}`);
 		const baseTreeSha = commitRes.tree.sha;
 
-		// Create blobs for each table
-		const tree: { path: string; mode: string; type: string; sha: string }[] = [];
+		// Create blobs for each table, plus the identity-stub + membership
+		// sidecars (not synced tables — see applyUserStubs / the membership
+		// merge in restoreSnapshot).
+		const files: Record<string, string> = {};
 		for (const [table, rows] of Object.entries(data)) {
-			const content = JSON.stringify(rows, null, 2);
+			files[`${table}.json`] = JSON.stringify(rows, null, 2);
+		}
+		const memberships = exportLabMemberships(labId);
+		files['users.json'] = JSON.stringify(exportUserStubs(data, memberships), null, 2);
+		files['lab_memberships.json'] = JSON.stringify(memberships, null, 2);
+		const tree: { path: string; mode: string; type: string; sha: string }[] = [];
+		for (const [filename, content] of Object.entries(files)) {
 			const blobRes = await ghApi(config, `POST /repos/${owner}/${repo}/git/blobs`, {
 				content,
 				encoding: 'utf-8'
 			});
 			tree.push({
-				path: `${labPathPrefix}/${table}.json`,
+				path: `${labPathPrefix}/${filename}`,
 				mode: '100644',
 				type: 'blob',
 				sha: blobRes.sha
@@ -486,6 +737,13 @@ export async function commitSnapshot(
 		// and doesn't keep retrying every tick.
 		if (treeRes.sha === baseTreeSha) {
 			db.prepare("UPDATE labs SET last_backup_at = datetime('now') WHERE id = ?").run(labId);
+			// Content matches the repo — record the local fingerprint so the
+			// sync scheduler knows this state is pushed. last_synced_sha is
+			// left alone (the repo head may be another lab's commit in a
+			// shared repo; syncLab sets the sha from its own path lookup).
+			db.prepare(
+				`UPDATE labs SET last_synced_state = ? WHERE id = ?`
+			).run(localStateHash(data), labId);
 			return { sha: latestSha, unchanged: true };
 		}
 
@@ -510,6 +768,9 @@ export async function commitSnapshot(
 				 VALUES (?, ?, ?, 'pushed', ?)`
 			).run(labId, newCommitRes.sha, message, automatic);
 			db.prepare("UPDATE labs SET last_backup_at = datetime('now') WHERE id = ?").run(labId);
+			// This commit is now the head of the lab's snapshot path and its
+			// content is exactly `data` — record both sync markers.
+			setSyncMarkers(db, labId, newCommitRes.sha, localStateHash(data));
 		})();
 
 		return { sha: newCommitRes.sha };
@@ -547,11 +808,221 @@ async function ghApi(config: GitHubConfig, endpoint: string, body?: unknown): Pr
 	return res.json();
 }
 
+// ============================================================
+// Two-way snapshot sync
+// ============================================================
+
 /**
- * Periodic backup scheduler. Started once on the first getDb() call. Wakes
- * every 15 minutes, finds labs whose `backup_interval_hours` is set and
- * whose `last_backup_at` is older than that interval, and runs an
- * automatic snapshot for each.
+ * List the lab slugs that have snapshot data in a repo (the directories
+ * under `data/`). Used by the "sync an existing lab" onboarding path to
+ * both validate a pasted repo+token and show which labs it holds — before
+ * anything is created locally.
+ */
+export async function listRepoLabSlugs(
+	config: GitHubConfig
+): Promise<{ ok: true; slugs: string[] } | { ok: false; status: number | null; error: string }> {
+	const [owner, repo] = config.repo.split('/');
+	if (!owner || !repo) {
+		return { ok: false, status: null, error: 'Repo must be in "owner/repo" format.' };
+	}
+	try {
+		const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data`, {
+			headers: {
+				Authorization: `Bearer ${config.token}`,
+				Accept: 'application/vnd.github+json',
+				'X-GitHub-Api-Version': '2022-11-28'
+			}
+		});
+		if (res.status === 404) {
+			// Repo unreachable vs no data/ dir are both 404 with a token that
+			// lacks access — probe the repo root to tell them apart.
+			const root = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+				headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/vnd.github+json' }
+			});
+			if (root.ok) return { ok: true, slugs: [] };
+			return {
+				ok: false,
+				status: root.status,
+				error: 'Repo not found — check the name and that the token can see it.'
+			};
+		}
+		if (res.status === 401) {
+			return { ok: false, status: 401, error: 'Token is invalid or expired.' };
+		}
+		if (!res.ok) {
+			const body = await res.text();
+			return { ok: false, status: res.status, error: body.slice(0, 300) };
+		}
+		const entries = (await res.json()) as Array<{ name: string; type: string }>;
+		return { ok: true, slugs: entries.filter((e) => e.type === 'dir').map((e) => e.name) };
+	} catch (err) {
+		return { ok: false, status: null, error: err instanceof Error ? err.message : String(err) };
+	}
+}
+
+/**
+ * Initial pull for a lab that was just created pre-wired to a snapshot
+ * repo: restore the repo's current head into the (empty) lab. The caller
+ * has already stored github_repo/github_token on the lab row.
+ */
+export async function bootstrapLabFromRepo(
+	labId: string
+): Promise<{ ok: true; counts: Record<string, number> } | { ok: false; error: string }> {
+	const db = getDb();
+	const lab = db
+		.prepare('SELECT github_repo, github_token, slug FROM labs WHERE id = ?')
+		.get(labId) as LabRow | undefined;
+	if (!lab?.github_repo || !lab?.github_token) {
+		return { ok: false, error: 'Lab has no snapshot repo configured.' };
+	}
+	const config: GitHubConfig = { token: lab.github_token, repo: lab.github_repo };
+	try {
+		const head = await getRemoteHeadSha(config, lab);
+		if (!head) return { ok: false, error: `No snapshot found in the repo for "${lab.slug}".` };
+		const res = await restoreSnapshot(labId, head);
+		if (!res.ok) return { ok: false, error: res.error };
+		db.prepare(
+			`UPDATE labs SET last_sync_at = datetime('now'), last_sync_status = 'pulled: bootstrap' WHERE id = ?`
+		).run(labId);
+		return { ok: true, counts: res.counts };
+	} catch (err) {
+		return { ok: false, error: err instanceof Error ? err.message : String(err) };
+	}
+}
+
+/** True when the lab has no entity data — only (possibly seeded) reference
+ *  tables. Used by first-run sync to decide that auto-pulling the remote
+ *  snapshot over this lab cannot destroy anything of value. */
+function labHasNoEntityData(db: Database.Database, labId: string): boolean {
+	const entityTables = [
+		'projects', 'sites', 'samples', 'extracts', 'pcr_plates',
+		'pcr_amplifications', 'library_plates', 'library_preps',
+		'sequencing_runs', 'analyses'
+	];
+	for (const t of entityTables) {
+		const row = db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE lab_id = ?`).get(labId) as { n: number };
+		if (row.n > 0) return false;
+	}
+	return true;
+}
+
+export type SyncOutcome =
+	| 'unconfigured' // no repo/token — nothing to do, not recorded
+	| 'ok'           // in sync, nothing moved
+	| 'pushed'       // local changes pushed to the repo
+	| 'pulled'       // remote changes restored into this instance
+	| 'conflict'     // both sides changed — needs an admin decision
+	| 'needs_init'   // first run, both sides have data — needs an admin decision
+	| 'error';
+
+/**
+ * One sync pass for one lab, against the lab's snapshot repo.
+ *
+ * Change detection is marker-based: `last_synced_state` is this instance's
+ * content fingerprint at the last sync, `last_synced_sha` the remote path
+ * head at the last sync. Local-only change → push. Remote-only change →
+ * pull (wipe + restore, guarded against writes that land mid-download).
+ * Both → do nothing destructive; flag a conflict that the admin resolves
+ * with the existing "Backup now" (keep local) or "Restore" (take remote)
+ * buttons — both of which reset the markers.
+ *
+ * First run (no markers yet) is deliberately conservative:
+ *   - remote has no snapshot            → push (bootstrap the repo)
+ *   - remote head is a commit WE pushed → adopt push role (pre-sync installs)
+ *   - remote has data, this lab doesn't → pull (fresh replica bootstrap)
+ *   - both have data                    → needs_init, admin decides
+ * The one thing this must never do is push an empty lab over real data or
+ * pull over un-pushed local work.
+ *
+ * Note for multi-instance labs: run the same app version everywhere.
+ * A re-export after a pull is re-fingerprinted locally, so version drift
+ * can't ping-pong commits — but a push from an older schema drops columns
+ * the newer schema would keep.
+ */
+export async function syncLab(labId: string): Promise<{ outcome: SyncOutcome; detail?: string }> {
+	const db = getDb();
+	// Sync deliberately ignores the GITHUB_REPO/GITHUB_TOKEN env fallback:
+	// the fallback applies to every lab on the box, and two-way sync (which
+	// can push a lab's data into the repo unprompted) should only run where
+	// an admin explicitly configured THIS lab's repo + token. Env-fallback
+	// labs keep the legacy push-only backup schedule instead.
+	const lab = db
+		.prepare('SELECT github_repo, github_token, slug FROM labs WHERE id = ?')
+		.get(labId) as LabRow | undefined;
+	if (!lab?.github_repo || !lab?.github_token) return { outcome: 'unconfigured' };
+	const config: GitHubConfig = { token: lab.github_token, repo: lab.github_repo };
+
+	const record = (outcome: SyncOutcome, detail?: string) => {
+		db.prepare(
+			`UPDATE labs SET last_sync_at = datetime('now'), last_sync_status = ? WHERE id = ?`
+		).run(detail ? `${outcome}: ${detail.slice(0, 300)}` : outcome, labId);
+		return { outcome, detail };
+	};
+
+	try {
+		const markers = db
+			.prepare('SELECT last_synced_sha, last_synced_state FROM labs WHERE id = ?')
+			.get(labId) as { last_synced_sha: string | null; last_synced_state: string | null };
+		const stateHash = localStateHash(exportTablesAsJson(labId));
+		const remoteHead = await getRemoteHeadSha(config, lab);
+
+		// ---- First run: no fingerprint recorded yet ----
+		if (!markers.last_synced_state) {
+			if (remoteHead === null) {
+				const pushed = await commitSnapshot(labId, `Auto sync ${new Date().toISOString()}`, { automatic: true });
+				return pushed ? record('pushed', 'bootstrap') : record('error', 'bootstrap push failed');
+			}
+			const wePushedHead = db
+				.prepare("SELECT 1 FROM db_snapshots WHERE lab_id = ? AND commit_sha = ? AND status = 'pushed'")
+				.get(labId, remoteHead);
+			if (wePushedHead) {
+				// Pre-sync install that has been backing up all along: the
+				// remote is ours. Push (no-ops if unchanged) and set markers.
+				const pushed = await commitSnapshot(labId, `Auto sync ${new Date().toISOString()}`, { automatic: true });
+				if (!pushed) return record('error', 'adopt push failed');
+				if (pushed.unchanged) setSyncMarkers(db, labId, remoteHead, stateHash);
+				return record(pushed.unchanged ? 'ok' : 'pushed', 'adopted existing backups');
+			}
+			if (labHasNoEntityData(db, labId)) {
+				const res = await restoreSnapshot(labId, remoteHead, { abortUnlessState: stateHash });
+				return res.ok ? record('pulled', 'bootstrap from repo') : record('error', res.error);
+			}
+			return record('needs_init');
+		}
+
+		// ---- Steady state ----
+		const localChanged = stateHash !== markers.last_synced_state;
+		const remoteChanged = remoteHead !== markers.last_synced_sha;
+
+		if (!localChanged && !remoteChanged) return record('ok');
+		if (localChanged && remoteChanged) return record('conflict');
+		if (localChanged) {
+			const pushed = await commitSnapshot(labId, `Auto sync ${new Date().toISOString()}`, { automatic: true });
+			if (!pushed) return record('error', 'push failed');
+			if (pushed.unchanged) setSyncMarkers(db, labId, remoteHead, stateHash);
+			return record('pushed');
+		}
+		// Remote changed only. A null head with markers set means the repo
+		// history vanished (force-push / repo swap) — re-push our state.
+		if (remoteHead === null) {
+			const pushed = await commitSnapshot(labId, `Auto sync ${new Date().toISOString()}`, { automatic: true });
+			return pushed ? record('pushed', 're-seeded emptied repo') : record('error', 'push failed');
+		}
+		const res = await restoreSnapshot(labId, remoteHead, { abortUnlessState: stateHash });
+		return res.ok ? record('pulled') : record('error', res.error);
+	} catch (err) {
+		return record('error', err instanceof Error ? err.message : String(err));
+	}
+}
+
+/**
+ * Periodic backup + sync scheduler. Started once on the first getDb() call;
+ * wakes every 15 minutes.
+ *
+ * Labs with sync_enabled run a sync pass every tick — one GitHub API call
+ * when nothing changed (the local fingerprint is computed offline). Labs
+ * with sync turned off keep the legacy behavior: push-only snapshots every
+ * `backup_interval_hours`.
  *
  * Conservative cadence: a 24-hour-interval lab will fire approximately at
  * 24h ± 15min. Good enough — backups don't need to be punctual, they just
@@ -567,7 +1038,26 @@ export function startBackupScheduler() {
 	const tick = async () => {
 		try {
 			const db = getDb();
-			const due = db.prepare(`
+
+			// Sync-enabled labs: full two-way pass each tick. Sequential —
+			// avoid hitting GitHub's secondary rate limit when many labs
+			// are configured.
+			const synced = new Set<string>();
+			const syncing = db
+				.prepare('SELECT id, name FROM labs WHERE sync_enabled = 1')
+				.all() as { id: string; name: string }[];
+			for (const lab of syncing) {
+				const { outcome, detail } = await syncLab(lab.id);
+				if (outcome !== 'unconfigured') synced.add(lab.id);
+				if (outcome !== 'unconfigured' && outcome !== 'ok') {
+					console.log(`[sync] lab ${lab.name}: ${outcome}${detail ? ` (${detail})` : ''}`);
+				}
+			}
+
+			// Legacy push-only schedule: labs with sync off, plus sync-enabled
+			// labs that sync can't serve (no per-lab repo config — e.g. env-
+			// fallback single-lab installs, whose backups must keep running).
+			const due = (db.prepare(`
 				SELECT id, name, last_backup_at, backup_interval_hours
 				FROM labs
 				WHERE backup_interval_hours IS NOT NULL AND backup_interval_hours > 0
@@ -575,13 +1065,12 @@ export function startBackupScheduler() {
 				    last_backup_at IS NULL
 				    OR (julianday('now') - julianday(last_backup_at)) * 24 >= backup_interval_hours
 				  )
-			`).all() as { id: string; name: string; last_backup_at: string | null; backup_interval_hours: number }[];
+			`).all() as { id: string; name: string; last_backup_at: string | null; backup_interval_hours: number }[])
+				.filter((lab) => !synced.has(lab.id));
 
 			for (const lab of due) {
 				const msg = `Auto snapshot ${new Date().toISOString()}`;
 				console.log(`[backup-scheduler] running for lab ${lab.name} (${lab.id})`);
-				// Sequential — avoid hitting GitHub's secondary rate limit
-				// when many labs are due at once.
 				await commitSnapshot(lab.id, msg, { automatic: true });
 			}
 		} catch (err) {
@@ -589,8 +1078,11 @@ export function startBackupScheduler() {
 		}
 	};
 
-	// First tick fires after the interval, not on boot — so a quick restart
-	// loop doesn't spam the GitHub API.
+	// One early tick shortly after boot (so a lab instance switched on
+	// after time away picks up remote changes quickly), then the regular
+	// interval. 90s is late enough that a crash-restart loop won't spam
+	// the GitHub API.
+	setTimeout(tick, 90_000);
 	setInterval(tick, SCHEDULER_TICK_MS);
 	console.log(`[backup-scheduler] started (tick every ${SCHEDULER_TICK_MS / 60_000} min)`);
 }

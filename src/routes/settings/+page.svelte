@@ -212,9 +212,18 @@
 		github_token_set: boolean;
 		backup_interval_hours: number | null;
 		last_backup_at: string | null;
+		sync_enabled: boolean;
+		last_sync_at: string | null;
+		last_sync_status: string | null;
 	} | null>(null);
 	let backupHistory = $state<any[]>([]);
-	let backupForm = $state({ github_repo: '', github_token: '', backup_interval_hours: 0 });
+	let backupForm = $state({ github_repo: '', github_token: '', backup_interval_hours: 0, sync_enabled: true });
+	/** Sync passes that need the admin to pick a side (Backup now vs Restore). */
+	let syncNeedsDecision = $derived(
+		!!backupSettings?.sync_enabled &&
+		(backupSettings?.last_sync_status?.startsWith('conflict') ||
+			backupSettings?.last_sync_status?.startsWith('needs_init'))
+	);
 	let backupLoaded = $state(false);
 	let backupBusy = $state(false);
 	let backupMsg = $state('');
@@ -231,6 +240,7 @@
 			backupForm.github_repo = backupSettings?.github_repo ?? '';
 			backupForm.github_token = '';
 			backupForm.backup_interval_hours = backupSettings?.backup_interval_hours ?? 0;
+			backupForm.sync_enabled = backupSettings?.sync_enabled ?? true;
 		}
 		if (hRes.ok) backupHistory = await hRes.json();
 	}
@@ -242,7 +252,8 @@
 		// typed something OR explicitly chose to clear it.
 		const body: Record<string, unknown> = {
 			github_repo: backupForm.github_repo.trim(),
-			backup_interval_hours: Number(backupForm.backup_interval_hours) || null
+			backup_interval_hours: Number(backupForm.backup_interval_hours) || null,
+			sync_enabled: backupForm.sync_enabled
 		};
 		if (backupForm.github_token.trim()) body.github_token = backupForm.github_token.trim();
 		const res = await fetch('/api/lab/settings', {
@@ -1458,11 +1469,12 @@
 	{:else if tabType === 'backup'}
 	<div class="space-y-6">
 		<div>
-			<h2 class="text-base font-semibold text-white">GitHub Backup</h2>
+			<h2 class="text-base font-semibold text-white">GitHub Backup &amp; Sync</h2>
 			<p class="text-sm text-slate-400 mt-0.5">
 				Push a JSON snapshot of every project / sample / extract / PCR / library /
 				run / analysis row in this lab to a GitHub repo. Use it for off-box
-				disaster recovery and version-controlled provenance.
+				disaster recovery, version-controlled provenance, and keeping a
+				lab/ship instance in sync with your online one.
 			</p>
 			<p class="text-sm text-slate-400 mt-2">
 				<strong class="text-amber-300">Not backed up:</strong> photo files,
@@ -1538,15 +1550,50 @@
 				</details>
 			</div>
 			<div>
-				<label for="bk-interval" class="block text-sm text-slate-300 mb-1">Auto-backup every (hours)</label>
-				<input id="bk-interval" type="number" min="0" max="8760" bind:value={backupForm.backup_interval_hours}
-					class="w-32 {inputCls} text-sm" />
-				<p class="text-xs text-slate-500 mt-1">
-					0 means manual only — backups happen when you click Backup now.
-					Otherwise SampleTown pushes an automatic backup every N hours
-					(common picks: 24 for daily, 168 for weekly).
-				</p>
+				<label class="flex items-start gap-2 cursor-pointer">
+					<input type="checkbox" bind:checked={backupForm.sync_enabled} class="mt-1 accent-ocean-500" />
+					<span class="text-sm text-slate-300">
+						Automatic sync
+						<span class="block text-xs text-slate-500 mt-0.5">
+							Needs the repo and token above. Checks every 15 minutes: pushes local
+							changes to the repo, and pulls changes other SampleTown instances of
+							this lab have pushed. If both sides changed, nothing moves until you
+							choose below. Turn off for push-only scheduled backups.
+						</span>
+					</span>
+				</label>
+				{#if backupSettings?.sync_enabled && backupSettings?.last_sync_at}
+					<p class="text-xs text-slate-500 mt-2 ml-6">
+						Last sync: {new Date(backupSettings.last_sync_at).toLocaleString()}
+						{#if backupSettings.last_sync_status}· {backupSettings.last_sync_status}{/if}
+					</p>
+				{/if}
 			</div>
+			{#if syncNeedsDecision}
+				<div class="p-3 rounded-lg border border-amber-800 bg-amber-900/20 text-amber-300 text-sm space-y-1">
+					<p class="font-medium">Sync needs a decision.</p>
+					<p class="text-amber-300/90">
+						{backupSettings?.last_sync_status?.startsWith('needs_init')
+							? 'Both this instance and the snapshot repo already contain data, so sync doesn’t know which side to trust yet.'
+							: 'Both this instance and the snapshot repo changed since the last sync.'}
+						Click <strong>Backup now</strong> to keep this instance's data (pushing it to the repo),
+						or use <strong>Restore from backup</strong> below to take the repo's version instead.
+						Sync resumes automatically after either.
+					</p>
+				</div>
+			{/if}
+			{#if !backupForm.sync_enabled}
+				<div>
+					<label for="bk-interval" class="block text-sm text-slate-300 mb-1">Auto-backup every (hours)</label>
+					<input id="bk-interval" type="number" min="0" max="8760" bind:value={backupForm.backup_interval_hours}
+						class="w-32 {inputCls} text-sm" />
+					<p class="text-xs text-slate-500 mt-1">
+						0 means manual only — backups happen when you click Backup now.
+						Otherwise SampleTown pushes an automatic backup every N hours
+						(common picks: 24 for daily, 168 for weekly).
+					</p>
+				</div>
+			{/if}
 			<div class="flex gap-3 pt-2">
 				<button type="submit" disabled={backupBusy}
 					class="px-3 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 text-sm font-medium">
@@ -1701,9 +1748,13 @@
 				or accept an invite to another one.
 			</p>
 			<p class="text-xs text-slate-500 mt-2">
-				If you have configured GitHub backups, the JSON snapshot in your backup repo is
-				NOT deleted — that's your safety net. Pull a fresh snapshot first if you want a
-				point-in-time export before the delete.
+				This only affects <strong>this SampleTown instance</strong>. If the lab backs up
+				or syncs to a GitHub repo, the repo's snapshots are NOT deleted (that's your
+				safety net), and any other synced instance of this lab keeps its copy and keeps
+				syncing with the repo. Deleting here means "remove the lab from this instance" —
+				it can be re-synced later from the setup screen. To erase the lab everywhere,
+				delete it on every instance and remove its <code>data/&lt;slug&gt;</code> folder
+				from the repo too.
 			</p>
 		</div>
 

@@ -12,6 +12,9 @@ interface SettingsRow {
 	github_token: string | null;
 	backup_interval_hours: number | null;
 	last_backup_at: string | null;
+	sync_enabled: number;
+	last_sync_at: string | null;
+	last_sync_status: string | null;
 }
 
 /** Return the caller's lab settings. The token is masked so it isn't
@@ -22,7 +25,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const db = getDb();
 	const lab = db
 		.prepare(
-			'SELECT id, name, slug, github_repo, github_token, backup_interval_hours, last_backup_at FROM labs WHERE id = ?'
+			'SELECT id, name, slug, github_repo, github_token, backup_interval_hours, last_backup_at, sync_enabled, last_sync_at, last_sync_status FROM labs WHERE id = ?'
 		)
 		.get(labId) as SettingsRow | undefined;
 	if (!lab) return json({ error: 'Lab not found' }, { status: 404 });
@@ -33,7 +36,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 		github_repo: lab.github_repo,
 		github_token_set: !!lab.github_token,
 		backup_interval_hours: lab.backup_interval_hours,
-		last_backup_at: lab.last_backup_at
+		last_backup_at: lab.last_backup_at,
+		sync_enabled: !!lab.sync_enabled,
+		last_sync_at: lab.last_sync_at,
+		last_sync_status: lab.last_sync_status
 	});
 };
 
@@ -90,6 +96,15 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		}
 		updates.push('backup_interval_hours = ?');
 		params.push(hours);
+	}
+
+	if ('sync_enabled' in body) {
+		const v = body.sync_enabled;
+		if (typeof v !== 'boolean') {
+			return json({ error: 'sync_enabled must be a boolean' }, { status: 400 });
+		}
+		updates.push('sync_enabled = ?');
+		params.push(v ? 1 : 0);
 	}
 
 	if (updates.length === 0) {
