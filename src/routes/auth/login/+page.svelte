@@ -26,7 +26,6 @@
 		error: string;
 	}>({ status: 'idle', userCode: '', verificationUri: '', error: '' });
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
-	let copied = $state(false);
 
 	async function startDeviceLogin() {
 		device = { status: 'starting', userCode: '', verificationUri: '', error: '' };
@@ -88,16 +87,6 @@
 		}
 	}
 
-	async function copyCode() {
-		try {
-			await navigator.clipboard.writeText(device.userCode);
-			copied = true;
-			setTimeout(() => (copied = false), 1500);
-		} catch {
-			/* clipboard unavailable — the code is selectable */
-		}
-	}
-
 	$effect(() => () => { if (pollTimer) clearTimeout(pollTimer); });
 </script>
 
@@ -149,15 +138,9 @@
 							class="text-ocean-400 hover:text-ocean-300 underline">{device.verificationUri.replace('https://', '')}</a>
 						and enter:
 					</p>
-					<button
-						type="button"
-						onclick={copyCode}
-						title="Copy code"
-						class="font-mono text-2xl tracking-[0.2em] text-white bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 hover:border-ocean-500 transition-colors"
-					>{device.userCode}</button>
-					<p class="text-xs text-slate-500">
-						{copied ? 'Copied!' : 'Click the code to copy it.'} Waiting for GitHub approval…
-					</p>
+					<div class="font-mono text-2xl tracking-[0.2em] text-white bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 select-all inline-block"
+					>{device.userCode}</div>
+					<p class="text-xs text-slate-500">Waiting for GitHub approval…</p>
 				</div>
 			{:else}
 				<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm space-y-2">
