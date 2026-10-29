@@ -4,6 +4,8 @@ declare global {
 	namespace App {
 		interface Locals {
 			user: import('$lib/types').User | null;
+			/** How the request authenticated: browser session cookie or API token. */
+			authVia?: 'session' | 'token';
 		}
 	}
 }

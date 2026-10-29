@@ -99,6 +99,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		db.transaction(() => {
 			db.prepare('DELETE FROM lab_memberships WHERE user_id = ? AND lab_id = ?').run(params.id, labId);
 			db.prepare('DELETE FROM sessions WHERE user_id = ?').run(params.id);
+			db.prepare("UPDATE api_tokens SET revoked_at = datetime('now') WHERE revoked_at IS NULL AND user_id = ?").run(params.id);
 			// Clear active_lab_id if it pointed at this lab
 			db.prepare('UPDATE users SET active_lab_id = NULL WHERE id = ? AND active_lab_id = ?').run(params.id, labId);
 		})();
