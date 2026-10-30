@@ -1,7 +1,7 @@
 # API reference
 
 REST endpoints under `/api/*`. Every endpoint requires a session cookie
-unless explicitly marked **public**. Lab-scoped endpoints additionally
+or a personal API token (see below) unless explicitly marked **public**. Lab-scoped endpoints additionally
 require the caller to have a non-null `lab_id`.
 
 ## Conventions
@@ -32,6 +32,41 @@ require the caller to have a non-null `lab_id`.
 | DELETE | `/api/account` | self | Body: `{ confirm: <username> }`. Last-admin guard. Wipes session |
 | POST | `/api/auth/setup-lab` | lab-less | Body: `{ name, slug? }`. Creates lab + makes caller admin. Rate-limited 3/day/IP |
 | POST | `/api/auth/join` | any | Body: `{ token }`. Atomic single-use. Rate-limited 10/h/IP |
+
+## API tokens (scripts)
+
+Any signed-in user can create personal tokens under **Account → API
+tokens**. A token is sent as `Authorization: Bearer st_…` and acts as its
+owner — same active lab, same role, same admin/viewer gates as their
+session. Only a SHA-256 of the token is stored; the plaintext is shown once.
+
+- Honoured on `/api/*` only, and refused on `/api/account/*` and
+  `/api/auth/*`, so a token can't mint tokens, change the password or
+  delete the account
+- Refused on admin-only writes (users, invites, lab settings and delete,
+  DB snapshots and restore), even for an admin's token. Admin-only reads
+  still work for an admin
+- Revoked automatically when an admin deletes or resets the user, or the
+  user deletes their account
+- Multipart/form POSTs (e.g. `/api/import/mixs`) must send an `Origin`
+  header equal to the site's origin — SvelteKit's CSRF check applies to
+  every form POST, browser or not
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| GET | `/api/account/tokens` | self, session only | Live tokens (prefix, expiry, last used) — never the token |
+| POST | `/api/account/tokens` | self, session only | Body: `{ name, ttl_days? }` (`null` = no expiry, max 365). Returns the token once. 10/h/user, 20 live max |
+| DELETE | `/api/account/tokens/[id]` | self, session only | Revoke |
+
+`scripts/sampletown.mjs` is a dependency-free client:
+
+```sh
+export SAMPLETOWN_TOKEN=st_...
+node scripts/sampletown.mjs template --checklist MimarksS --extension Water > template.tsv
+node scripts/sampletown.mjs import field-sheets.xlsx            # dry run
+node scripts/sampletown.mjs import field-sheets.xlsx --commit
+node scripts/sampletown.mjs get /api/samples
+```
 
 ## Lab + invites + backup (all admin)
 

@@ -60,6 +60,7 @@ export const DELETE: RequestHandler = async ({ request, locals, cookies }) => {
 
 		db.transaction(() => {
 			db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+			db.prepare("UPDATE api_tokens SET revoked_at = datetime('now') WHERE revoked_at IS NULL AND user_id = ?").run(user.id);
 			db.prepare('DELETE FROM lab_memberships WHERE user_id = ?').run(user.id);
 			db.prepare(
 				`UPDATE users

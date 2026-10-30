@@ -1,7 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
 import { json, redirect } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { validateSession, maybeSweepExpired, isSecureOrigin } from '$lib/server/auth';
+import { validateSession, validateApiToken, maybeSweepExpired, isSecureOrigin } from '$lib/server/auth';
 
 /**
  * Security headers applied to every response.
@@ -199,6 +199,16 @@ function isPublicPage(pathname: string): boolean {
 	return PUBLIC_PAGE_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
+/**
+ * Routes that refuse API-token auth even though they're under /api/: the
+ * account's own credentials and lab onboarding. These need a real sign-in.
+ */
+const TOKEN_FORBIDDEN_PREFIXES = ['/api/account', '/api/auth'];
+
+function isTokenForbidden(pathname: string): boolean {
+	return TOKEN_FORBIDDEN_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'));
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	// Initialize DB on first request
 	getDb();
@@ -206,12 +216,28 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Periodic sweep of expired sessions + oauth states (rate-limited internally).
 	maybeSweepExpired();
 
-	// Session-based auth
-	const sessionId = event.cookies.get('session');
-	event.locals.user = sessionId ? validateSession(sessionId) : null;
-
 	const { pathname } = event.url;
 	const method = event.request.method;
+
+	// Session-based auth (browser), or a personal API token (scripts):
+	//   Authorization: Bearer st_...
+	// A token is only honoured on /api/* and never on the routes that manage
+	// the account itself, so a leaked token can't mint more tokens, change the
+	// password or delete the account. A request carrying a token is not
+	// cookie-authenticated, so it can't be driven cross-site from a browser.
+	const sessionId = event.cookies.get('session');
+	event.locals.user = sessionId ? validateSession(sessionId) : null;
+	event.locals.authVia = event.locals.user ? 'session' : undefined;
+	const authz = event.request.headers.get('authorization');
+	if (!event.locals.user && authz?.startsWith('Bearer ')) {
+		if (!pathname.startsWith('/api/') || isTokenForbidden(pathname)) {
+			return json({ error: 'API tokens cannot be used on this route' }, { status: 403 });
+		}
+		const user = validateApiToken(authz.slice(7).trim());
+		if (!user) return json({ error: 'Invalid or expired API token' }, { status: 401 });
+		event.locals.user = user;
+		event.locals.authVia = 'token';
+	}
 
 	// Centralized API auth gate.
 	if (pathname.startsWith('/api/')) {
@@ -220,6 +246,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 		if (requiresAdmin(pathname, method) && event.locals.user?.role !== 'admin') {
 			return json({ error: 'Admin role required' }, { status: 403 });
+		}
+		// Admin writes (users, invites, lab delete, DB restore) need a real
+		// sign-in: a leaked admin token shouldn't be able to take over the lab.
+		if (
+			event.locals.authVia === 'token' &&
+			MUTATING_METHODS.has(method) &&
+			requiresAdmin(pathname, method)
+		) {
+			return json({ error: 'API tokens cannot be used for admin changes' }, { status: 403 });
 		}
 		if (blockedByViewerReadOnly(pathname, method, event.locals.user?.role)) {
 			return json({ error: 'Viewer role is read-only' }, { status: 403 });

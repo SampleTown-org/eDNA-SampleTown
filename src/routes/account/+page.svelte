@@ -136,6 +136,41 @@
 		deleteError = (await res.json().catch(() => ({}))).error || 'Delete failed';
 		deleteBusy = false;
 	}
+
+	// --- API tokens ---
+	type ApiToken = { id: string; name: string; token_prefix: string; expires_at: string | null; last_used_at: string | null; created_at: string };
+	let tokens = $state<ApiToken[]>(data.tokens ?? []);
+	let tokenName = $state('');
+	let tokenTtl = $state('90');
+	let tokenBusy = $state(false);
+	let tokenError = $state('');
+	let newToken = $state('');
+
+	async function createToken(e: SubmitEvent) {
+		e.preventDefault();
+		tokenBusy = true; tokenError = ''; newToken = '';
+		const res = await fetch('/api/account/tokens', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name: tokenName, ttl_days: tokenTtl === 'never' ? null : Number(tokenTtl) })
+		});
+		const body = await res.json().catch(() => ({}));
+		if (res.ok) {
+			newToken = body.token;
+			const { token: _t, ...row } = body;
+			tokens = [row as ApiToken, ...tokens];
+			tokenName = '';
+		} else {
+			tokenError = body.error || `Failed (${res.status})`;
+		}
+		tokenBusy = false;
+	}
+
+	async function revokeToken(id: string) {
+		if (!confirm('Revoke this token? Scripts using it will stop working.')) return;
+		const res = await fetch(`/api/account/tokens/${id}`, { method: 'DELETE' });
+		if (res.ok) tokens = tokens.filter((t) => t.id !== id);
+	}
 </script>
 
 <div class="max-w-xl space-y-8">
@@ -313,6 +348,55 @@
 				There's nothing to change here — manage your GitHub credentials at
 				<a href="https://github.com/settings/security" target="_blank" class="text-ocean-400 hover:text-ocean-300">github.com/settings/security</a>.
 			</p>
+		{/if}
+	</div>
+
+	<!-- API tokens -->
+	<div class="space-y-3">
+		<h2 class="text-base font-semibold text-white">API tokens</h2>
+		<p class="text-xs text-slate-500">
+			For scripts and command-line tools. A token acts as you, with your lab and role. Send it as
+			<code class="text-slate-300">Authorization: Bearer &lt;token&gt;</code>. It works on <code class="text-slate-300">/api/*</code>
+			only and can't manage your account or make admin changes.
+		</p>
+		{#if tokenError}
+			<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{tokenError}</div>
+		{/if}
+		{#if newToken}
+			<div class="p-3 rounded-lg bg-green-900/30 border border-green-800 text-green-200 text-sm space-y-1">
+				<div>Copy this token now — it won't be shown again.</div>
+				<code class="block break-all select-all text-white">{newToken}</code>
+			</div>
+		{/if}
+		<form onsubmit={createToken} class="flex flex-wrap gap-2">
+			<input bind:value={tokenName} required maxlength="80" placeholder="Token name (e.g. field-sheet import)" class="{inputCls} flex-1 min-w-48" />
+			<select bind:value={tokenTtl} class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm">
+				<option value="30">30 days</option>
+				<option value="90">90 days</option>
+				<option value="365">1 year</option>
+				<option value="never">No expiry</option>
+			</select>
+			<button type="submit" disabled={tokenBusy}
+				class="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-500 disabled:opacity-50 transition-colors text-sm font-medium">
+				{tokenBusy ? 'Creating...' : 'Create token'}
+			</button>
+		</form>
+		{#if tokens.length}
+			<ul class="divide-y divide-slate-800 border border-slate-800 rounded-lg text-sm">
+				{#each tokens as t (t.id)}
+					<li class="flex items-center justify-between gap-3 px-3 py-2">
+						<div class="min-w-0">
+							<div class="text-white truncate">{t.name} <code class="text-slate-500">{t.token_prefix}…</code></div>
+							<div class="text-xs text-slate-500">
+								created {t.created_at.slice(0, 10)} ·
+								{t.expires_at ? `expires ${t.expires_at.slice(0, 10)}` : 'no expiry'} ·
+								{t.last_used_at ? `last used ${t.last_used_at.slice(0, 16)}` : 'never used'}
+							</div>
+						</div>
+						<button type="button" onclick={() => revokeToken(t.id)} class="text-xs text-red-400 hover:text-red-300">Revoke</button>
+					</li>
+				{/each}
+			</ul>
 		{/if}
 	</div>
 

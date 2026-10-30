@@ -1,4 +1,5 @@
 import { GitHub } from 'arctic';
+import { createHash, randomBytes } from 'crypto';
 import bcrypt from 'bcrypt';
 import { getDb, generateId } from './db';
 import { env } from '$env/dynamic/private';
@@ -245,4 +246,107 @@ export async function verifyLocalUser(username: string, password: string): Promi
 		  ON m.user_id = u.id AND m.lab_id = u.active_lab_id AND m.status = 'active'
 		WHERE u.id = ?
 	`).get(row.id) as User;
+}
+
+// ============================================================
+// Personal API tokens
+// ============================================================
+
+/**
+ * Tokens look like `st_<43 base64url chars>` (32 random bytes). Only the
+ * SHA-256 is stored, so a leaked database does not leak usable tokens; a
+ * fast hash is fine because the input is high-entropy, unlike a password.
+ */
+export const API_TOKEN_PREFIX = 'st_';
+const API_TOKEN_MAX_TTL_DAYS = 365;
+
+function hashApiToken(token: string): string {
+	return createHash('sha256').update(token).digest('hex');
+}
+
+export interface ApiTokenRow {
+	id: string;
+	name: string;
+	token_prefix: string;
+	expires_at: string | null;
+	last_used_at: string | null;
+	created_at: string;
+}
+
+export function createApiToken(
+	userId: string,
+	name: string,
+	ttlDays: number | null
+): { token: string; row: ApiTokenRow } {
+	const db = getDb();
+	const id = generateId();
+	const token = API_TOKEN_PREFIX + randomBytes(32).toString('base64url');
+	const days = ttlDays == null ? null : Math.min(Math.max(1, Math.floor(ttlDays)), API_TOKEN_MAX_TTL_DAYS);
+	const expiresAt = days == null ? null : new Date(Date.now() + days * 86_400_000).toISOString();
+	db.prepare(
+		`INSERT INTO api_tokens (id, user_id, name, token_hash, token_prefix, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`
+	).run(id, userId, name, hashApiToken(token), token.slice(0, 10), expiresAt);
+	const row = db
+		.prepare('SELECT id, name, token_prefix, expires_at, last_used_at, created_at FROM api_tokens WHERE id = ?')
+		.get(id) as ApiTokenRow;
+	return { token, row };
+}
+
+export function listApiTokens(userId: string): ApiTokenRow[] {
+	return getDb()
+		.prepare(
+			`SELECT id, name, token_prefix, expires_at, last_used_at, created_at
+			 FROM api_tokens WHERE user_id = ? AND revoked_at IS NULL
+			 ORDER BY created_at DESC`
+		)
+		.all(userId) as ApiTokenRow[];
+}
+
+/** Revoke one of the caller's own tokens. Returns false if it isn't theirs. */
+export function revokeApiToken(userId: string, tokenId: string): boolean {
+	const res = getDb()
+		.prepare(
+			`UPDATE api_tokens SET revoked_at = datetime('now')
+			 WHERE id = ? AND user_id = ? AND revoked_at IS NULL`
+		)
+		.run(tokenId, userId);
+	return res.changes > 0;
+}
+
+/**
+ * Resolve a bearer token to its user, loaded exactly as validateSession
+ * loads one (active lab membership, role). Expired, revoked or unknown
+ * tokens, and deleted users, resolve to null.
+ */
+export function validateApiToken(token: string): User | null {
+	if (!token.startsWith(API_TOKEN_PREFIX) || token.length > 200) return null;
+	const db = getDb();
+	const hash = hashApiToken(token);
+	const row = db.prepare(`
+		SELECT ${USER_MEMBERSHIP_COLS}, t.id AS __token_id
+		FROM api_tokens t
+		JOIN users u ON u.id = t.user_id
+		LEFT JOIN lab_memberships m
+		  ON m.user_id = u.id AND m.lab_id = u.active_lab_id AND m.status = 'active'
+		WHERE t.token_hash = ?
+		  AND t.revoked_at IS NULL
+		  AND (t.expires_at IS NULL OR t.expires_at > ?)
+		  AND COALESCE(u.is_deleted, 0) = 0
+	`).get(hash, new Date().toISOString()) as (User & { __token_id: string }) | undefined;
+	if (!row) return null;
+	// last_used_at is informational; write it at most once a minute per token.
+	db.prepare(
+		`UPDATE api_tokens SET last_used_at = datetime('now')
+		 WHERE id = ? AND (last_used_at IS NULL OR last_used_at < datetime('now', '-1 minute'))`
+	).run(row.__token_id);
+	const { __token_id: _, ...user } = row;
+	return user as User;
+}
+
+/** Revoke every token a user holds — call when their account is deleted or locked. */
+export function revokeAllApiTokens(userId: string) {
+	getDb()
+		.prepare(`UPDATE api_tokens SET revoked_at = datetime('now') WHERE user_id = ? AND revoked_at IS NULL`)
+		.run(userId);
 }

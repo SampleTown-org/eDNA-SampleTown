@@ -36,6 +36,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		db.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(params.id);
 		// Revoke any active sessions for this user.
 		db.prepare('DELETE FROM sessions WHERE user_id = ?').run(params.id);
+		db.prepare("UPDATE api_tokens SET revoked_at = datetime('now') WHERE revoked_at IS NULL AND user_id = ?").run(params.id);
 
 		return json({ ok: true });
 	} catch (err) {
