@@ -357,7 +357,7 @@
 		<p class="text-xs text-slate-500">
 			For scripts and command-line tools. A token acts as you, with your lab and role. Send it as
 			<code class="text-slate-300">Authorization: Bearer &lt;token&gt;</code>. It works on <code class="text-slate-300">/api/*</code>
-			only and can't manage your account.
+			only and can't manage your account or make admin changes.
 		</p>
 		{#if tokenError}
 			<div class="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm">{tokenError}</div>

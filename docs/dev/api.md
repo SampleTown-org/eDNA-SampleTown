@@ -43,6 +43,9 @@ session. Only a SHA-256 of the token is stored; the plaintext is shown once.
 - Honoured on `/api/*` only, and refused on `/api/account/*` and
   `/api/auth/*`, so a token can't mint tokens, change the password or
   delete the account
+- Refused on admin-only writes (users, invites, lab settings and delete,
+  DB snapshots and restore), even for an admin's token. Admin-only reads
+  still work for an admin
 - Revoked automatically when an admin deletes or resets the user, or the
   user deletes their account
 - Multipart/form POSTs (e.g. `/api/import/mixs`) must send an `Origin`

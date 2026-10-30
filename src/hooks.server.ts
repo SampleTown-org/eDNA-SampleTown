@@ -247,6 +247,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (requiresAdmin(pathname, method) && event.locals.user?.role !== 'admin') {
 			return json({ error: 'Admin role required' }, { status: 403 });
 		}
+		// Admin writes (users, invites, lab delete, DB restore) need a real
+		// sign-in: a leaked admin token shouldn't be able to take over the lab.
+		if (
+			event.locals.authVia === 'token' &&
+			MUTATING_METHODS.has(method) &&
+			requiresAdmin(pathname, method)
+		) {
+			return json({ error: 'API tokens cannot be used for admin changes' }, { status: 403 });
+		}
 		if (blockedByViewerReadOnly(pathname, method, event.locals.user?.role)) {
 			return json({ error: 'Viewer role is read-only' }, { status: 403 });
 		}
